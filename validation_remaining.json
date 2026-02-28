@@ -1,0 +1,93 @@
+{
+  "station": {
+    "elapsedMs": 4556,
+    "fetchMode": "fast",
+    "readRange": "2026!A1:NZ260",
+    "unknownColorCount": 0,
+    "inventoryDataRows": {
+      "NAVER": [
+        120,
+        121,
+        122
+      ],
+      "STATION": [
+        115,
+        117,
+        119
+      ]
+    },
+    "validationIssues": [
+      {
+        "code": "RAW_DERIVED_VALUE_MISMATCH",
+        "severity": "warn"
+      }
+    ]
+  },
+  "naver": {
+    "elapsedMs": 5532,
+    "fetchMode": "fast",
+    "readRange": "2026!A1:NZ260",
+    "unknownColorCount": 0,
+    "inventoryDataRows": {
+      "NAVER": [
+        120,
+        121,
+        122
+      ],
+      "STATION": [
+        115,
+        117,
+        119
+      ]
+    },
+    "validationIssues": [
+      {
+        "code": "RAW_DERIVED_VALUE_MISMATCH",
+        "severity": "warn"
+      }
+    ]
+  },
+  "oooValidation": {
+    "roomRows": 41,
+    "dateCols": 6,
+    "triggerCount": 3,
+    "blackCount": 0,
+    "blackWithNote": 0,
+    "mismatchCount": 3,
+    "samples": [
+      {
+        "date": "2026-02-24",
+        "row": 86,
+        "col": 57,
+        "colA1": "BE",
+        "roomNo": "A1101",
+        "hex": "",
+        "text": "O.O.O",
+        "note": "메디컬블룸 한의원 홍보 영상 촬영 (A1101, A1102)",
+        "status": "VAC"
+      },
+      {
+        "date": "2026-02-24",
+        "row": 106,
+        "col": 57,
+        "colA1": "BE",
+        "roomNo": "A1102",
+        "hex": "",
+        "text": "O.O.O",
+        "note": "메디컬블룸 한의원 홍보 영상 촬영 (A1101, A1102)",
+        "status": "VAC"
+      },
+      {
+        "date": "2026-02-24",
+        "row": 107,
+        "col": 57,
+        "colA1": "BE",
+        "roomNo": "A1201",
+        "hex": "",
+        "text": "O.O.O",
+        "note": "코엑스점 홍보 영상 촬영",
+        "status": "VAC"
+      }
+    ]
+  }
+}

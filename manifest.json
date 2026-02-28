@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "Reservation Inventory Board",
+  "version": "0.4.0",
+  "description": "Naver/Station inventory read, sheet mapping, and sync apply tool.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "cookies",
+    "storage",
+    "clipboardWrite"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "host_permissions": [
+    "https://*/*",
+    "https://partner.booking.naver.com/*",
+    "https://api-partner.booking.naver.com/*",
+    "https://admin.admin-stationbyuhc.com/*",
+    "https://api.admin-stationbyuhc.com/*",
+    "https://sheets.googleapis.com/*",
+    "https://oauth2.googleapis.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://partner.booking.naver.com/*",
+        "https://admin.admin-stationbyuhc.com/*"
+      ],
+      "js": [
+        "src/constants.js",
+        "src/domain.types.js",
+        "src/scan/normalize.js",
+        "src/engine/noteKey.js",
+        "src/domain/reservationPolicy.js",
+        "src/report/report.format.js",
+        "src/engine/rules.js",
+        "src/scan/blockBuilder.js",
+        "src/scan/aggregator.js",
+        "src/io/sheets.fetch.js",
+        "src/io/pms.fetch.js",
+        "src/report/validator.js",
+        "src/report/reservationVerification.js",
+        "src/ui/panelDom.js",
+        "src/ui/panelEvents.js",
+        "src/engine/scanEngine.js",
+        "src/sheetScanner.entry.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyYSY/LIMGtI9blOrXS1BF42Uej2MS7SPlXybKlNEYa9VVfcf50YEocTy0IT49rusCbDX+JEVwRwO46bACy/4tpActh/pjgIrBDRiVOzCwwphKGahtviVdvmQRrgP1392jQrPeags4ueboToAH3sN2vAAtrddb16KsSNIkeNBxpeInEuZ/UUAAx2Lt6x021aRHCzJ4bjbM6Jxo0dzEk8Yb3K8RZA8SzseZFw4SRgZgF2pqg3aMfF0Jsk+w6bLwlJ3nnEIrEwAHmxndy1SRnH88ZVsgVeeQITx+y3dg2endPt07+JPbP3z8mv8Dz4TT2cyXg18dCiWDV58ZYzoldqTIwIDAQAB"
+}

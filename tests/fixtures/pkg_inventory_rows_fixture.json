@@ -1,0 +1,31 @@
+{
+  "startRow": 10,
+  "maxRow": 22,
+  "dateCols": [
+    { "dateKey": "2026-02-22", "col": 6 },
+    { "dateKey": "2026-02-23", "col": 7 }
+  ],
+  "cells": [
+    { "row": 10, "col": 0, "formattedValue": "STATION" },
+    { "row": 11, "col": 0, "formattedValue": "Urban Spa Suite 6인 (PKG)" },
+    { "row": 11, "col": 6, "formattedValue": "1/2" },
+    { "row": 11, "col": 7, "formattedValue": "1/2" },
+    { "row": 12, "col": 0, "formattedValue": "Urban Spa Suite 6인" },
+    { "row": 12, "col": 6, "formattedValue": "0/1" },
+    { "row": 12, "col": 7, "formattedValue": "0/1" },
+    { "row": 13, "col": 0, "formattedValue": "Double Twin Spa Room 4인 (PKG)" },
+    { "row": 13, "col": 6, "formattedValue": "1/2" },
+    { "row": 13, "col": 7, "formattedValue": "1/2" },
+    { "row": 14, "col": 0, "formattedValue": "Double Twin Spa Room 4인" },
+    { "row": 14, "col": 6, "formattedValue": "0/1" },
+    { "row": 14, "col": 7, "formattedValue": "0/1" },
+    { "row": 15, "col": 0, "formattedValue": "Grand Spa Suite 8인" },
+    { "row": 15, "col": 6, "formattedValue": "닫음" },
+    { "row": 15, "col": 7, "formattedValue": "닫음" },
+    { "row": 16, "col": 0, "formattedValue": "NAVER" }
+  ],
+  "expected": {
+    "defaultRows": [12, 14, 15],
+    "allowPkgRows": [11, 13, 15]
+  }
+}
