@@ -78,6 +78,12 @@ from src.reconcile.sheet_reconcile import (
     cross_validate_sheet_vs_sources,
     reconcile_sheet_vs_har,
 )
+from src.report.ops_workflow import (
+    build_ops_artifacts,
+    build_ops_summary,
+    load_blocks_csv,
+    write_ops_outputs,
+)
 from src.report.sheet_report import (
     write_blocks_csv,
     write_cross_validation_csv,
@@ -824,6 +830,7 @@ def load_analysis_context(args: argparse.Namespace) -> Dict[str, Any]:
         har_index = build_har_index(har_records)
 
     return {
+        "client": client,
         "spreadsheet_id": spreadsheet_id,
         "sheet_name": sheet_name,
         "matrix": matrix,
@@ -871,6 +878,14 @@ def build_analysis_artifacts(args: argparse.Namespace, context: Dict[str, Any]) 
         naver_existing=naver_existing,
         vac_share_limit=args.vac_share_limit,
     )
+    ops_artifacts = build_ops_artifacts(
+        blocks,
+        report_date=args.report_date,
+        report_start=args.report_start_date,
+        report_end=args.report_end_date,
+        client=context.get("client"),
+        ops_sheet_spreadsheet=args.ops_sheet_spreadsheet,
+    )
 
     return {
         "blocks": blocks,
@@ -885,6 +900,7 @@ def build_analysis_artifacts(args: argparse.Namespace, context: Dict[str, Any]) 
         "issues": reconcile_sheet_vs_har(blocks, har_index) if har_index else [],
         "cross_issues": cross_validate_sheet_vs_sources(blocks, source_records),
         "long_tail_candidates": list(scan_meta.get("long_tail_ota_candidates", [])),
+        **ops_artifacts,
     }
 
 
@@ -901,6 +917,7 @@ def write_analysis_outputs(out_dir: Path, artifacts: Dict[str, Any]) -> None:
         out_dir / "long_tail_ota_candidates.csv", artifacts["long_tail_candidates"]
     )
     save_json(out_dir / "long_tail_ota_candidates.json", artifacts["long_tail_candidates"])
+    write_ops_outputs(out_dir, artifacts)
 
 
 def build_analysis_summary(
@@ -928,6 +945,8 @@ def build_analysis_summary(
             "daily_branch_rows": len(artifacts["daily_branch_stats"]),
             "reconciliation_issues": len(artifacts["issues"]),
             "cross_validation_issues": len(artifacts["cross_issues"]),
+            "orderlist_rows": len(artifacts["orderlist_artifact"]["rows"]),
+            "arrival_rows": len(artifacts["arrival_artifact"]["rows"]),
         },
         "scan_v2": {
             "branch_split_row_fallback": BRANCH_SPLIT_ROW + 1,
@@ -945,10 +964,12 @@ def build_analysis_summary(
             "long_tail_ota_counts": scan_meta.get("long_tail_ota_counts", {}),
         },
         "inventory_rows_found": artifacts["inventory_rows"],
+        "derived_reports": {
+            **build_ops_summary(artifacts),
+        },
         "issues": artifacts["issues"],
         "cross_validation_issues": artifacts["cross_issues"],
     }
-
 
 def apply_no_proxy_if_requested(args: argparse.Namespace) -> None:
     if bool(getattr(args, "_no_proxy_applied", False)):
@@ -1122,6 +1143,64 @@ def command_analyze(args: argparse.Namespace) -> int:
     print(f"- Reconciliation issues: {len(artifacts['issues'])}")
     print(f"- Cross validation source records: {len(artifacts['source_records'])}")
     print(f"- Cross validation issues: {len(artifacts['cross_issues'])}")
+    print(
+        "- Derived reports:"
+        f" orderlist={len(artifacts['orderlist_artifact']['rows'])},"
+        f" arrival={len(artifacts['arrival_artifact']['rows'])}"
+    )
+    print(
+        "- Ops sheet packets:"
+        f" orderlist_tabs={len(artifacts['ops_sheet_bundle']['orderlist_packets'])},"
+        f" arrival_tabs={len(artifacts['ops_sheet_bundle']['arrival_packets'])}"
+    )
+    print(f"- Output dir: {out_dir}")
+    return 0
+
+
+def command_ops_artifacts(args: argparse.Namespace) -> int:
+    apply_no_proxy_if_requested(args)
+    source_mode = "blocks_csv"
+    context: Dict[str, Any] = {}
+    if normalize_text(args.blocks_csv):
+        blocks = load_blocks_csv(Path(args.blocks_csv))
+    else:
+        source_mode = "live_sheet"
+        context = load_analysis_context(args)
+        blocks, _scan_meta = extract_reservation_blocks(
+            context["matrix"], context["date_cols"], context["room_rows"]
+        )
+    artifacts = build_ops_artifacts(
+        blocks,
+        report_date=args.report_date,
+        report_start=args.report_start_date,
+        report_end=args.report_end_date,
+        client=context.get("client"),
+        ops_sheet_spreadsheet=args.ops_sheet_spreadsheet,
+    )
+    out_dir = Path(args.out_dir)
+    write_ops_outputs(out_dir, artifacts)
+    summary = {
+        "input": {
+            "source_mode": source_mode,
+            "blocks_csv": normalize_text(args.blocks_csv),
+            "spreadsheet_id": context.get("spreadsheet_id", ""),
+            "sheet_name": context.get("sheet_name", ""),
+            "reservation_blocks": len(blocks),
+        },
+        "derived_reports": build_ops_summary(artifacts),
+    }
+    save_json(out_dir / "ops_summary.json", summary)
+
+    print("ops artifacts complete")
+    print(f"- Source mode: {source_mode}")
+    print(f"- Reservation blocks: {len(blocks)}")
+    print(f"- Orderlist rows: {len(artifacts['orderlist_artifact']['rows'])}")
+    print(f"- Arrival rows: {len(artifacts['arrival_artifact']['rows'])}")
+    print(
+        "- Ops sheet packets:"
+        f" orderlist_tabs={len(artifacts['ops_sheet_bundle']['orderlist_packets'])},"
+        f" arrival_tabs={len(artifacts['ops_sheet_bundle']['arrival_packets'])}"
+    )
     print(f"- Output dir: {out_dir}")
     return 0
 
@@ -1165,11 +1244,20 @@ def add_analyze_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--pms-file", default="")
     parser.add_argument("--out-dir", default="output")
     parser.add_argument("--vac-share-limit", type=int, default=2)
+    parser.add_argument("--report-date", default="")
+    parser.add_argument("--report-start-date", default="")
+    parser.add_argument("--report-end-date", default="")
+    parser.add_argument("--ops-sheet-spreadsheet", default="")
     parser.add_argument("--access-token", default="")
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE)
     parser.add_argument("--client-id", default=DEFAULT_CLIENT_ID)
     parser.add_argument("--client-secret", default="")
     parser.add_argument("--no-proxy", action="store_true")
+
+
+def add_ops_artifact_arguments(parser: argparse.ArgumentParser) -> None:
+    add_analyze_arguments(parser)
+    parser.add_argument("--blocks-csv", default="")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1218,6 +1306,13 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_current.add_argument("--oauth-timeout-sec", type=int, default=240)
     analyze_current.add_argument("--no-browser", action="store_true")
     analyze_current.set_defaults(func=command_analyze_current)
+
+    ops_artifacts = sub.add_parser(
+        "ops-artifacts",
+        help="ReservationBlock 기반 오더리스트/어라이벌 작성 모듈",
+    )
+    add_ops_artifact_arguments(ops_artifacts)
+    ops_artifacts.set_defaults(func=command_ops_artifacts)
 
     return parser
 

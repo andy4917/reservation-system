@@ -5,7 +5,7 @@ import datetime as dt
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from src.domain.sheet_domain import DailyStat, ReservationBlock, SourceReservation
+from src.domain.sheet_domain import DailyStat, ReservationBlock, SourceReservation, normalize_text
 
 
 def write_blocks_csv(path: Path, blocks: List[ReservationBlock]) -> None:
@@ -34,6 +34,7 @@ def write_blocks_csv(path: Path, blocks: List[ReservationBlock]) -> None:
                 "part_index",
                 "parts_total",
                 "month_split",
+                "note_head",
             ]
         )
         for b in blocks:
@@ -60,6 +61,7 @@ def write_blocks_csv(path: Path, blocks: List[ReservationBlock]) -> None:
                     b.part_index,
                     b.parts_total,
                     "Y" if b.month_split else "",
+                    normalize_text(b.note)[:120],
                 ]
             )
 
