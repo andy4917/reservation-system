@@ -81,7 +81,7 @@
         "orderlist_report.tsv",
         "arrival_report.tsv",
         "orderlist_ops_*.tsv",
-        "arrival_ops_*.tsv",
+        "arrival_ops_*.json",
         "ops_sheet_packets.json",
       ],
     };

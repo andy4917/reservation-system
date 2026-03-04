@@ -1,6 +1,5 @@
 # Project Guardrails
 
-- Check MCP and relevant Skills first.
-- Keep this file project-specific and short.
-- Use `instruction-hygiene` for AGENTS.md or custom-instruction refactors.
-- Do not place raw URLs, gist embed tags, or long excerpts in instructions.
+- Keep this file limited to repository-specific rules for this project.
+- Do not commit or paste live credentials, tokens, cookies, auth bundles, or OAuth secrets into tracked files or instructions.
+- Use `instruction-hygiene` when refactoring `AGENTS.md` or other instruction files.

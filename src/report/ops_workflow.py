@@ -17,6 +17,32 @@ from src.report.ops_artifact_report import (
 )
 from src.report.ops_sheet_export import build_ops_sheet_export_bundle, write_packet_text_files
 
+REQUIRED_BLOCKS_CSV_COLUMNS = [
+    "row",
+    "room_type",
+    "room_no",
+    "start_col",
+    "end_col",
+    "checkin",
+    "checkout",
+    "nights",
+    "checkout_exclusive",
+    "price",
+    "branch",
+    "channel",
+    "reservation_no",
+    "reservation_key",
+    "platform",
+    "color_hex",
+    "source_columns",
+    "group_key",
+    "part_index",
+    "parts_total",
+    "month_split",
+    "note_head",
+    "nationality_nights",
+]
+
 
 def build_ops_artifacts(
     blocks: List[ReservationBlock],
@@ -90,6 +116,10 @@ def write_ops_outputs(out_dir: Path, artifacts: Dict[str, Any]) -> None:
         "arrival_ops",
         artifacts["ops_sheet_bundle"]["arrival_packets"],
     )
+    for packet in artifacts["ops_sheet_bundle"]["arrival_packets"]:
+        report_date = str(packet.get("report_date", "") or "").replace("-", "") or "unknown"
+        with (out_dir / f"arrival_ops_{report_date}.json").open("w", encoding="utf-8") as f:
+            json.dump(packet, f, ensure_ascii=False, indent=2)
 
 
 def build_ops_summary(artifacts: Dict[str, Any]) -> Dict[str, Any]:
@@ -158,37 +188,82 @@ def load_blocks_csv(path: Path) -> List[ReservationBlock]:
     blocks: List[ReservationBlock] = []
     with path.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
-        for row in reader:
-            checkin = try_parse_iso_date(row.get("checkin", ""))
-            checkout = try_parse_iso_date(row.get("checkout", ""))
+        fieldnames = list(reader.fieldnames or [])
+        missing_columns = [name for name in REQUIRED_BLOCKS_CSV_COLUMNS if name not in fieldnames]
+        if missing_columns:
+            raise AuditError(
+                "reservation blocks CSV is missing required columns: "
+                + ", ".join(missing_columns)
+            )
+        for line_no, row in enumerate(reader, start=2):
+            checkin = _parse_required_iso_date(row, "checkin", line_no)
+            checkout = _parse_required_iso_date(row, "checkout", line_no)
+            checkout_exclusive = _parse_required_iso_date(row, "checkout_exclusive", line_no)
             source_columns = [
-                max(int(part) - 1, 0)
+                _parse_positive_int(part, "source_columns", line_no) - 1
                 for part in str(row.get("source_columns", "") or "").split("|")
-                if str(part).strip().isdigit()
+                if str(part).strip()
             ]
+            row_index = _parse_positive_int(row.get("row", ""), "row", line_no) - 1
+            start_col = _parse_positive_int(row.get("start_col", ""), "start_col", line_no) - 1
+            end_col = _parse_positive_int(row.get("end_col", ""), "end_col", line_no) - 1
+            nights = _parse_positive_int(row.get("nights", ""), "nights", line_no)
+            part_index = _parse_positive_int(row.get("part_index", ""), "part_index", line_no)
+            parts_total = _parse_positive_int(row.get("parts_total", ""), "parts_total", line_no)
+            price = _parse_optional_int(row.get("price", ""), "price", line_no)
+            month_split = str(row.get("month_split", "") or "").strip().upper()
+            if month_split not in ("", "Y"):
+                raise AuditError(
+                    f"reservation blocks CSV line {line_no}: invalid month_split={month_split!r}"
+                )
+            if start_col > end_col:
+                raise AuditError(
+                    f"reservation blocks CSV line {line_no}: start_col > end_col"
+                )
+            if checkin >= checkout:
+                raise AuditError(
+                    f"reservation blocks CSV line {line_no}: checkin must be earlier than checkout"
+                )
+            if checkout != checkout_exclusive:
+                raise AuditError(
+                    f"reservation blocks CSV line {line_no}: checkout and checkout_exclusive differ"
+                )
+            if len(source_columns) != nights:
+                raise AuditError(
+                    f"reservation blocks CSV line {line_no}: source_columns count does not match nights"
+                )
+            if source_columns and (source_columns[0] != start_col or source_columns[-1] != end_col):
+                raise AuditError(
+                    f"reservation blocks CSV line {line_no}: source_columns do not match start/end columns"
+                )
+            if part_index > parts_total:
+                raise AuditError(
+                    f"reservation blocks CSV line {line_no}: part_index exceeds parts_total"
+                )
             blocks.append(
                 ReservationBlock(
-                    row=max(int(row.get("row", "1") or "1") - 1, 0),
-                    room_type=str(row.get("room_type", "") or ""),
-                    room_no=str(row.get("room_no", "") or ""),
-                    start_col=max(int(row.get("start_col", "1") or "1") - 1, 0),
-                    end_col=max(int(row.get("end_col", "1") or "1") - 1, 0),
+                    row=row_index,
+                    room_type=_require_text(row, "room_type", line_no),
+                    room_no=_require_text(row, "room_no", line_no),
+                    start_col=start_col,
+                    end_col=end_col,
                     checkin=checkin,
                     checkout=checkout,
-                    nights=int(row.get("nights", "0") or "0"),
-                    price=_to_optional_int(row.get("price", "")),
+                    nights=nights,
+                    price=price,
                     note=str(row.get("note_head", "") or ""),
                     reservation_no=_to_optional_text(row.get("reservation_no", "")),
-                    reservation_key=_to_optional_text(row.get("reservation_key", "")),
-                    branch=str(row.get("branch", "") or ""),
-                    channel=str(row.get("channel", "") or ""),
-                    platform=str(row.get("platform", "") or ""),
+                    reservation_key=_require_optional_text(row, "reservation_key", line_no),
+                    branch=_require_text(row, "branch", line_no),
+                    channel=_require_text(row, "channel", line_no),
+                    platform=_require_text(row, "platform", line_no),
                     color_hex=_to_optional_text(row.get("color_hex", "")),
                     source_columns=source_columns,
                     group_key=str(row.get("group_key", "") or ""),
-                    part_index=int(row.get("part_index", "1") or "1"),
-                    parts_total=int(row.get("parts_total", "1") or "1"),
-                    month_split=str(row.get("month_split", "") or "").strip().upper() == "Y",
+                    part_index=part_index,
+                    parts_total=parts_total,
+                    month_split=month_split == "Y",
+                    nationality_nights=str(row.get("nationality_nights", "") or ""),
                 )
             )
     return blocks
@@ -204,3 +279,56 @@ def _to_optional_int(value: Any) -> Optional[int]:
     if not text:
         return None
     return int(text)
+
+
+def _require_text(row: Dict[str, Any], key: str, line_no: int) -> str:
+    text = str(row.get(key, "") or "").strip()
+    if not text:
+        raise AuditError(f"reservation blocks CSV line {line_no}: missing {key}")
+    return text
+
+
+def _require_optional_text(row: Dict[str, Any], key: str, line_no: int) -> Optional[str]:
+    text = _require_text(row, key, line_no)
+    return text or None
+
+
+def _parse_positive_int(value: Any, key: str, line_no: int) -> int:
+    text = str(value or "").strip()
+    if not text:
+        raise AuditError(f"reservation blocks CSV line {line_no}: missing {key}")
+    try:
+        parsed = int(text)
+    except ValueError as exc:
+        raise AuditError(
+            f"reservation blocks CSV line {line_no}: invalid integer for {key}={text!r}"
+        ) from exc
+    if parsed <= 0:
+        raise AuditError(
+            f"reservation blocks CSV line {line_no}: {key} must be positive"
+        )
+    return parsed
+
+
+def _parse_optional_int(value: Any, key: str, line_no: int) -> Optional[int]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError as exc:
+        raise AuditError(
+            f"reservation blocks CSV line {line_no}: invalid integer for {key}={text!r}"
+        ) from exc
+
+
+def _parse_required_iso_date(row: Dict[str, Any], key: str, line_no: int) -> dt.date:
+    text = str(row.get(key, "") or "").strip()
+    if not text:
+        raise AuditError(f"reservation blocks CSV line {line_no}: missing {key}")
+    parsed = try_parse_iso_date(text)
+    if parsed is None:
+        raise AuditError(
+            f"reservation blocks CSV line {line_no}: invalid ISO date for {key}={text!r}"
+        )
+    return parsed

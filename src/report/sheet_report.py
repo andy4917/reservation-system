@@ -8,6 +8,15 @@ from typing import Any, Dict, List, Tuple
 from src.domain.sheet_domain import DailyStat, ReservationBlock, SourceReservation, normalize_text
 
 
+def col_one_based_to_a1(col_one_based: int) -> str:
+    value = max(int(col_one_based), 1)
+    letters: List[str] = []
+    while value > 0:
+        value, rem = divmod(value - 1, 26)
+        letters.append(chr(ord("A") + rem))
+    return "".join(reversed(letters))
+
+
 def write_blocks_csv(path: Path, blocks: List[ReservationBlock]) -> None:
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
@@ -30,14 +39,21 @@ def write_blocks_csv(path: Path, blocks: List[ReservationBlock]) -> None:
                 "platform",
                 "color_hex",
                 "source_columns",
+                "start_col_a1",
+                "end_col_a1",
+                "source_columns_a1",
                 "group_key",
                 "part_index",
                 "parts_total",
                 "month_split",
                 "note_head",
+                "nationality_nights",
             ]
         )
         for b in blocks:
+            start_col_one_based = b.start_col + 1
+            end_col_one_based = b.end_col + 1
+            source_columns_one_based = [col + 1 for col in b.source_columns]
             writer.writerow(
                 [
                     b.row + 1,
@@ -56,12 +72,16 @@ def write_blocks_csv(path: Path, blocks: List[ReservationBlock]) -> None:
                     b.reservation_key or "",
                     b.platform,
                     b.color_hex or "",
-                    "|".join(str(col + 1) for col in b.source_columns),
+                    "|".join(str(col) for col in source_columns_one_based),
+                    col_one_based_to_a1(start_col_one_based),
+                    col_one_based_to_a1(end_col_one_based),
+                    "|".join(col_one_based_to_a1(col) for col in source_columns_one_based),
                     b.group_key,
                     b.part_index,
                     b.parts_total,
                     "Y" if b.month_split else "",
                     normalize_text(b.note)[:120],
+                    normalize_text(b.nationality_nights),
                 ]
             )
 
@@ -156,6 +176,12 @@ def write_cross_validation_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
                     "source_systems",
                     "sheet_room_nos",
                     "source_room_nos",
+                    "extra_sheet_room_nos",
+                    "missing_in_sheet_room_nos",
+                    "extra_sheet_channels",
+                    "duplicate_dates",
+                    "room_no",
+                    "sheet_event_count",
                     "sheet_dates",
                     "source_dates",
                     "missing_in_sheet_dates",
@@ -182,6 +208,12 @@ def write_cross_validation_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
         "source_systems",
         "sheet_room_nos",
         "source_room_nos",
+        "extra_sheet_room_nos",
+        "missing_in_sheet_room_nos",
+        "extra_sheet_channels",
+        "duplicate_dates",
+        "room_no",
+        "sheet_event_count",
         "sheet_dates",
         "source_dates",
         "missing_in_sheet_dates",
@@ -223,9 +255,10 @@ def write_source_reservations_csv(path: Path, rows: List[SourceReservation]) -> 
                     "account",
                     "status",
                     "status_bucket",
-                    "audit_anomaly",
-                    "branch",
-                    "reservation_ref",
+                "audit_anomaly",
+                "branch",
+                "reservation_ref",
+                "nationality_nights",
                 ]
         )
         for r in rows:
@@ -245,6 +278,7 @@ def write_source_reservations_csv(path: Path, rows: List[SourceReservation]) -> 
                     "Y" if r.audit_anomaly else "",
                     r.branch,
                     r.reservation_ref,
+                    r.nationality_nights,
                 ]
             )
 

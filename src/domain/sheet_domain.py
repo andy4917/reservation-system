@@ -201,6 +201,15 @@ CHANNEL_FIELD_ALIASES = [
     "\ud310\ub9e4\ucc44\ub110\uba85",
     "\uacc4\uc815",
 ]
+NATIONALITY_FIELD_ALIASES = [
+    "nationality",
+    "guest_nationality",
+    "guest_nation",
+    "guest_country",
+    "nationality_nights",
+    "\uad6d\uc801",
+    "\uad6d\uc801\ubc0f\ubc15\uc218",
+]
 NIGHTS_FIELD_ALIASES = ["nights", "night", "stay_nights", "\ubc15\uc218"]
 ROOM_FIELD_ALIASES = ["room_no", "roomno", "room_number", "\uac1d\uc2e4", "\uac1d\uc2e4\ubc88\ud638"]
 PRICE_FIELD_ALIASES = ["price", "amount", "cost", "room_amt", "rate", "\uc219\ubc15\ube44", "\uc694\uae08"]
@@ -330,6 +339,7 @@ class ReservationBlock:
     part_index: int = 1
     parts_total: int = 1
     month_split: bool = False
+    nationality_nights: str = ""
 
 
 @dataclass
@@ -361,6 +371,7 @@ class SourceReservation:
     audit_anomaly: bool = False
     branch: str = ""
     reservation_ref: str = ""
+    nationality_nights: str = ""
     raw: Dict[str, Any] = dataclasses.field(default_factory=dict)
 
 

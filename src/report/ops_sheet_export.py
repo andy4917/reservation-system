@@ -11,7 +11,7 @@ from src.domain.ops_sheet_policy import (
     format_ops_sheet_room_no,
     resolve_ops_sheet_tab,
 )
-from src.domain.sheet_domain import normalize_text
+from src.domain.sheet_domain import normalize_room_no_key, normalize_text
 from src.io.sheets_api import GoogleSheetsReadonlyClient
 
 ORDERLIST_PACKET_FIELDNAMES = [
@@ -39,6 +39,19 @@ ARRIVAL_PACKET_FIELDNAMES = [
     "비고",
 ]
 
+ARRIVAL_TEMPLATE_SPREADSHEET_ID = "1S-Dw_UEB3A2gXyf834BJfuNolDzz_hR8TsJfcTjEj7g"
+ARRIVAL_TEMPLATE_SHEET_NAME = "Arrival"
+ARRIVAL_TEMPLATE_ROOM_LAYOUT = {
+    "B동": [
+        "201", "202", "301", "302", "401", "402", "501", "502", "601", "602", "701",
+        "702", "801", "802", "901", "902", "1001", "1002", "1101", "1102", "1201", "1202",
+    ],
+    "A동": [
+        "A301", "A302", "A401", "A402", "A501", "A502", "A601", "A602", "A701", "A702",
+        "A801", "A802", "A901", "A902", "A1001", "A1002", "A1101", "A1102", "A1201",
+    ],
+}
+
 
 def build_ops_sheet_export_bundle(
     orderlist_rows: List[Dict[str, Any]],
@@ -48,19 +61,22 @@ def build_ops_sheet_export_bundle(
     spreadsheet_id: str = "",
 ) -> Dict[str, Any]:
     orderlist_packets = build_orderlist_sheet_packets(orderlist_rows)
-    arrival_packets = build_arrival_sheet_packets(arrival_rows)
+    arrival_packets = build_arrival_template_packets(orderlist_rows, arrival_rows)
     snapshot = (
         load_ops_sheet_tab_snapshots(client=client, spreadsheet_id=spreadsheet_id)
         if client and spreadsheet_id
         else {}
     )
     enrich_packets_with_snapshot(orderlist_packets, snapshot)
-    enrich_packets_with_snapshot(arrival_packets, snapshot)
     return {
         "spreadsheet_id": spreadsheet_id,
         "tabs": [policy.tab_name for policy in DEFAULT_OPS_SHEET_TABS],
         "orderlist_packets": orderlist_packets,
         "arrival_packets": arrival_packets,
+        "arrival_template": {
+            "spreadsheet_id": ARRIVAL_TEMPLATE_SPREADSHEET_ID,
+            "sheet_name": ARRIVAL_TEMPLATE_SHEET_NAME,
+        },
         "tab_snapshots": snapshot,
     }
 
@@ -113,40 +129,124 @@ def build_orderlist_sheet_packets(rows: List[Dict[str, Any]]) -> List[Dict[str, 
     ]
 
 
-def build_arrival_sheet_packets(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-    meta_by_tab: Dict[str, Dict[str, str]] = {}
-    for row in rows:
-        policy = resolve_ops_sheet_tab(row.get("branch", ""), row.get("building", ""))
-        if policy is None:
+def build_arrival_template_packets(
+    orderlist_rows: List[Dict[str, Any]],
+    arrival_rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    by_date: Dict[str, Dict[str, Any]] = {}
+    for row in orderlist_rows:
+        date_key = normalize_text(row.get("date", ""))
+        if not date_key:
             continue
-        grouped[policy.tab_name].append(
-            {
-                "날짜": normalize_text(row.get("date", "")).replace("-", ""),
-                "지점명": policy.property_label,
-                "객실번호": format_ops_sheet_room_no(str(row.get("room_no", ""))),
-                "구분": normalize_text(row.get("section", "")),
-                "예약번호": normalize_text(row.get("reservation_no", "")),
-                "채널": normalize_text(row.get("channel", "")),
-                "체크인": normalize_text(row.get("checkin", "")),
-                "체크아웃": normalize_text(row.get("checkout", "")),
-                "비고": build_arrival_comment(row),
-            }
-        )
-        meta_by_tab[policy.tab_name] = {
-            "tab_name": policy.tab_name,
-            "property_label": policy.property_label,
-        }
+        bucket = by_date.setdefault(date_key, {"orderlist": [], "arrival": []})
+        bucket["orderlist"].append(row)
+    for row in arrival_rows:
+        date_key = normalize_text(row.get("date", ""))
+        if not date_key:
+            continue
+        bucket = by_date.setdefault(date_key, {"orderlist": [], "arrival": []})
+        bucket["arrival"].append(row)
     return [
-        finalize_packet(
-            packet_type="arrival",
-            tab_name=tab_name,
-            property_label=meta_by_tab[tab_name]["property_label"],
-            rows=packet_rows,
-            fieldnames=ARRIVAL_PACKET_FIELDNAMES,
+        build_arrival_template_packet(
+            date_key=date_key,
+            orderlist_rows=bucket["orderlist"],
+            arrival_rows=bucket["arrival"],
         )
-        for tab_name, packet_rows in sorted(grouped.items())
+        for date_key, bucket in sorted(by_date.items())
+        if bucket["orderlist"] or bucket["arrival"]
     ]
+
+
+def build_arrival_template_packet(
+    *,
+    date_key: str,
+    orderlist_rows: List[Dict[str, Any]],
+    arrival_rows: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    order_by_room = {
+        normalize_room_no_key(row.get("room_no", "")): row for row in orderlist_rows
+    }
+    arrival_by_room: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for row in arrival_rows:
+        room_key = normalize_room_no_key(row.get("room_no", ""))
+        if room_key:
+            arrival_by_room[room_key].append(row)
+
+    grid_rows: List[Dict[str, Any]] = []
+    cell_updates: List[Dict[str, str]] = [{"range": "B2", "value": format_arrival_template_date(date_key)}]
+    for building, rooms in ARRIVAL_TEMPLATE_ROOM_LAYOUT.items():
+        label_col, dep_col, arr_col = ("B", "C", "D") if building == "B동" else ("F", "G", "H")
+        start_row = 5
+        for offset, room_no in enumerate(rooms):
+            row_no = start_row + offset
+            room_key = normalize_room_no_key(room_no)
+            order_row = order_by_room.get(room_key)
+            room_arrivals = arrival_by_room.get(room_key, [])
+            departure_text, arrival_text = infer_arrival_template_cell_texts(
+                order_row=order_row,
+                arrival_rows=room_arrivals,
+            )
+            room_label = format_arrival_template_room_label(room_no)
+            grid_rows.append(
+                {
+                    "date": date_key,
+                    "building": building,
+                    "room_no": room_no,
+                    "room_label": room_label,
+                    "departure_text": departure_text,
+                    "arrival_text": arrival_text,
+                }
+            )
+            cell_updates.extend(
+                [
+                    {"range": f"{label_col}{row_no}", "value": room_label},
+                    {"range": f"{dep_col}{row_no}", "value": departure_text},
+                    {"range": f"{arr_col}{row_no}", "value": arrival_text},
+                ]
+            )
+    return {
+        "packet_type": "arrival-template",
+        "template_kind": "coex-arrival-board",
+        "spreadsheet_id": ARRIVAL_TEMPLATE_SPREADSHEET_ID,
+        "sheet_name": ARRIVAL_TEMPLATE_SHEET_NAME,
+        "report_date": date_key,
+        "display_date": format_arrival_template_date(date_key),
+        "row_count": len(grid_rows),
+        "grid_rows": grid_rows,
+        "cell_updates": cell_updates,
+        "legacy_fieldnames": ARRIVAL_PACKET_FIELDNAMES,
+        "legacy_rows": sorted(
+            [
+                {
+                    "No.": idx,
+                    "날짜": normalize_text(row.get("date", "")).replace("-", ""),
+                    "지점명": resolve_ops_sheet_tab(row.get("branch", ""), row.get("building", "")).property_label,
+                    "객실번호": format_ops_sheet_room_no(str(row.get("room_no", ""))),
+                    "구분": normalize_text(row.get("section", "")),
+                    "예약번호": normalize_text(row.get("reservation_no", "")),
+                    "채널": normalize_text(row.get("channel", "")),
+                    "체크인": normalize_text(row.get("checkin", "")),
+                    "체크아웃": normalize_text(row.get("checkout", "")),
+                    "비고": build_arrival_comment(row),
+                }
+                for idx, row in enumerate(
+                    sorted(
+                        [
+                            row for row in arrival_rows
+                            if resolve_ops_sheet_tab(row.get("branch", ""), row.get("building", "")) is not None
+                        ],
+                        key=lambda item: (
+                            normalize_text(item.get("date", "")),
+                            normalize_room_no_key(item.get("room_no", "")),
+                            normalize_text(item.get("section", "")),
+                        ),
+                    ),
+                    start=1,
+                )
+            ],
+            key=lambda item: (item["날짜"], item["객실번호"], item["구분"]),
+        ),
+    }
 
 
 def finalize_packet(
@@ -241,6 +341,78 @@ def build_arrival_comment(row: Dict[str, Any]) -> str:
     return " / ".join(parts)
 
 
+def format_arrival_template_date(value: str) -> str:
+    text = normalize_text(value)
+    if len(text) >= 10 and text[4] == "-" and text[7] == "-":
+        return f"{int(text[5:7])}/{int(text[8:10])}"
+    return text
+
+
+def format_arrival_template_room_label(room_no: str) -> str:
+    text = normalize_text(room_no).upper()
+    if text.startswith("A"):
+        return f"A {text[1:]}"
+    return f"B {format_ops_sheet_room_no(text)}"
+
+
+def infer_arrival_template_cell_texts(
+    *,
+    order_row: Dict[str, Any] | None,
+    arrival_rows: List[Dict[str, Any]],
+) -> tuple[str, str]:
+    task_label = normalize_text((order_row or {}).get("task_label", ""))
+    note_heads = normalize_text((order_row or {}).get("note_heads", ""))
+    has_turnover = any(normalize_text(row.get("section", "")) == "TURNOVER" for row in arrival_rows)
+    arrival_only = [row for row in arrival_rows if normalize_text(row.get("section", "")) == "ARRIVAL"]
+    departure_only = [row for row in arrival_rows if normalize_text(row.get("section", "")) == "DEPARTURE"]
+
+    if task_label == "룸메이크업" and not arrival_rows:
+        return "재실", "재실"
+    if task_label == "룸클리닝":
+        return "전체청소", "전체청소"
+    if has_turnover:
+        return "전체청소", "전체청소"
+
+    departure_text = "공실"
+    arrival_text = "공실"
+
+    if departure_only:
+        departure_text = infer_departure_display(departure_only, note_heads=note_heads)
+        arrival_text = "공실"
+    if arrival_only:
+        arrival_text = infer_arrival_display(arrival_only)
+        if not departure_only:
+            departure_text = ""
+    if task_label == "긴급클리닝" and not arrival_text:
+        arrival_text = "전체청소"
+    return departure_text, arrival_text
+
+
+def infer_departure_display(rows: List[Dict[str, Any]], *, note_heads: str = "") -> str:
+    merged = " ".join(
+        [note_heads] + [normalize_text(row.get("note_head", "")) for row in rows] + [build_arrival_comment(row) for row in rows]
+    ).upper()
+    if "LCO" in merged:
+        return "12LCO"
+    return ""
+
+
+def infer_arrival_display(rows: List[Dict[str, Any]]) -> str:
+    first = rows[0] if rows else {}
+    nationality_nights = normalize_text(first.get("nationality_nights", ""))
+    if nationality_nights:
+        return nationality_nights
+    note_head = normalize_text(first.get("note_head", ""))
+    if note_head and "LCO" not in note_head.upper():
+        return note_head
+    nights = normalize_text(first.get("nights", ""))
+    channel = normalize_text(first.get("channel", ""))
+    if nights.isdigit():
+        channel_label = channel or "미상"
+        return f"{channel_label} {int(nights)}박"
+    return ""
+
+
 def load_ops_sheet_tab_snapshots(
     *,
     client: GoogleSheetsReadonlyClient,
@@ -276,6 +448,8 @@ def write_packet_text_files(
     packets: List[Dict[str, Any]],
 ) -> None:
     for packet in packets:
+        if "tsv" not in packet or "csv" not in packet:
+            continue
         tab_name = normalize_text(packet.get("tab_name", "")).replace(" ", "_")
         (out_dir / f"{prefix}_{tab_name}.tsv").write_text(packet.get("tsv", ""), encoding="utf-8-sig")
         (out_dir / f"{prefix}_{tab_name}.csv").write_text(packet.get("csv", ""), encoding="utf-8-sig")

@@ -42,6 +42,7 @@ from src.domain.sheet_domain import (
     DEFAULT_SHEET_NAME,
     DEFAULT_START_ROW,
     DEFAULT_TOKEN_FILE,
+    NATIONALITY_FIELD_ALIASES,
     NIGHTS_FIELD_ALIASES,
     PRICE_FIELD_ALIASES,
     RES_NO_FIELD_ALIASES,
@@ -50,6 +51,7 @@ from src.domain.sheet_domain import (
     AuditError,
     BRANCH_SPLIT_ROW,
     HarRecord,
+    ReservationBlock,
     SourceReservation,
     extract_sheet_id,
     infer_year_from_sheet_name,
@@ -85,6 +87,7 @@ from src.report.ops_workflow import (
     write_ops_outputs,
 )
 from src.report.sheet_report import (
+    col_one_based_to_a1,
     write_blocks_csv,
     write_cross_validation_csv,
     write_daily_csv,
@@ -274,6 +277,29 @@ def load_source_reservations(
     return list(deduped.values())
 
 
+def enrich_blocks_with_source_metadata(
+    blocks: List[ReservationBlock],
+    source_records: List[SourceReservation],
+) -> None:
+    by_reservation_no: Dict[str, List[SourceReservation]] = {}
+    for record in source_records:
+        key = normalize_text(record.reservation_no)
+        if not key:
+            continue
+        by_reservation_no.setdefault(key, []).append(record)
+    for block in blocks:
+        if normalize_text(block.nationality_nights):
+            continue
+        reservation_no = normalize_text(block.reservation_no)
+        if not reservation_no:
+            continue
+        for record in by_reservation_no.get(reservation_no, []):
+            nationality_nights = normalize_text(record.nationality_nights)
+            if nationality_nights:
+                block.nationality_nights = nationality_nights
+                break
+
+
 def to_int(value: Any) -> Optional[int]:
     try:
         if value is None or value == "":
@@ -406,6 +432,17 @@ def infer_branch_from_source_row(
     return ""
 
 
+def normalize_nationality_nights(value: Any, nights: int) -> str:
+    text = normalize_text(str(value or ""))
+    if not text:
+        return ""
+    if re.search(r"\d+\s*\ubc15", text):
+        return text
+    if nights > 0:
+        return f"{text} {nights}\ubc15"
+    return text
+
+
 def is_inactive_reservation_status(status: str) -> bool:
     text = normalize_text(status).upper()
     if not text:
@@ -450,6 +487,10 @@ def parse_source_row(
     reservation_ref = coerce_reservation_no(
         get_first_value_by_alias(row, ["global_rsvn_no", "guest_rsvn_no", "rsvn_seq_no"])
     )
+    nationality_nights = normalize_nationality_nights(
+        get_first_value_by_alias(row, NATIONALITY_FIELD_ALIASES),
+        nights_final,
+    )
 
     effective_channel = normalize_channel(channel_raw, source_system)
     generic_channels = {"", "UNKNOWN", "PMS", "WINGS", "CMS", "PHN"}
@@ -474,6 +515,7 @@ def parse_source_row(
         audit_anomaly=audit_anomaly,
         branch=branch,
         reservation_ref=reservation_ref,
+        nationality_nights=nationality_nights,
         raw=row,
     )
 
@@ -860,6 +902,7 @@ def build_analysis_artifacts(args: argparse.Namespace, context: Dict[str, Any]) 
         station_file=args.station_file,
         pms_file=args.pms_file,
     )
+    enrich_blocks_with_source_metadata(blocks, source_records)
 
     inventory_rows = find_inventory_rows(matrix, row_start=date_row + 2)
     station_existing = (
@@ -1205,6 +1248,139 @@ def command_ops_artifacts(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_trace_blocks(args: argparse.Namespace) -> int:
+    blocks_path = Path(args.blocks_csv)
+    blocks = load_blocks_csv(blocks_path)
+    summary_meta = load_trace_summary_metadata(
+        blocks_path=blocks_path,
+        summary_path=Path(args.summary_json) if normalize_text(args.summary_json) else None,
+    )
+    target_date = parse_any_date(args.date) if normalize_text(args.date) else None
+    if normalize_text(args.date) and target_date is None:
+        raise AuditError(f"--date must be YYYY-MM-DD: {args.date}")
+    matches = [
+        block
+        for block in blocks
+        if block_matches_trace_filters(
+            block,
+            reservation_key=normalize_text(args.reservation_key),
+            reservation_no=normalize_text(args.reservation_no),
+            room_no=normalize_text(args.room_no),
+            target_date=target_date,
+        )
+    ]
+    packets = [
+        build_trace_packet(block, summary_meta)
+        for block in matches[: max(int(args.limit), 1)]
+    ]
+    print(
+        json.dumps(
+            {
+                "count": len(matches),
+                "returned": len(packets),
+                "filters": {
+                    "reservation_key": normalize_text(args.reservation_key),
+                    "reservation_no": normalize_text(args.reservation_no),
+                    "room_no": normalize_text(args.room_no),
+                    "date": target_date.isoformat() if target_date else "",
+                    "blocks_csv": str(blocks_path),
+                    "summary_json": summary_meta.get("summary_json", ""),
+                },
+                "matches": packets,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return 0
+
+
+def load_trace_summary_metadata(
+    *,
+    blocks_path: Path,
+    summary_path: Optional[Path],
+) -> Dict[str, str]:
+    candidates: List[Path] = []
+    if summary_path is not None:
+        candidates.append(summary_path)
+    default_summary = blocks_path.with_name("summary.json")
+    if default_summary not in candidates:
+        candidates.append(default_summary)
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        data = json.loads(candidate.read_text(encoding="utf-8-sig"))
+        input_meta = data.get("input", {})
+        return {
+            "summary_json": str(candidate),
+            "spreadsheet_id": normalize_text(input_meta.get("spreadsheet_id", "")),
+            "sheet_name": normalize_text(input_meta.get("sheet_name", "")),
+        }
+    return {"summary_json": "", "spreadsheet_id": "", "sheet_name": ""}
+
+
+def block_matches_trace_filters(
+    block: ReservationBlock,
+    *,
+    reservation_key: str,
+    reservation_no: str,
+    room_no: str,
+    target_date: Optional[dt.date],
+) -> bool:
+    if reservation_key and normalize_text(block.reservation_key) != reservation_key:
+        return False
+    if reservation_no and normalize_text(block.reservation_no) != reservation_no:
+        return False
+    if room_no and normalize_text(block.room_no) != room_no:
+        return False
+    if target_date is not None:
+        if not block.checkin or not block.checkout:
+            return False
+        if not (block.checkin <= target_date < block.checkout):
+            return False
+    return True
+
+
+def build_trace_packet(block: ReservationBlock, summary_meta: Dict[str, str]) -> Dict[str, Any]:
+    source_columns_one_based = [col + 1 for col in block.source_columns]
+    start_col_one_based = block.start_col + 1
+    end_col_one_based = block.end_col + 1
+    start_col_a1 = col_one_based_to_a1(start_col_one_based)
+    end_col_a1 = col_one_based_to_a1(end_col_one_based)
+    sheet_name = summary_meta.get("sheet_name", "")
+    safe_sheet_name = ""
+    if sheet_name:
+        escaped_sheet_name = sheet_name.replace("'", "''")
+        safe_sheet_name = f"'{escaped_sheet_name}'"
+    row_one_based = block.row + 1
+    sheet_range_a1 = ""
+    if safe_sheet_name:
+        sheet_range_a1 = f"{safe_sheet_name}!{start_col_a1}{row_one_based}:{end_col_a1}{row_one_based}"
+    return {
+        "spreadsheet_id": summary_meta.get("spreadsheet_id", ""),
+        "sheet_name": sheet_name,
+        "row": row_one_based,
+        "room_no": block.room_no,
+        "room_type": block.room_type,
+        "reservation_no": block.reservation_no or "",
+        "reservation_key": block.reservation_key or "",
+        "branch": block.branch,
+        "channel": block.channel,
+        "checkin": block.checkin.isoformat() if block.checkin else "",
+        "checkout": block.checkout.isoformat() if block.checkout else "",
+        "nights": block.nights,
+        "start_col": start_col_one_based,
+        "end_col": end_col_one_based,
+        "start_col_a1": start_col_a1,
+        "end_col_a1": end_col_a1,
+        "source_columns": source_columns_one_based,
+        "source_columns_a1": [col_one_based_to_a1(col) for col in source_columns_one_based],
+        "sheet_range_a1": sheet_range_a1,
+        "note_head": normalize_text(block.note)[:120],
+        "nationality_nights": normalize_text(block.nationality_nights),
+    }
+
+
 def command_analyze_current(args: argparse.Namespace) -> int:
     apply_no_proxy_if_requested(args)
     try:
@@ -1260,6 +1436,16 @@ def add_ops_artifact_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--blocks-csv", default="")
 
 
+def add_trace_block_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--blocks-csv", default="output/reservation_blocks.csv")
+    parser.add_argument("--summary-json", default="")
+    parser.add_argument("--reservation-key", default="")
+    parser.add_argument("--reservation-no", default="")
+    parser.add_argument("--room-no", default="")
+    parser.add_argument("--date", default="")
+    parser.add_argument("--limit", type=int, default=20)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="예약시트 읽기 전용 분석 모듈 (NAVER/STATION/VAC/대조 리포트)"
@@ -1313,6 +1499,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_ops_artifact_arguments(ops_artifacts)
     ops_artifacts.set_defaults(func=command_ops_artifacts)
+
+    trace_blocks = sub.add_parser(
+        "trace-blocks",
+        help="ReservationBlock CSV에서 시트 추적 좌표를 출력",
+    )
+    add_trace_block_arguments(trace_blocks)
+    trace_blocks.set_defaults(func=command_trace_blocks)
 
     return parser
 

@@ -213,6 +213,17 @@
     return true;
   }
 
+  function unmatchedReservationRooms(leftRooms, rightRooms) {
+    const rightAliases = new Set();
+    (rightRooms || []).forEach((roomNo) => reservationRoomAliasKeys(roomNo).forEach((alias) => rightAliases.add(alias)));
+    const out = [];
+    (leftRooms || []).forEach((roomNo) => {
+      const aliases = reservationRoomAliasKeys(roomNo);
+      if (aliases.length > 0 && aliases.every((alias) => !rightAliases.has(alias))) out.push(normalizeText(roomNo));
+    });
+    return [...toNormalizedSet(out, (value) => normalizeText(value))].sort();
+  }
+
   function buildExclusiveStayDateKeys(checkin, checkout) {
     const checkinDate = fromDateKey(checkin || "");
     const checkoutDate = fromDateKey(checkout || "");
@@ -797,7 +808,22 @@
           }
         );
       } else {
-        addVerificationPass(report);
+        const extraSheetRooms = unmatchedReservationRooms(sheetRooms, pmsRooms);
+        if (extraSheetRooms.length > 0 && sheetRooms.length > pmsRooms.length) {
+          mismatchFound = true;
+          appendReservationIssue(
+            "fail",
+            "PMS_DUPLICATE_SHEET_ROOMS_SUSPECT",
+            sheet,
+            `시트 객실 ${sheetRooms.join(",") || "-"} / PMS 객실 ${pmsRooms.join(",") || "-"} / 시트 추가 객실 ${extraSheetRooms.join(",")}`,
+            {
+              pmsStatusBucket: "ACTIVE",
+              sheetStatusGuess: "ACTIVE"
+            }
+          );
+        } else {
+          addVerificationPass(report);
+        }
       }
     });
 
@@ -872,6 +898,7 @@
     summaryHasAuditAnomaly,
     isManualOtaSummary,
     firstKnownValue,
+    unmatchedReservationRooms,
     dateKeyDistance,
     splitReservationRoomTokens,
     reservationRoomAliasKeys,

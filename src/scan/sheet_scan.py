@@ -907,6 +907,7 @@ def extract_reservation_blocks(
         if nights <= 0:
             return
         checkout = checkin + dt.timedelta(days=nights)
+        note_info = parse_note_info(run["note"])
         blocks.append(
             ReservationBlock(
                 row=run["row"],
@@ -926,6 +927,7 @@ def extract_reservation_blocks(
                 platform=run["channel"],
                 color_hex=run["color_hex"],
                 source_columns=source_columns,
+                nationality_nights=normalize_text(note_info.nationality_nights),
             )
         )
 

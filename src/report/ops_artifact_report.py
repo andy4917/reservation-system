@@ -61,6 +61,7 @@ ARRIVAL_FIELDNAMES = [
     "arrival_channels",
     "departure_channels",
     "note_head",
+    "nationality_nights",
 ]
 
 WEEKDAY_LABELS = ("월", "화", "수", "목", "금", "토", "일")
@@ -336,6 +337,7 @@ def build_arrival_or_departure_row(
         "arrival_channels": join_unique(item.channel or item.platform for item in context.arrivals),
         "departure_channels": join_unique(item.channel or item.platform for item in context.departures),
         "note_head": note_head(block.note),
+        "nationality_nights": normalize_text(block.nationality_nights),
     }
 
 
@@ -362,6 +364,9 @@ def build_turnover_row(context: RoomDayContext) -> Dict[str, Any]:
         "arrival_channels": join_unique(item.channel or item.platform for item in context.arrivals),
         "departure_channels": join_unique(item.channel or item.platform for item in context.departures),
         "note_head": join_unique(note_head(item.note) for item in context.arrivals + context.departures),
+        "nationality_nights": join_unique(
+            normalize_text(item.nationality_nights) for item in context.arrivals + context.departures
+        ),
     }
 
 

@@ -2,6 +2,13 @@
 
 네이버/스테이션 관리자 페이지에서 재고 현황 조회 + 시트 기반 OTA 캘린더 적용을 수행하는 Chrome MV3 확장입니다.
 
+## 문서 구조
+
+- 루트: `README.md`, `AGENTS.md`만 유지
+- 시트 문서: `docs/sheets/`
+- 연동 문서: `docs/integrations/`
+- 작업 인계/세션 메모: `tasks/handoffs/`
+
 ## 대상 페이지
 
 - `https://partner.booking.naver.com/*`

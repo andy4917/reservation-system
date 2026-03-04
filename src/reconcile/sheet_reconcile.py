@@ -29,17 +29,21 @@ def aggregate_sheet_reservations(
             block.reservation_no,
             {
                 "reservation_no": block.reservation_no,
-                "room_no": block.room_no,
-                "room_type": block.room_type,
+                "room_nos": set(),
+                "room_types": set(),
                 "checkin": block.checkin,
                 "checkout": block.checkout,
                 "nights": block.nights,
-                "platforms": set([block.platform]),
+                "platforms": set(),
                 "prices": [block.price] if block.price is not None else [],
-                "blocks": 1,
+                "blocks": 0,
             },
         )
         g["blocks"] += 1
+        if normalize_text(block.room_no):
+            g["room_nos"].add(normalize_text(block.room_no))
+        if normalize_text(block.room_type):
+            g["room_types"].add(normalize_text(block.room_type))
         g["platforms"].add(block.platform)
         if block.price is not None:
             g["prices"].append(block.price)
@@ -52,6 +56,10 @@ def aggregate_sheet_reservations(
         if item["checkin"] and item["checkout"]:
             item["nights"] = (item["checkout"] - item["checkin"]).days
         item["platforms"] = sorted(item["platforms"])
+        item["room_nos"] = sorted(item["room_nos"])
+        item["room_types"] = sorted(item["room_types"])
+        item["room_no"] = ",".join(item["room_nos"])
+        item["room_type"] = ",".join(item["room_types"])
         item["price"] = item["prices"][0] if item["prices"] else None
         item.pop("prices", None)
     return grouped
@@ -233,6 +241,34 @@ def room_sets_conflict(sheet_rooms: set[str], source_rooms: set[str]) -> bool:
     return sheet_alias.isdisjoint(source_alias)
 
 
+def unmatched_room_tokens(left_rooms: set[str], right_rooms: set[str]) -> List[str]:
+    if not left_rooms:
+        return []
+    right_alias = room_alias_union(right_rooms)
+    out: List[str] = []
+    for room in sorted(left_rooms):
+        room_alias = room_alias_keys(room)
+        if room_alias and room_alias.isdisjoint(right_alias):
+            out.append(room)
+    return out
+
+
+def unmatched_known_tokens(left_values: set[str], right_values: set[str]) -> List[str]:
+    right_normalized = {
+        normalize_text(value).upper()
+        for value in right_values
+        if normalize_text(value)
+    }
+    out: List[str] = []
+    for value in sorted(left_values):
+        token = normalize_text(value).upper()
+        if not token:
+            continue
+        if token not in right_normalized:
+            out.append(token)
+    return out
+
+
 def is_inactive_source_status(status: str) -> bool:
     return classify_reservation_status_bucket(status) == "CANCELED"
 
@@ -301,6 +337,25 @@ def build_source_reservation_events(
     return list(deduped.values())
 
 
+def build_sheet_room_date_counts(
+    blocks: List[ReservationBlock],
+) -> Dict[Tuple[str, dt.date, str], int]:
+    counts: Dict[Tuple[str, dt.date, str], int] = defaultdict(int)
+    for block in blocks:
+        reservation_no = normalize_text(block.reservation_no)
+        room_no = normalize_text(block.room_no)
+        if not reservation_no or not room_no:
+            continue
+        checkin, checkout, _nights = calculate_checkout_from_dates(
+            block.checkin, block.checkout, block.nights
+        )
+        if not checkin or not checkout:
+            continue
+        for date_val in stay_dates(checkin, checkout):
+            counts[(reservation_no, date_val, room_no)] += 1
+    return counts
+
+
 def aggregate_source_reservations(
     records: List[SourceReservation],
 ) -> Dict[str, Dict[str, Any]]:
@@ -362,6 +417,7 @@ def cross_validate_sheet_vs_sources(
     issues: List[Dict[str, Any]] = []
     sheet_events = build_sheet_reservation_events(blocks)
     source_events = build_source_reservation_events(source_records)
+    sheet_room_date_counts = build_sheet_room_date_counts(blocks)
 
     sheet_by_res_date: Dict[Tuple[str, dt.date], Dict[str, Any]] = defaultdict(
         lambda: {"channels": set(), "room_nos": set()}
@@ -630,6 +686,18 @@ def cross_validate_sheet_vs_sources(
 
         sheet_room_nos = set(split_room_tokens(sheet.get("room_no") or ""))
         source_room_nos = set(source.get("room_nos") or [])
+        extra_sheet_room_nos = unmatched_room_tokens(sheet_room_nos, source_room_nos)
+        missing_in_sheet_room_nos = unmatched_room_tokens(source_room_nos, sheet_room_nos)
+        known_sheet_channels = {
+            normalize_text(value).upper()
+            for value in (sheet.get("platforms") or [])
+            if not is_unknown_or_ambiguous_channel(str(value))
+        }
+        known_source_channels = {
+            normalize_text(value).upper()
+            for value in (source.get("channels") or [])
+            if not is_unknown_or_ambiguous_channel(str(value))
+        }
         if room_sets_conflict(sheet_room_nos, source_room_nos):
             issues.append(
                 {
@@ -640,5 +708,92 @@ def cross_validate_sheet_vs_sources(
                     "source_room_nos": sorted(source_room_nos),
                 }
             )
+        elif (
+            "PMS" in set(source.get("systems") or [])
+            and extra_sheet_room_nos
+            and source_room_nos
+            and len(sheet_room_nos) > len(source_room_nos)
+        ):
+            issues.append(
+                {
+                    "type": "PMS_DUPLICATE_SHEET_ROOMS_SUSPECT",
+                    "reservation_no": reservation_no,
+                    "date": "",
+                    "sheet_room_nos": sorted(sheet_room_nos),
+                    "source_room_nos": sorted(source_room_nos),
+                    "source_systems": source.get("systems", []),
+                    "source_statuses": source.get("statuses", []),
+                    "extra_sheet_room_nos": extra_sheet_room_nos,
+                }
+            )
+        elif (
+            "PMS" in set(source.get("systems") or [])
+            and missing_in_sheet_room_nos
+            and sheet_room_nos
+            and len(source_room_nos) > len(sheet_room_nos)
+        ):
+            issues.append(
+                {
+                    "type": "PMS_MISSING_SHEET_ROOMS_SUSPECT",
+                    "reservation_no": reservation_no,
+                    "date": "",
+                    "sheet_room_nos": sorted(sheet_room_nos),
+                    "source_room_nos": sorted(source_room_nos),
+                    "source_systems": source.get("systems", []),
+                    "source_statuses": source.get("statuses", []),
+                    "missing_in_sheet_room_nos": missing_in_sheet_room_nos,
+                }
+            )
+        if (
+            "PMS" in set(source.get("systems") or [])
+            and len(known_sheet_channels) > 1
+            and len(known_source_channels) == 1
+        ):
+            extra_sheet_channels = unmatched_known_tokens(
+                known_sheet_channels, known_source_channels
+            )
+            if extra_sheet_channels:
+                issues.append(
+                    {
+                        "type": "PMS_MULTI_CHANNEL_SHEET_SUSPECT",
+                        "reservation_no": reservation_no,
+                        "date": "",
+                        "sheet_channels": sorted(known_sheet_channels),
+                        "source_channels": sorted(known_source_channels),
+                        "source_systems": source.get("systems", []),
+                        "source_statuses": source.get("statuses", []),
+                        "extra_sheet_channels": extra_sheet_channels,
+                    }
+                )
+        if "PMS" in set(source.get("systems") or []):
+            for room_no in sorted(sheet_room_nos):
+                checkin = sheet.get("checkin")
+                checkout = sheet.get("checkout")
+                if not checkin or not checkout:
+                    continue
+                duplicate_dates: List[str] = []
+                max_sheet_event_count = 0
+                if unmatched_room_tokens({room_no}, source_room_nos):
+                    continue
+                for date_val in stay_dates(checkin, checkout):
+                    count = sheet_room_date_counts.get((reservation_no, date_val, room_no), 0)
+                    if count > 1:
+                        duplicate_dates.append(date_val.isoformat())
+                        max_sheet_event_count = max(max_sheet_event_count, count)
+                if duplicate_dates:
+                    issues.append(
+                        {
+                            "type": "PMS_DUPLICATE_SHEET_STAY_SUSPECT",
+                            "reservation_no": reservation_no,
+                            "date": "",
+                            "room_no": room_no,
+                            "sheet_room_nos": sorted(sheet_room_nos),
+                            "source_room_nos": sorted(source_room_nos),
+                            "source_systems": source.get("systems", []),
+                            "source_statuses": source.get("statuses", []),
+                            "duplicate_dates": duplicate_dates,
+                            "sheet_event_count": max_sheet_event_count,
+                        }
+                    )
 
     return issues
