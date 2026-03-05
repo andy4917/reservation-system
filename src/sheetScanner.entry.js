@@ -142,6 +142,7 @@
     convertHarToWingsPmsConfig,
     applyEmbeddedSyncConfig,
     getEmbeddedAuthMissingFields,
+    sanitizeNaverExecutionConfig,
     sanitizeSyncConfig,
     loadSyncConfig,
     saveSyncConfig,
@@ -376,7 +377,9 @@
     syncApprovalFingerprint: "",
     secretsMasked: true,
     onboardingDismissed: false,
-    opsSectionExpanded: false
+    opsSectionExpanded: false,
+    naverQueue: runtime.naverQueue || (runtime.naverQueue = new Map()),
+    naverQueueMeta: runtime.naverQueueMeta || (runtime.naverQueueMeta = { lastFlushedAt: 0 })
   };
   const PANEL_ANIM_MS = 140;
   let panelAnimTimer = 0;
@@ -1462,16 +1465,149 @@
   }
 
   function renderSiteValueTable(dates, valueRows) {
-    renderTable(ui.siteHead, ui.siteBody, dates, valueRows);
+    renderTable(ui.siteHead, ui.siteBody, dates, buildRoomTypeAggregatedRowsForView(dates, valueRows, activeProviderKey()));
   }
 
   function renderSheetValueTable(dates, valueRows) {
-    renderTable(ui.sheetHead, ui.sheetBody, dates, valueRows);
+    renderTable(ui.sheetHead, ui.sheetBody, dates, buildRoomTypeAggregatedRowsForView(dates, valueRows, activeProviderKey()));
   }
 
   function renderMismatchRows(rows, query = null) {
     void rows;
     void query;
+  }
+
+  function roomTypeLabelFromSummaryKey(typeKey) {
+    if (typeKey === "urban") return ROOM_TYPE_LABELS.urban;
+    if (typeKey === "doubleTwin") return ROOM_TYPE_LABELS.doubleTwin;
+    if (typeKey === "grand") return ROOM_TYPE_LABELS.grand;
+    return "UNKNOWN";
+  }
+
+  const ROOM_TYPE_AGGREGATION_POLICY_DEFAULT = {
+    urban: "sum",
+    doubleTwin: "sum",
+    grand: "sum",
+    unknown: "sum"
+  };
+
+  function normalizeRoomTypeAggregationMode(modeRaw) {
+    const mode = normalizeText(modeRaw || "").toLowerCase();
+    if (mode === "min" || mode === "max") return mode;
+    return "sum";
+  }
+
+  function resolveRoomTypeAggregationMode(typeKeyRaw) {
+    const typeKey = String(typeKeyRaw || "");
+    const policy = state.syncConfig?.roomTypeAggregationPolicy;
+    const configured = policy && typeof policy === "object" ? policy[typeKey] : "";
+    const fallback = ROOM_TYPE_AGGREGATION_POLICY_DEFAULT[typeKey] || "sum";
+    return normalizeRoomTypeAggregationMode(configured || fallback);
+  }
+
+  function resolveRoomTypeKeyForItem(providerKey, roomIdRaw, roomNameRaw) {
+    const roomId = String(roomIdRaw || "");
+    const roomName = String(roomNameRaw || "");
+    const previewMapped = state.syncPreview?.providerItemMap?.[roomId]?.roomType;
+    if (normalizeText(previewMapped || "")) {
+      return normalizeRoomTypeKeyForSummary(previewMapped);
+    }
+    const derivedMapped = state.sheetSnapshot?.derivedCorrections?.[providerKey]?.roomTypeMap?.[roomId];
+    if (normalizeText(derivedMapped || "")) {
+      return normalizeRoomTypeKeyForSummary(derivedMapped);
+    }
+    return normalizeRoomTypeKeyForSummary(roomName);
+  }
+
+  function buildRoomTypeAggregatedRowsForView(dates, valueRows, providerKey) {
+    const safeDates = Array.isArray(dates) ? dates : [];
+    const safeRows = Array.isArray(valueRows) ? valueRows : [];
+    if (!safeDates.length || !safeRows.length) return [];
+
+    const bucketByType = new Map();
+    const orderedTypeKeys = ["urban", "doubleTwin", "grand", "unknown"];
+
+    const ensureBucket = (typeKey) => {
+      const normalizedTypeKey = orderedTypeKeys.includes(typeKey) ? typeKey : "unknown";
+      if (bucketByType.has(normalizedTypeKey)) return bucketByType.get(normalizedTypeKey);
+      const bucket = {
+        typeKey: normalizedTypeKey,
+        roomIds: [],
+        rows: []
+      };
+      bucketByType.set(normalizedTypeKey, bucket);
+      return bucket;
+    };
+
+    safeRows.forEach((row) => {
+      const roomId = String(row?.roomId || "");
+      const roomName = String(row?.roomName || roomId || "");
+      const typeKey = resolveRoomTypeKeyForItem(providerKey, roomId, roomName);
+      const bucket = ensureBucket(typeKey);
+      if (roomId) bucket.roomIds.push(roomId);
+      bucket.rows.push(row);
+    });
+
+    return orderedTypeKeys
+      .filter((typeKey) => bucketByType.has(typeKey))
+      .map((typeKey) => {
+        const bucket = bucketByType.get(typeKey);
+        const roomCount = new Set(bucket.roomIds.filter(Boolean)).size;
+        const label = roomTypeLabelFromSummaryKey(typeKey);
+        const aggregationMode = resolveRoomTypeAggregationMode(typeKey);
+        return {
+          roomId: `type:${typeKey}`,
+          roomName: roomCount > 0 ? `${label} (${roomCount})` : label,
+          cells: safeDates.map((_, idx) => {
+            let sumCurrent = 0;
+            let sumMaximum = 0;
+            let hasFraction = false;
+            let hasClosed = false;
+            let fallbackText = "";
+            const candidates = [];
+            bucket.rows.forEach((row) => {
+              const cell = Array.isArray(row?.cells) ? row.cells[idx] : "";
+              const text = normalizeDisplayInventoryValue(tableCellDisplayText(cell));
+              const fraction = parseStockFraction(text);
+              if (fraction) {
+                hasFraction = true;
+                sumCurrent += Number(fraction.current || 0);
+                sumMaximum += Number(fraction.maximum || 0);
+                candidates.push({
+                  text,
+                  available: Math.max(0, Number(fraction.maximum || 0) - Number(fraction.current || 0))
+                });
+                return;
+              }
+              if (text === TEXT.closed) {
+                hasClosed = true;
+                candidates.push({
+                  text: TEXT.closed,
+                  available: 0
+                });
+                return;
+              }
+              if (!fallbackText && text) fallbackText = text;
+            });
+            if (aggregationMode === "min" || aggregationMode === "max") {
+              if (candidates.length > 0) {
+                const ordered = [...candidates].sort((a, b) => a.available - b.available);
+                return aggregationMode === "min"
+                  ? ordered[0].text
+                  : ordered[ordered.length - 1].text;
+              }
+              if (hasClosed) return TEXT.closed;
+              return fallbackText;
+            }
+            if (hasFraction) {
+              const mergedText = normalizeDisplayInventoryValue(`${Math.max(0, sumCurrent)}/${Math.max(0, sumMaximum)}`);
+              return autoCorrectInventoryDisplayValue(mergedText).text;
+            }
+            if (hasClosed) return TEXT.closed;
+            return fallbackText;
+          })
+        };
+      });
   }
 
   function verifySiteInventoryAccuracy(report, query) {
@@ -1490,7 +1626,7 @@
     });
     const renderedIndex = buildValueCellIndex(state.dates, state.valueRows);
 
-    if ((state.valueRows || []).length !== preset.length) {
+    if ((state.valueRows || []).length < preset.length) {
       addVerificationWarn(
         report,
         makeVerificationIssue(
@@ -1498,7 +1634,7 @@
           query.startDate,
           "-",
           "ROW_COUNT_MISMATCH",
-          `렌더 행 수(${(state.valueRows || []).length})와 기준 객실 수(${preset.length})가 다릅니다.`
+          `렌더 행 수(${(state.valueRows || []).length})가 기준 객실 수(${preset.length})보다 적습니다.`
         )
       );
     } else {
@@ -1646,7 +1782,7 @@
       addVerificationPass(report);
     }
 
-    if ((state.sheetValueRows || []).length !== preset.length) {
+    if ((state.sheetValueRows || []).length < preset.length) {
       addVerificationWarn(
         report,
         makeVerificationIssue(
@@ -1654,7 +1790,7 @@
           query.startDate,
           "-",
           "ROW_COUNT_MISMATCH",
-          `시트 행 수(${(state.sheetValueRows || []).length})와 기준 객실 수(${preset.length})가 다릅니다.`
+          `시트 행 수(${(state.sheetValueRows || []).length})가 기준 객실 수(${preset.length})보다 적습니다.`
         )
       );
     } else {
@@ -1663,7 +1799,11 @@
 
     const providerKey = context.providerType === "admin-station" ? "STATION" : "NAVER";
     const roomValueMaps = resolveProviderRoomValueMaps(state.sheetSnapshot, providerKey);
-    const allowProviderFallback = shouldAllowProviderFallback(state.sheetSnapshot, providerKey);
+    const allowProviderFallback = shouldAllowProviderFallback(
+      state.sheetSnapshot,
+      providerKey,
+      Array.isArray(state.sheetValueRows) ? state.sheetValueRows.length : preset.length
+    );
     const sourceUsage = {
       room_raw: 0,
       room_derived: 0,
@@ -1884,14 +2024,49 @@
   function buildValueModel(rows, query, options = null) {
     const applyCorrections = options?.applyCorrections === true;
     const dates = buildDateRange(query.startDate, query.endDate);
+    const safeRows = Array.isArray(rows) ? rows : [];
     const index = new Map();
-    for (const row of rows) index.set(`${row.date}::${row.roomId}`, row);
-    const preset = ROOM_PRESETS[context.providerType];
-    const valueRows = preset.map((room) => ({
-      roomId: room.id,
-      roomName: room.name,
+    for (const row of safeRows) index.set(`${row.date}::${row.roomId}`, row);
+    const providerKey = activeProviderKey();
+    const preset = ROOM_PRESETS[context.providerType] || [];
+    const presetOrder = new Map(preset.map((room, idx) => [String(room?.id || ""), idx]));
+    const roomNameById = new Map(
+      preset.map((room) => [String(room?.id || ""), String(room?.name || room?.id || "")])
+    );
+    safeRows.forEach((row) => {
+      const roomId = String(row?.roomId || "");
+      if (!roomId || roomNameById.has(roomId)) return;
+      const candidateName =
+        normalizeText(row?.roomName || "") ||
+        normalizeText(row?.rawRoomName || "") ||
+        normalizeText(row?.mappingMatchedName || "");
+      roomNameById.set(roomId, candidateName || roomId);
+    });
+    const roomIds = [...new Set(safeRows.map((row) => String(row?.roomId || "")).filter(Boolean))];
+    if (roomIds.length <= 0) {
+      preset.forEach((room) => {
+        const roomId = String(room?.id || "");
+        if (roomId) roomIds.push(roomId);
+      });
+    }
+    roomIds.sort((a, b) => {
+      const ao = presetOrder.get(a);
+      const bo = presetOrder.get(b);
+      const hasOrderA = Number.isInteger(ao);
+      const hasOrderB = Number.isInteger(bo);
+      if (hasOrderA && hasOrderB && ao !== bo) return ao - bo;
+      if (hasOrderA && !hasOrderB) return -1;
+      if (!hasOrderA && hasOrderB) return 1;
+      return a.localeCompare(b);
+    });
+    const valueRows = roomIds.map((roomId) => ({
+      roomId,
+      roomName: roomNameById.get(roomId) || roomId,
+      roomType: roomTypeLabelFromSummaryKey(
+        resolveRoomTypeKeyForItem(providerKey, roomId, roomNameById.get(roomId) || roomId)
+      ),
       cells: dates.map((date) => {
-        const rawText = normalizeDisplayInventoryValue(rowToValue(index.get(`${date}::${room.id}`)));
+        const rawText = normalizeDisplayInventoryValue(rowToValue(index.get(`${date}::${roomId}`)));
         if (!applyCorrections) return rawText;
         const corrected = autoCorrectInventoryDisplayValue(rawText);
         if (!corrected.corrected) return rawText;
@@ -1955,19 +2130,22 @@
     };
   }
 
-  function hasCompleteProviderRoomDataRows(snapshot, providerKey) {
+  function hasCompleteProviderRoomDataRows(snapshot, providerKey, expectedRoomCount = null) {
     const rows = providerKey === "STATION"
       ? snapshot?.inventoryDataRows?.STATION
       : snapshot?.inventoryDataRows?.NAVER;
     const providerType = providerKey === "STATION" ? "admin-station" : "naver-partner";
     const presetCount = (ROOM_PRESETS[providerType] || []).length;
+    const expectedCount = Number.isInteger(expectedRoomCount) && expectedRoomCount > 0
+      ? Number(expectedRoomCount)
+      : presetCount;
     const validCount = Array.isArray(rows) ? rows.filter((row) => Number.isInteger(row)).length : 0;
-    if (presetCount <= 0) return validCount > 0;
-    return validCount >= presetCount;
+    if (expectedCount <= 0) return validCount > 0;
+    return validCount >= expectedCount;
   }
 
-  function shouldAllowProviderFallback(snapshot, providerKey) {
-    return !hasCompleteProviderRoomDataRows(snapshot, providerKey);
+  function shouldAllowProviderFallback(snapshot, providerKey, expectedRoomCount = null) {
+    return !hasCompleteProviderRoomDataRows(snapshot, providerKey, expectedRoomCount);
   }
 
   function resolveSheetSnapshotInventoryCell(
@@ -2013,11 +2191,11 @@
     dates,
     roomValueMapsOverride = null
   ) {
-    const roomValueMaps = roomValueMapsOverride || resolveProviderRoomValueMaps(snapshot, providerKey);
-    const allowProviderFallback = shouldAllowProviderFallback(snapshot, providerKey);
-    const out = {};
     const safePreset = Array.isArray(roomPreset) ? roomPreset : [];
     const safeDates = Array.isArray(dates) ? dates.filter(Boolean) : [];
+    const roomValueMaps = roomValueMapsOverride || resolveProviderRoomValueMaps(snapshot, providerKey);
+    const allowProviderFallback = shouldAllowProviderFallback(snapshot, providerKey, safePreset.length);
+    const out = {};
 
     safePreset.forEach((room) => {
       const roomId = String(room?.id || "");
@@ -2056,7 +2234,7 @@
     }
 
     const roomValueMaps = resolveProviderRoomValueMaps(snapshot, providerKey);
-    const allowProviderFallback = shouldAllowProviderFallback(snapshot, providerKey);
+    const allowProviderFallback = shouldAllowProviderFallback(snapshot, providerKey, safePreset.length);
 
     safePreset.forEach((room) => {
       safeDates.forEach((day) => {
@@ -2242,17 +2420,50 @@
     const dates = Array.isArray(snapshot?.dateCols) ? snapshot.dateCols.map((dc) => dc.dateKey) : [];
     const providerType = providerKey === "STATION" ? "admin-station" : "naver-partner";
     const preset = ROOM_PRESETS[providerType] || ROOM_PRESETS[context.providerType] || [];
+    const presetOrder = new Map(preset.map((room, idx) => [String(room?.id || ""), idx]));
     const roomValueMaps = resolveProviderRoomValueMaps(snapshot, providerKey);
-    const allowProviderFallback = shouldAllowProviderFallback(snapshot, providerKey);
-    const valueRows = preset.map((room) => ({
-      roomId: room.id,
-      roomName: room.name,
+    const roomNameById = new Map(
+      preset.map((room) => [String(room?.id || ""), String(room?.name || room?.id || "")])
+    );
+    (state.rows || []).forEach((row) => {
+      const roomId = String(row?.roomId || "");
+      if (!roomId || roomNameById.has(roomId)) return;
+      const candidateName =
+        normalizeText(row?.roomName || "") ||
+        normalizeText(row?.rawRoomName || "") ||
+        normalizeText(row?.mappingMatchedName || "");
+      roomNameById.set(roomId, candidateName || roomId);
+    });
+    const roomIds = [
+      ...new Set([
+        ...preset.map((room) => String(room?.id || "")).filter(Boolean),
+        ...Object.keys(roomValueMaps?.mergedRoomValuesById || {}).map((id) => String(id || "")).filter(Boolean),
+        ...Object.keys(snapshot?.derivedCorrections?.[providerKey]?.roomTypeMap || {}).map((id) => String(id || "")).filter(Boolean)
+      ])
+    ];
+    roomIds.sort((a, b) => {
+      const ao = presetOrder.get(a);
+      const bo = presetOrder.get(b);
+      const hasOrderA = Number.isInteger(ao);
+      const hasOrderB = Number.isInteger(bo);
+      if (hasOrderA && hasOrderB && ao !== bo) return ao - bo;
+      if (hasOrderA && !hasOrderB) return -1;
+      if (!hasOrderA && hasOrderB) return 1;
+      return a.localeCompare(b);
+    });
+    const allowProviderFallback = shouldAllowProviderFallback(snapshot, providerKey, roomIds.length);
+    const valueRows = roomIds.map((roomId) => ({
+      roomId,
+      roomName: roomNameById.get(roomId) || roomId,
+      roomType: roomTypeLabelFromSummaryKey(
+        resolveRoomTypeKeyForItem(providerKey, roomId, roomNameById.get(roomId) || roomId)
+      ),
       cells: (() => {
         return dates.map((day) => {
           const display = resolveSheetDisplayCell(
             snapshot,
             providerKey,
-            room.id,
+            roomId,
             day,
             allowProviderFallback,
             roomValueMaps,
@@ -2842,6 +3053,7 @@
         ...((state.syncConfig?.providerApply && typeof state.syncConfig.providerApply === "object") ? state.syncConfig.providerApply : {}),
         [currentProviderApplyKey()]: ui.cfgProviderApply?.checked === true
       },
+      naverExecution: sanitizeNaverExecutionConfig(state.syncConfig?.naverExecution || {}),
       accessToken: tokenBundle?.accessToken || getFieldValue(ui.cfgAccessToken),
       refreshToken: tokenBundle?.refreshToken || getFieldValue(ui.cfgRefreshToken),
       pmsPreset: readPmsPresetFromUI(),
@@ -3024,6 +3236,154 @@
     }
 
     return results;
+  }
+
+  function resolveNaverExecutionConfig(syncConfig) {
+    return sanitizeNaverExecutionConfig(syncConfig?.naverExecution || {});
+  }
+
+  function buildNaverQueueCellKey(bizItemId, day) {
+    return `${String(bizItemId || "")}::${String(day || "")}`;
+  }
+
+  function enqueueNaverActions(actions = []) {
+    const queue = state.naverQueue;
+    let upsertCount = 0;
+    const now = Date.now();
+    (Array.isArray(actions) ? actions : []).forEach((action) => {
+      const type = String(action?.type || "");
+      if (type !== "stock" && type !== "sale-day") return;
+      const bizItemId = String(action?.bizItemId || "");
+      const day = String(action?.date || "");
+      if (!bizItemId || !day) return;
+      const cellKey = buildNaverQueueCellKey(bizItemId, day);
+      const entry = queue.get(cellKey) || {
+        bizItemId,
+        date: day,
+        stockAction: null,
+        saleAction: null,
+        errorCount: 0,
+        updatedAt: now
+      };
+      if (type === "stock") entry.stockAction = { ...action, bizItemId, date: day };
+      else entry.saleAction = { ...action, bizItemId, date: day };
+      entry.updatedAt = now;
+      queue.set(cellKey, entry);
+      upsertCount += 1;
+    });
+    return {
+      upsertCount,
+      queueSize: queue.size
+    };
+  }
+
+  function shouldFlushNaverQueue(config, trigger = "manual") {
+    if (String(trigger || "manual") !== "manual") return false;
+    const queueSize = state.naverQueue.size;
+    if (queueSize <= 0) return false;
+    return true;
+  }
+
+  function buildNaverBatchFromQueue(config) {
+    const maxBatchActions = Math.max(1, Number(config?.maxBatchActions || 1));
+    const entries = [...state.naverQueue.entries()].sort((a, b) => Number(a?.[1]?.updatedAt || 0) - Number(b?.[1]?.updatedAt || 0));
+    const selectedKeys = [];
+    const selectedEntries = new Map();
+    const actions = [];
+    for (const [cellKey, entry] of entries) {
+      const pair = [];
+      if (entry?.stockAction) pair.push({ ...entry.stockAction });
+      if (entry?.saleAction) pair.push({ ...entry.saleAction });
+      if (pair.length <= 0) continue;
+      if (actions.length > 0 && actions.length + pair.length > maxBatchActions) break;
+      selectedKeys.push(cellKey);
+      selectedEntries.set(cellKey, entry);
+      actions.push(...pair);
+      if (actions.length >= maxBatchActions) break;
+    }
+    return { actions, selectedKeys, selectedEntries };
+  }
+
+  function requeueNaverFailedResults(results, actionByResultKey, selectedEntries, retryLimit) {
+    (results || []).forEach((row) => {
+      if (row?.status !== "FAILED") return;
+      const actionKey = buildNaverResultKey(row?.type, row?.bizItemId, row?.date);
+      const action = actionByResultKey.get(actionKey);
+      if (!action) return;
+      const cellKey = buildNaverQueueCellKey(row?.bizItemId, row?.date);
+      const baseEntry = selectedEntries.get(cellKey) || {
+        bizItemId: String(row?.bizItemId || ""),
+        date: String(row?.date || ""),
+        stockAction: null,
+        saleAction: null,
+        errorCount: 0,
+        updatedAt: Date.now()
+      };
+      const nextErrorCount = Number(baseEntry.errorCount || 0) + 1;
+      if (nextErrorCount > retryLimit) return;
+      const nextEntry = {
+        ...baseEntry,
+        stockAction: baseEntry.stockAction,
+        saleAction: baseEntry.saleAction,
+        errorCount: nextErrorCount,
+        updatedAt: Date.now()
+      };
+      if (String(action?.type || "") === "stock") nextEntry.stockAction = { ...action };
+      if (String(action?.type || "") === "sale-day") nextEntry.saleAction = { ...action };
+      state.naverQueue.set(cellKey, nextEntry);
+    });
+  }
+
+  async function executeQueuedNaverActions(syncConfig, sleepMs, trigger = "manual") {
+    const naverCfg = resolveNaverExecutionConfig(syncConfig);
+    if (naverCfg.mode !== "sync") {
+      return {
+        mode: naverCfg.mode,
+        queueSize: state.naverQueue.size,
+        results: []
+      };
+    }
+    if (!shouldFlushNaverQueue(naverCfg, trigger)) {
+      return {
+        mode: naverCfg.mode,
+        queueSize: state.naverQueue.size,
+        results: []
+      };
+    }
+    const { actions, selectedKeys, selectedEntries } = buildNaverBatchFromQueue(naverCfg);
+    if (actions.length <= 0) {
+      return {
+        mode: naverCfg.mode,
+        queueSize: state.naverQueue.size,
+        results: []
+      };
+    }
+    if (actions.length > Number(naverCfg.maxChangesPerRun || actions.length)) {
+      return {
+        mode: naverCfg.mode,
+        queueSize: state.naverQueue.size,
+        results: actions.map((action) => ({
+          type: action.type,
+          bizItemId: action.bizItemId,
+          date: action.date,
+          status: "FAILED",
+          error: `NAVER guard: batch actions ${actions.length} exceeds maxChangesPerRun ${naverCfg.maxChangesPerRun}`
+        }))
+      };
+    }
+    selectedKeys.forEach((cellKey) => state.naverQueue.delete(cellKey));
+    const actionByResultKey = new Map(
+      actions.map((action) => [buildNaverResultKey(action?.type, action?.bizItemId, action?.date), action])
+    );
+    const effectiveSleepMs = Math.max(Number(sleepMs) || 0, Number(naverCfg.rateLimitMs) || 0);
+    const results = await applyNaverActions(actions, effectiveSleepMs);
+    requeueNaverFailedResults(results, actionByResultKey, selectedEntries, Number(naverCfg.retryLimit || 0));
+    state.naverQueueMeta.lastFlushedAt = Date.now();
+    return {
+      mode: naverCfg.mode,
+      queueSize: state.naverQueue.size,
+      results
+    };
   }
 
   function buildPreviewRows(providerKey, actions) {
@@ -3444,6 +3804,7 @@
       targetMode,
       stockMode: normalizeText(syncConfig?.stockMode || ""),
       providerApply: { ...((syncConfig?.providerApply && typeof syncConfig.providerApply === "object") ? syncConfig.providerApply : {}) },
+      naverExecution: resolveNaverExecutionConfig(syncConfig),
       query: {
         startDate: query?.startDate || "",
         endDate: query?.endDate || ""
@@ -3542,7 +3903,7 @@
     const inventoryDataRows = providerKey === "STATION"
       ? snapshot?.inventoryDataRows?.STATION
       : snapshot?.inventoryDataRows?.NAVER;
-    const allowProviderFallback = shouldAllowProviderFallback(snapshot, providerKey);
+    const allowProviderFallback = shouldAllowProviderFallback(snapshot, providerKey, preset.length);
 
     let selected = null;
     let firstComparable = null;
@@ -3749,7 +4110,7 @@
     const inventoryDataRows = providerKey === "STATION"
       ? snapshot?.inventoryDataRows?.STATION
       : snapshot?.inventoryDataRows?.NAVER;
-    const allowProviderFallback = shouldAllowProviderFallback(snapshot, providerKey);
+    const allowProviderFallback = shouldAllowProviderFallback(snapshot, providerKey, preset.length);
 
     const providerTrace = snapshot?.trace?.providerValueSources?.[providerKey] || {};
     const dateColByDay = new Map(
@@ -3837,13 +4198,79 @@
   }
 
   function buildSyncPreviewContext(snapshot, rows) {
-    const roomPreset = ROOM_PRESETS[context.providerType] || [];
-    const roomIds = roomPreset.map((row) => row.id);
     const isStation = context.providerType === "admin-station";
     const providerKey = isStation ? "STATION" : "NAVER";
+    const normalizedRows = Array.isArray(rows) ? rows : [];
     const valuesByDate = isStation ? snapshot.stationValues : snapshot.naverValues;
     const roomValueMaps = resolveProviderRoomValueMaps(snapshot, providerKey);
     const dates = Array.isArray(snapshot?.dateCols) ? snapshot.dateCols.map((dc) => dc?.dateKey).filter(Boolean) : [];
+    const roomPreset = (() => {
+      const preset = ROOM_PRESETS[context.providerType] || [];
+      const roomTypeMap = snapshot?.derivedCorrections?.[providerKey]?.roomTypeMap || {};
+      const presetNameById = new Map(
+        preset.map((room) => [String(room?.id || ""), String(room?.name || room?.id || "")])
+      );
+      const presetOrder = new Map(preset.map((room, index) => [String(room?.id || ""), index]));
+      const namesById = new Map();
+      const pushName = (idRaw, nameRaw) => {
+        const id = String(idRaw || "");
+        const name = String(nameRaw || "").trim();
+        if (!id || !name || namesById.has(id)) return;
+        namesById.set(id, name);
+      };
+      preset.forEach((room) => pushName(room?.id, room?.name));
+      normalizedRows.forEach((row) => {
+        const id = String(row?.roomId || row?.providerItemId || "");
+        if (!id) return;
+        pushName(id, row?.roomName);
+        pushName(id, row?.rawRoomName);
+        pushName(id, row?.mappingMatchedName);
+      });
+      const discoveredIds = new Set();
+      normalizedRows.forEach((row) => {
+        const id = String(row?.roomId || row?.providerItemId || "");
+        if (id) discoveredIds.add(id);
+      });
+      Object.keys(roomValueMaps?.mergedRoomValuesById || {}).forEach((id) => {
+        if (id) discoveredIds.add(String(id));
+      });
+      if (discoveredIds.size <= 0) {
+        preset.forEach((room) => {
+          const id = String(room?.id || "");
+          if (id) discoveredIds.add(id);
+        });
+      }
+      const toRoomType = (id, name) => {
+        const explicit = normalizeText(roomTypeMap?.[id] || "");
+        if (explicit) return explicit;
+        const normalized = normalizeRoomTypeKeyForSummary(name || "");
+        if (normalized === "urban") return ROOM_TYPE_LABELS.urban;
+        if (normalized === "doubleTwin") return ROOM_TYPE_LABELS.doubleTwin;
+        if (normalized === "grand") return ROOM_TYPE_LABELS.grand;
+        return "UNKNOWN";
+      };
+      return [...discoveredIds]
+        .filter(Boolean)
+        .sort((a, b) => {
+          const ao = presetOrder.get(a);
+          const bo = presetOrder.get(b);
+          const hasOrderA = Number.isInteger(ao);
+          const hasOrderB = Number.isInteger(bo);
+          if (hasOrderA && hasOrderB && ao !== bo) return ao - bo;
+          if (hasOrderA && !hasOrderB) return -1;
+          if (!hasOrderA && hasOrderB) return 1;
+          return a.localeCompare(b);
+        })
+        .map((id) => {
+          const name = namesById.get(id) || presetNameById.get(id) || id;
+          return {
+            id,
+            name,
+            roomType: toRoomType(id, name)
+          };
+        });
+    })();
+    const roomIds = roomPreset.map((row) => row.id).filter(Boolean);
     const roomValuesByRoom = buildResolvedRoomValuesByRoom(
       snapshot,
       providerKey,
@@ -3855,16 +4282,36 @@
     return {
       roomPreset,
       roomIds,
+      providerItemMap: roomPreset.reduce((acc, item) => {
+        const id = String(item?.id || "");
+        if (!id) return acc;
+        acc[id] = {
+          roomType: String(item?.roomType || "UNKNOWN"),
+          roomName: String(item?.name || id)
+        };
+        return acc;
+      }, {}),
       isStation,
       providerKey,
       valuesByDate,
       roomValueMaps,
       dates,
       roomValuesByRoom,
-      hasCompleteRoomDataRows: hasCompleteProviderRoomDataRows(snapshot, providerKey),
-      normalizedRows: Array.isArray(rows) ? rows : [],
+      hasCompleteRoomDataRows: hasCompleteProviderRoomDataRows(snapshot, providerKey, roomIds.length),
+      normalizedRows,
       snapshot
     };
+  }
+
+  function hasCompleteRoomTargetCoverage(targetsByDay, roomIds, dates) {
+    const safeRoomIds = Array.isArray(roomIds) ? roomIds.filter(Boolean) : [];
+    const safeDates = Array.isArray(dates) ? dates.filter(Boolean) : [];
+    if (!safeRoomIds.length || !safeDates.length) return false;
+    return safeDates.every((day) => {
+      const byRoom = targetsByDay?.[day];
+      if (!byRoom || typeof byRoom !== "object" || Array.isArray(byRoom)) return false;
+      return safeRoomIds.every((roomId) => Object.prototype.hasOwnProperty.call(byRoom, roomId));
+    });
   }
 
   function resolveSyncPreviewTargets(previewContext, stockMode) {
@@ -3875,7 +4322,9 @@
       stockMode,
       previewContext.providerKey
     );
-    const hasRoomTargets = previewContext.hasCompleteRoomDataRows && Object.keys(roomTargets).length > 0;
+    const hasRoomTargets =
+      previewContext.hasCompleteRoomDataRows &&
+      hasCompleteRoomTargetCoverage(roomTargets, previewContext.roomIds, previewContext.dates);
     const targets = hasRoomTargets ? roomTargets : providerTargets;
     if (!Object.keys(targets).length) {
       throw new Error(`선택한 기간에서 ${previewContext.providerKey} 목표값을 해석하지 못했습니다.`);
@@ -3978,6 +4427,7 @@
       targetMode,
       providerTargets,
       roomTargets,
+      providerItemMap: previewContext.providerItemMap,
       validation,
       actions,
       warnings,
@@ -4464,6 +4914,10 @@
     runtime.stationTokenCache = stationTokenCache;
     naverBizItemsCache = { ts: 0, items: [] };
     runtime.naverBizItemsCache = naverBizItemsCache;
+    state.naverQueue = new Map();
+    runtime.naverQueue = state.naverQueue;
+    state.naverQueueMeta = { lastFlushedAt: 0 };
+    runtime.naverQueueMeta = state.naverQueueMeta;
     state.providerReservations = [];
     state.providerReservationMeta = null;
     state.verificationReport = null;
@@ -4607,9 +5061,11 @@
 
   async function executeSyncPreviewActions(preview) {
     if (preview.providerKey === "STATION") {
-      return applyStationActions(preview.actions, preview.syncConfig.sleepMs);
+      const results = await applyStationActions(preview.actions, preview.syncConfig.sleepMs);
+      return { mode: "immediate", queueSize: 0, results };
     }
-    return applyNaverActions(preview.actions, preview.syncConfig.sleepMs);
+    enqueueNaverActions(preview.actions);
+    return executeQueuedNaverActions(preview.syncConfig, preview.syncConfig.sleepMs, "manual");
   }
 
   function finalizeSyncRun(preview, results) {
@@ -4662,14 +5118,34 @@
       if (blockSyncRunForValidation(preview)) return;
       if (blockSyncRunForPreviewMode(preview)) return;
 
-      const confirmed = confirmSyncRun(preview, query);
-      if (!confirmed) {
-        setStatus("적용이 취소되었습니다.");
+      const naverExecutionCfg = preview.providerKey === "NAVER" ? resolveNaverExecutionConfig(preview.syncConfig) : null;
+      if (naverExecutionCfg?.mode === "verify") {
+        setStatus(`NAVER VERIFY mode: mismatch 검증만 수행하고 실행은 생략합니다.`);
+        ui.status.classList.add("ok");
         return;
       }
+      if (preview.providerKey === "NAVER" && naverExecutionCfg?.mode === "plan") {
+        setStatus(`NAVER PLAN mode: diff/preview만 생성하고 실행은 생략합니다.`);
+        ui.status.classList.add("ok");
+        return;
+      }
+      {
+        const confirmed = confirmSyncRun(preview, query);
+        if (!confirmed) {
+          setStatus("적용이 취소되었습니다.");
+          return;
+        }
+      }
 
-      const results = await executeSyncPreviewActions(preview);
-      finalizeSyncRun(preview, results);
+      const execution = await executeSyncPreviewActions(preview);
+      finalizeSyncRun(preview, execution?.results || []);
+      if (preview.providerKey === "NAVER") {
+        const modeText = String(execution?.mode || naverExecutionCfg?.mode || "sync").toUpperCase();
+        setStatus(
+          `${TEXT.statusSyncDone}: NAVER ${modeText}, queue=${Number(execution?.queueSize || 0)}. ${TEXT.statusSyncVerifyByManualLoad}`
+        );
+        ui.status.classList.add("ok");
+      }
     } catch (error) {
       handleSyncRunError(error);
     } finally {

@@ -74,6 +74,7 @@
   } = N;
   const { buildReservationIdentity } = K;
   const { roomNameKey } = R;
+  const W = App.pms?.wingsAdapter || {};
   const normalizeReservationStatus =
     typeof P.normalizeReservationStatus === "function"
       ? P.normalizeReservationStatus
@@ -671,6 +672,10 @@
   }
 
   function assertReadonlyPmsRequest(url, options) {
+    if (typeof W.assertReadonlyRequest === "function") {
+      W.assertReadonlyRequest(url, options);
+      return;
+    }
     const method = normalizeText(options?.method || "GET").toUpperCase() || "GET";
     if (!["GET", "POST"].includes(method)) {
       throw new Error(`PMS 읽기 전용 요청만 허용됩니다. 현재 method=${method}`);
@@ -888,8 +893,19 @@
     const bundle = syncConfig?.pmsAuthBundle && typeof syncConfig.pmsAuthBundle === "object"
       ? syncConfig.pmsAuthBundle
       : null;
-    const { url, options } = buildReservationRequestOptions(pmsUrlRaw, bundle, query);
-    assertReadonlyPmsRequest(url, options);
+    const requestPlan =
+      typeof W.buildRequest === "function"
+        ? W.buildRequest({ urlRaw: pmsUrlRaw, bundle, query })
+        : (() => {
+            const fallbackRequest = buildReservationRequestOptions(pmsUrlRaw, bundle, query);
+            assertReadonlyPmsRequest(fallbackRequest.url, fallbackRequest.options);
+            return {
+              ...fallbackRequest,
+              endpointPath: normalizeText(fallbackRequest.url?.pathname || ""),
+              requestSchemaIssues: []
+            };
+          })();
+    const { url, options } = requestPlan;
     const cacheKey = buildPmsReservationCacheKey(providerType, url.toString(), options, bundle, query);
     const cached = readCachedPmsReservation(cacheKey);
     if (cached) {
@@ -897,13 +913,41 @@
     }
     const response = await fetchPmsReservationResponse(url, options, bundle);
     const payload = await parsePmsReservationResponse(response);
-    const records = extractReservationRecordsFromPayload(payload, "PMS", query, "");
+    const adapterParsed =
+      typeof W.getReservations === "function"
+        ? W.getReservations({
+            payload,
+            query,
+            parser: extractReservationRecordsFromPayload
+          })
+        : null;
+    const records = Array.isArray(adapterParsed?.records)
+      ? adapterParsed.records
+      : extractReservationRecordsFromPayload(payload, "PMS", query, "");
+    const roomStateRows =
+      typeof W.getRoomState === "function" ? W.getRoomState(records) : [];
+    const inventoryRows =
+      typeof W.getInventory === "function" ? W.getInventory(records) : [];
     const result = {
       records,
       source: records.length > 0 ? "pms-api" : "pms-empty",
       url: url.toString(),
       candidateCount: 1,
       attempts: [{ url: url.toString(), ok: true, recordCount: records.length }],
+      adapter: {
+        type: "wings",
+        endpointPath: normalizeText(requestPlan?.endpointPath || url?.pathname || ""),
+        knownEndpointCount:
+          typeof W.getKnownEndpointCount === "function" ? W.getKnownEndpointCount() : 0,
+        requestSchemaIssues: Array.isArray(requestPlan?.requestSchemaIssues)
+          ? [...requestPlan.requestSchemaIssues]
+          : [],
+        responseValidation: adapterParsed?.validation && typeof adapterParsed.validation === "object"
+          ? { ...adapterParsed.validation }
+          : null,
+        roomStateCount: Array.isArray(roomStateRows) ? roomStateRows.length : 0,
+        inventoryCount: Array.isArray(inventoryRows) ? inventoryRows.length : 0
+      },
       statusCounts: records.reduce(
         (acc, row) => {
           if (normalizeText(row?.statusBucket || "") === "CANCELED") acc.canceled += 1;
@@ -1199,18 +1243,28 @@
     }
 
     const preset = ROOM_PRESETS["naver-partner"] || [];
-    const target = new Set(preset.map((row) => row.id));
-    let filtered = items.filter((item) => target.has(String(item.bizItemId)));
-    if (!filtered.length) {
-      const presetKeys = preset
-        .map((room) => ({ id: room.id, key: roomNameKey(room.name) }))
-        .filter((row) => row.key);
-      filtered = items.filter((item) => {
-        const key = roomNameKey(item.bizItemName ?? item.name ?? item.title);
-        return key && presetKeys.some((row) => key.includes(row.key) || row.key.includes(key));
+    const itemById = new Map();
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const id = String(item?.bizItemId ?? "");
+      if (!id || itemById.has(id)) return;
+      itemById.set(id, item);
+    });
+    const orderedIds = [];
+    const seen = new Set();
+    preset.forEach((row) => {
+      const id = String(row?.id || "");
+      if (!id || seen.has(id) || !itemById.has(id)) return;
+      seen.add(id);
+      orderedIds.push(id);
+    });
+    [...itemById.keys()]
+      .sort((a, b) => a.localeCompare(b))
+      .forEach((id) => {
+        if (seen.has(id)) return;
+        seen.add(id);
+        orderedIds.push(id);
       });
-    }
-    items = filtered;
+    items = orderedIds.map((id) => itemById.get(id)).filter(Boolean);
 
     const roomRows = await mapWithConcurrencyLimit(
       items,
@@ -1469,9 +1523,9 @@
   }
 
   function normalizeRows(rows, query, providerType) {
-    const preset = ROOM_PRESETS[providerType];
-    const idMap = new Map(preset.map((room) => [room.id, room.name]));
-    const order = new Map(preset.map((room, index) => [room.id, index]));
+    const preset = ROOM_PRESETS[providerType] || [];
+    const idMap = new Map(preset.map((room) => [String(room.id), room.name]));
+    const order = new Map(preset.map((room, index) => [String(room.id), index]));
     const normalized = (rows || [])
       .map((row) => {
         const settingStock = safeInt(row.settingStock ?? row.stockCount ?? row.stock ?? row.availableStock ?? 0);
@@ -1526,14 +1580,22 @@
         const rawRoomId = String(row.roomId ?? "");
         const rawRoomName = String(row.roomName ?? row.name ?? "");
         const mappedRoom = resolvePresetRoomId(rawRoomId, rawRoomName, preset, idMap);
+        const providerItemId = rawRoomId || String(mappedRoom.roomId || "");
+        if (!providerItemId) return null;
+        const mappedName = String(mappedRoom.matchedName || idMap.get(providerItemId) || "");
+        const roomName = rawRoomName || mappedName || providerItemId;
+        const mappingMethod = rawRoomId ? "id_exact" : String(mappedRoom.method || "unmatched");
+        const mappingConfidence = rawRoomId ? 1 : Number(mappedRoom.confidence ?? 0);
         return {
           date: String(row.date ?? ""),
-          roomId: mappedRoom.roomId,
+          roomId: providerItemId,
+          providerItemId,
+          roomName,
           rawRoomId,
           rawRoomName,
-          mappingConfidence: Number(mappedRoom.confidence ?? 0),
-          mappingMethod: String(mappedRoom.method || "unmatched"),
-          mappingMatchedName: String(mappedRoom.matchedName || ""),
+          mappingConfidence,
+          mappingMethod,
+          mappingMatchedName: mappedName,
           priceSetId: toIntOrNull(row.priceSetId),
           settingStock,
           openStatus,
@@ -1545,7 +1607,8 @@
           source: normalizeText(row.source || "api")
         };
       })
-      .filter((row) => isDate(row.date) && idMap.has(row.roomId))
+      .filter(Boolean)
+      .filter((row) => isDate(row.date) && normalizeText(row.roomId || ""))
       .filter((row) => row.date >= query.startDate && row.date <= query.endDate);
     const deduped = new Map();
     normalized.forEach((row) => {
@@ -1555,11 +1618,19 @@
         deduped.set(key, row);
       }
     });
-    return [...deduped.values()].sort((a, b) =>
-      a.date === b.date
-        ? (order.get(a.roomId) ?? 99) - (order.get(b.roomId) ?? 99)
-        : a.date.localeCompare(b.date)
-    );
+    return [...deduped.values()].sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      const ao = order.get(a.roomId);
+      const bo = order.get(b.roomId);
+      const hasOrderA = Number.isInteger(ao);
+      const hasOrderB = Number.isInteger(bo);
+      if (hasOrderA && hasOrderB && ao !== bo) return ao - bo;
+      if (hasOrderA && !hasOrderB) return -1;
+      if (!hasOrderA && hasOrderB) return 1;
+      const byName = String(a.roomName || "").localeCompare(String(b.roomName || ""));
+      if (byName !== 0) return byName;
+      return String(a.roomId || "").localeCompare(String(b.roomId || ""));
+    });
   }
 
   Object.assign(ns, {
@@ -1571,6 +1642,14 @@
     fetchProviderReservations,
     assertReadonlyPmsRequest,
     buildPmsReservationCacheKey,
+    getKnownWingsEndpointCount:
+      typeof W.getKnownEndpointCount === "function"
+        ? () => W.getKnownEndpointCount()
+        : () => 0,
+    getKnownWingsEndpoints:
+      typeof W.getEndpointCatalog === "function"
+        ? () => W.getEndpointCatalog()
+        : () => [],
     resolvePresetRoomId,
     normalizeRows,
   });

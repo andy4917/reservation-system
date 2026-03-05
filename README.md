@@ -9,6 +9,10 @@
 - 연동 문서: `docs/integrations/`
 - 작업 인계/세션 메모: `tasks/handoffs/`
 
+아키텍처 참고:
+- OTA Adapter Layer: `docs/integrations/OTA_ADAPTER_LAYER.md`
+  - 운영 모드: NAVER 직접 API, BOOKING/AGODA/TRIP/AIRBNB는 WINGS HAR 기반
+
 ## 대상 페이지
 
 - `https://partner.booking.naver.com/*`

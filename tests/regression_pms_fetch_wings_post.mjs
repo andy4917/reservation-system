@@ -15,6 +15,7 @@ async function main() {
   [
     "src/constants.js",
     "src/scan/normalize.js",
+    "src/pms/wings.adapter.js",
     "src/engine/rules.js",
     "src/io/pms.fetch.js"
   ]

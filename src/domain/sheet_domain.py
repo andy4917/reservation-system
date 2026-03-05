@@ -298,11 +298,29 @@ class DateColumn:
 
 
 @dataclass
+class RoomIdentity:
+    branch: str
+    building: str
+    room_number: str
+    sheet_room_no: str
+    canonical_id: str
+    pms_room_no: str
+
+
+@dataclass
 class RoomRow:
     row: int
     room_type: str
     room_no: str
     capacity: Optional[int]
+    branch: str = ""
+    building: str = ""
+    room_number: str = ""
+    sheet_room_no: str = ""
+    canonical_id: str = ""
+    pms_room_no: str = ""
+    room_type_source: str = ""
+    raw_text: str = ""
 
 
 @dataclass

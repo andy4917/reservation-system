@@ -136,6 +136,63 @@ def write_room_type_vac_csv(path: Path, vac_map: Dict[Tuple[dt.date, str], int])
             writer.writerow([date_val.isoformat(), room_type, count])
 
 
+def write_room_rows_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
+    keys = [
+        "date",
+        "row_type",
+        "room_row",
+        "branch",
+        "room_no",
+        "building",
+        "room_number",
+        "sheet_room_no",
+        "canonical_id",
+        "pms_room_no",
+        "parsed_room_type",
+        "room_type_source",
+        "raw_text",
+    ]
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        writer.writeheader()
+        for row in rows or []:
+            writer.writerow({k: row.get(k, "") for k in keys})
+
+
+def write_room_registry_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
+    keys = [
+        "branch",
+        "building",
+        "room_number",
+        "sheet_room_no",
+        "canonical_id",
+        "pms_room_no",
+        "sheet_rows",
+        "sheet_row_first",
+    ]
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        writer.writeheader()
+        for row in rows or []:
+            writer.writerow({k: row.get(k, "") for k in keys})
+
+
+def write_room_identity_issues_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
+    keys = [
+        "issue_type",
+        "branch",
+        "pms_room_no",
+        "canonical_ids",
+        "sheet_room_nos",
+        "sheet_rows",
+    ]
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        writer.writeheader()
+        for row in rows or []:
+            writer.writerow({k: row.get(k, "") for k in keys})
+
+
 def write_recommendations_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
     if not rows:
         return

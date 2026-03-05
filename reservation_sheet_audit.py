@@ -31,6 +31,7 @@ from src.domain.sheet_domain import (
     ACCOUNT_FIELD_ALIASES,
     BRANCH_FIELD_ALIASES,
     CHANNEL_FIELD_ALIASES,
+    CELL_STATUS_VACANT,
     CHECKIN_FIELD_ALIASES,
     CHECKOUT_FIELD_ALIASES,
     DEFAULT_CLIENT_ID,
@@ -47,6 +48,7 @@ from src.domain.sheet_domain import (
     PRICE_FIELD_ALIASES,
     RES_NO_FIELD_ALIASES,
     ROOM_FIELD_ALIASES,
+    ROOM_TYPE_BY_ROOM_NO,
     STATUS_FIELD_ALIASES,
     AuditError,
     BRANCH_SPLIT_ROW,
@@ -58,6 +60,7 @@ from src.domain.sheet_domain import (
     classify_reservation_status_bucket,
     has_reservation_audit_anomaly,
     normalize_platform_name,
+    normalize_room_no_key,
     normalize_reservation_status,
     normalize_text,
     parse_money_to_int,
@@ -68,6 +71,7 @@ from src.io.sheet_loader import load_sheet_matrix_and_dates
 from src.scan.sheet_scan import (
     SheetMatrix,
     calculate_channel_recommendations,
+    classify_color_cell,
     calculate_daily_stats,
     calculate_vac_by_room_type,
     extract_inventory_values_by_date,
@@ -75,6 +79,7 @@ from src.scan.sheet_scan import (
     find_inventory_rows,
     map_room_rows,
     parse_note_info,
+    room_no_alias_keys,
 )
 from src.reconcile.sheet_reconcile import (
     cross_validate_sheet_vs_sources,
@@ -93,6 +98,9 @@ from src.report.sheet_report import (
     write_daily_csv,
     write_long_tail_ota_candidates_csv,
     write_recommendations_csv,
+    write_room_identity_issues_csv,
+    write_room_registry_csv,
+    write_room_rows_csv,
     write_room_type_vac_csv,
     write_source_reservations_csv,
 )
@@ -106,6 +114,22 @@ PROXY_ENV_KEYS = (
     "https_proxy",
     "all_proxy",
     "no_proxy",
+)
+
+ROOM_REGISTRY_ALLOWED_PATTERNS = (
+    re.compile(r"^\d{3,4}$"),
+    re.compile(r"^A\d{3,4}$"),
+)
+ROOM_REGISTRY_BUILDING_MAX_FLOOR = {
+    "A": 12,
+    "B": 12,
+}
+ROOM_REGISTRY_COMPARE_FIELDS = (
+    "branch",
+    "building",
+    "room_number",
+    "sheet_room_no",
+    "pms_room_no",
 )
 
 def parse_har_records(har_path: Path) -> List[HarRecord]:
@@ -148,7 +172,11 @@ def parse_har_records(har_path: Path) -> List[HarRecord]:
     return records
 
 
-def parse_source_reservations_from_har(har_path: Path) -> List[SourceReservation]:
+def parse_source_reservations_from_har(
+    har_path: Path,
+    *,
+    pms_branch_map: Optional[Dict[str, str]] = None,
+) -> List[SourceReservation]:
     with har_path.open("r", encoding="utf-8") as f:
         har = json.load(f)
     entries = har.get("log", {}).get("entries", [])
@@ -183,7 +211,11 @@ def parse_source_reservations_from_har(har_path: Path) -> List[SourceReservation
 
         for payload in payload_candidates:
             for obj in iter_json_objects(payload):
-                parsed = parse_source_row(obj, source_system=source_system)
+                parsed = parse_source_row(
+                    obj,
+                    source_system=source_system,
+                    pms_branch_map=pms_branch_map,
+                )
                 if parsed:
                     records.append(parsed)
 
@@ -214,13 +246,14 @@ def load_source_reservations(
     naver_file: str,
     station_file: str,
     pms_file: str,
+    pms_branch_map: Optional[Dict[str, str]] = None,
 ) -> List[SourceReservation]:
     records: List[SourceReservation] = []
 
     if har_path:
         path = Path(har_path)
         if path.exists():
-            records.extend(parse_source_reservations_from_har(path))
+            records.extend(parse_source_reservations_from_har(path, pms_branch_map=pms_branch_map))
             for hr in parse_har_records(path):
                 if not hr.reservation_no or not hr.checkin:
                     continue
@@ -262,7 +295,24 @@ def load_source_reservations(
         path = Path(file_path)
         if not path.exists():
             raise AuditError(f"{source_system} ?뚯씪??李얠? 紐삵뻽?듬땲?? {path}")
-        records.extend(parse_source_file(path, source_system, default_channel))
+        if path.suffix.lower() == ".har":
+            har_records = parse_source_reservations_from_har(
+                path,
+                pms_branch_map=pms_branch_map,
+            )
+            if source_system:
+                for record in har_records:
+                    record.source_system = source_system
+            records.extend(har_records)
+            continue
+        records.extend(
+            parse_source_file(
+                path,
+                source_system,
+                default_channel,
+                pms_branch_map=pms_branch_map,
+            )
+        )
 
     deduped: Dict[Tuple[str, dt.date, dt.date, str, str], SourceReservation] = {}
     for record in records:
@@ -414,19 +464,112 @@ def split_room_tokens(value: Any) -> List[str]:
     return out
 
 
+def normalize_branch_label(value: str) -> str:
+    text = normalize_text(value)
+    if not text:
+        return ""
+    low = text.lower()
+    if "coex" in low or "코엑스" in low:
+        return "COEX"
+    if "gangnam" in low or "강남" in low:
+        return "GANGNAM"
+    if "seolleung" in low or "선릉" in low:
+        return "BRANCH_THE_SEOLLEUNG"
+    if "samsung" in low or "삼성" in low:
+        return "BRANCH_THE_SAMSUNG"
+    if text.upper().startswith("BRANCH_"):
+        return text.upper()
+    return text.upper()
+
+
+def parse_pms_branch_map(raw_value: str) -> Dict[str, str]:
+    text = normalize_text(raw_value)
+    if not text:
+        return {}
+    entries: Dict[str, str] = {}
+    chunks = [item for item in re.split(r"[\n,]+", text) if normalize_text(item)]
+    for chunk in chunks:
+        if "=" not in chunk:
+            continue
+        left, right = chunk.split("=", 1)
+        key = normalize_text(left).upper().replace(" ", "")
+        value = normalize_branch_label(right)
+        if key and value:
+            entries[key] = value
+    return entries
+
+
+def _extract_source_property_keys(row: Dict[str, Any]) -> List[str]:
+    property_no = normalize_text(
+        str(
+            get_first_value_by_alias(
+                row,
+                ["property_no", "propertyNo", "property_code", "property"],
+            )
+            or ""
+        )
+    )
+    bsns_code = normalize_text(
+        str(get_first_value_by_alias(row, ["bsns_code", "bsnsCode", "business_code"]) or "")
+    )
+    keys: List[str] = []
+    if property_no:
+        keys.extend(
+            [
+                property_no.upper().replace(" ", ""),
+                f"PROPERTY_{property_no.upper().replace(' ', '')}",
+                f"P:{property_no.upper().replace(' ', '')}",
+            ]
+        )
+    if bsns_code:
+        keys.extend(
+            [
+                bsns_code.upper().replace(" ", ""),
+                f"BSNS_{bsns_code.upper().replace(' ', '')}",
+                f"B:{bsns_code.upper().replace(' ', '')}",
+            ]
+        )
+    if property_no and bsns_code:
+        pair = f"{bsns_code.upper().replace(' ', '')}:{property_no.upper().replace(' ', '')}"
+        keys.append(pair)
+        keys.append(f"P{pair}")
+    dedup: List[str] = []
+    seen: set[str] = set()
+    for key in keys:
+        if key in seen:
+            continue
+        seen.add(key)
+        dedup.append(key)
+    return dedup
+
+
 def infer_branch_from_source_row(
     row: Dict[str, Any],
     channel_raw: str,
     account: str,
+    pms_branch_map: Optional[Dict[str, str]] = None,
 ) -> str:
     branch_raw = normalize_text(str(get_first_value_by_alias(row, BRANCH_FIELD_ALIASES) or ""))
+    if pms_branch_map:
+        for key in _extract_source_property_keys(row):
+            mapped = normalize_branch_label(pms_branch_map.get(key, ""))
+            if mapped:
+                return mapped
+    property_name = normalize_text(
+        str(
+            get_first_value_by_alias(
+                row,
+                ["property_name", "property_no_name", "hotel_name", "hotel"],
+            )
+            or ""
+        )
+    )
     candidates = " ".join(
-        part for part in [branch_raw, channel_raw, account] if normalize_text(part)
+        part for part in [branch_raw, property_name, channel_raw, account] if normalize_text(part)
     ).lower()
-    if "coex" in candidates or "코엑스" in candidates:
-        return "COEX"
-    if "gangnam" in candidates or "강남" in candidates:
-        return "GANGNAM"
+    keyword_branch = normalize_branch_label(candidates)
+    if keyword_branch in {"COEX", "GANGNAM", "BRANCH_THE_SEOLLEUNG", "BRANCH_THE_SAMSUNG"}:
+        return keyword_branch
     if branch_raw.isdigit():
         return f"PROPERTY_{int(branch_raw)}"
     return ""
@@ -457,7 +600,10 @@ def is_inactive_reservation_status(status: str) -> bool:
 
 
 def parse_source_row(
-    row: Dict[str, Any], source_system: str, default_channel: str = ""
+    row: Dict[str, Any],
+    source_system: str,
+    default_channel: str = "",
+    pms_branch_map: Optional[Dict[str, str]] = None,
 ) -> Optional[SourceReservation]:
     reservation_no = coerce_reservation_no(
         get_first_value_by_alias(row, RES_NO_FIELD_ALIASES)
@@ -483,7 +629,12 @@ def parse_source_row(
     status = normalize_reservation_status(status_raw)
     status_bucket = classify_reservation_status_bucket(status)
     audit_anomaly = has_reservation_audit_anomaly(status)
-    branch = infer_branch_from_source_row(row, channel_raw=channel_raw, account=account)
+    branch = infer_branch_from_source_row(
+        row,
+        channel_raw=channel_raw,
+        account=account,
+        pms_branch_map=pms_branch_map,
+    )
     reservation_ref = coerce_reservation_no(
         get_first_value_by_alias(row, ["global_rsvn_no", "guest_rsvn_no", "rsvn_seq_no"])
     )
@@ -545,7 +696,12 @@ def try_parse_json_text(text: str) -> Optional[Any]:
     return None
 
 
-def parse_source_file(path: Path, source_system: str, default_channel: str = "") -> List[SourceReservation]:
+def parse_source_file(
+    path: Path,
+    source_system: str,
+    default_channel: str = "",
+    pms_branch_map: Optional[Dict[str, str]] = None,
+) -> List[SourceReservation]:
     records: List[SourceReservation] = []
     ext = path.suffix.lower()
 
@@ -566,7 +722,12 @@ def parse_source_file(path: Path, source_system: str, default_channel: str = "")
             delimiter = "\t" if blob_ext == ".tsv" else ","
             reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
             for row in reader:
-                parsed = parse_source_row(dict(row), source_system, default_channel)
+                parsed = parse_source_row(
+                    dict(row),
+                    source_system,
+                    default_channel,
+                    pms_branch_map=pms_branch_map,
+                )
                 if parsed:
                     blob_records.append(parsed)
             return blob_records
@@ -576,7 +737,12 @@ def parse_source_file(path: Path, source_system: str, default_channel: str = "")
             if data is None:
                 return blob_records
             for obj in iter_json_objects(data):
-                parsed = parse_source_row(obj, source_system, default_channel)
+                parsed = parse_source_row(
+                    obj,
+                    source_system,
+                    default_channel,
+                    pms_branch_map=pms_branch_map,
+                )
                 if parsed:
                     blob_records.append(parsed)
             return blob_records
@@ -843,6 +1009,919 @@ def save_json(path: Path, payload: Dict[str, Any]) -> None:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
+def save_json_compact(path: Path, payload: Dict[str, Any]) -> None:
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+
+
+def _collect_sheet_branch_scope(blocks: List[ReservationBlock]) -> set[str]:
+    return {
+        normalize_branch_label(block.branch)
+        for block in blocks
+        if normalize_branch_label(block.branch)
+    }
+
+
+def _extract_source_property_debug_meta(record: SourceReservation) -> Dict[str, str]:
+    raw = record.raw or {}
+    property_no = normalize_text(
+        str(
+            get_first_value_by_alias(
+                raw,
+                ["property_no", "propertyNo", "property_code", "property"],
+            )
+            or ""
+        )
+    )
+    bsns_code = normalize_text(
+        str(get_first_value_by_alias(raw, ["bsns_code", "bsnsCode", "business_code"]) or "")
+    )
+    property_name = normalize_text(
+        str(
+            get_first_value_by_alias(
+                raw,
+                ["property_name", "property_no_name", "hotel_name", "hotel"],
+            )
+            or ""
+        )
+    )
+    return {
+        "property_no": property_no,
+        "bsns_code": bsns_code,
+        "property_name": property_name,
+    }
+
+
+def apply_pms_branch_scope_filter(
+    blocks: List[ReservationBlock],
+    source_records: List[SourceReservation],
+) -> Tuple[List[SourceReservation], Dict[str, Any]]:
+    sheet_branch_scope = _collect_sheet_branch_scope(blocks)
+    included: List[SourceReservation] = []
+    excluded_rows: List[Dict[str, Any]] = []
+    excluded_reason_counts: Counter[str] = Counter()
+    excluded_branch_counts: Counter[str] = Counter()
+    included_pms = 0
+    excluded_pms = 0
+
+    for record in source_records:
+        source_system = normalize_text(record.source_system).upper()
+        if source_system != "PMS":
+            included.append(record)
+            continue
+        normalized_branch = normalize_branch_label(record.branch)
+        if not normalized_branch:
+            excluded_pms += 1
+            excluded_reason_counts["UNMAPPED_PMS_BRANCH"] += 1
+            meta = _extract_source_property_debug_meta(record)
+            excluded_rows.append(
+                {
+                    "reason": "UNMAPPED_PMS_BRANCH",
+                    "reservation_no": record.reservation_no,
+                    "source_branch": normalize_text(record.branch),
+                    "sheet_branch_scope": sorted(sheet_branch_scope),
+                    **meta,
+                    "checkin": record.checkin.isoformat() if record.checkin else "",
+                    "checkout": record.checkout.isoformat() if record.checkout else "",
+                    "room_no": normalize_text(record.room_no),
+                    "channel": normalize_text(record.channel),
+                }
+            )
+            continue
+        if sheet_branch_scope and normalized_branch not in sheet_branch_scope:
+            excluded_pms += 1
+            excluded_reason_counts["OUT_OF_SHEET_SCOPE"] += 1
+            excluded_branch_counts[normalized_branch] += 1
+            meta = _extract_source_property_debug_meta(record)
+            excluded_rows.append(
+                {
+                    "reason": "OUT_OF_SHEET_SCOPE",
+                    "reservation_no": record.reservation_no,
+                    "source_branch": normalized_branch,
+                    "sheet_branch_scope": sorted(sheet_branch_scope),
+                    **meta,
+                    "checkin": record.checkin.isoformat() if record.checkin else "",
+                    "checkout": record.checkout.isoformat() if record.checkout else "",
+                    "room_no": normalize_text(record.room_no),
+                    "channel": normalize_text(record.channel),
+                }
+            )
+            continue
+        included_pms += 1
+        included.append(record)
+
+    return included, {
+        "sheet_branch_scope": sorted(sheet_branch_scope),
+        "input_source_records": len(source_records),
+        "included_source_records": len(included),
+        "included_pms_records": included_pms,
+        "excluded_pms_records": excluded_pms,
+        "excluded_reason_counts": dict(excluded_reason_counts),
+        "excluded_branch_counts": dict(excluded_branch_counts),
+        "excluded_rows": excluded_rows,
+    }
+
+
+def write_pms_branch_scope_exclusions_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
+    keys = [
+        "reason",
+        "reservation_no",
+        "source_branch",
+        "sheet_branch_scope",
+        "property_no",
+        "bsns_code",
+        "property_name",
+        "checkin",
+        "checkout",
+        "room_no",
+        "channel",
+    ]
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        writer.writeheader()
+        for row in rows:
+            row_out = dict(row)
+            if isinstance(row_out.get("sheet_branch_scope"), list):
+                row_out["sheet_branch_scope"] = "|".join(str(x) for x in row_out["sheet_branch_scope"])
+            writer.writerow({k: row_out.get(k, "") for k in keys})
+
+
+def _normalize_trace_room_token(value: Any) -> str:
+    return normalize_text(str(value or "")).upper().replace(" ", "").replace("-", "")
+
+
+def _iter_issue_date_candidates(issue: Dict[str, Any]) -> Iterable[str]:
+    direct_date = normalize_text(str(issue.get("date", "")))
+    if direct_date:
+        yield direct_date
+    for key in (
+        "duplicate_dates",
+        "missing_in_source_dates",
+        "missing_in_sheet_dates",
+        "sheet_dates",
+        "source_dates",
+    ):
+        value = issue.get(key)
+        if isinstance(value, (list, tuple, set)):
+            for item in value:
+                text = normalize_text(str(item))
+                if text:
+                    yield text
+
+
+def extract_issue_dates(issue: Dict[str, Any]) -> List[dt.date]:
+    out: List[dt.date] = []
+    seen: set[dt.date] = set()
+    for candidate in _iter_issue_date_candidates(issue):
+        parsed = parse_any_date(candidate)
+        if not parsed or parsed in seen:
+            continue
+        seen.add(parsed)
+        out.append(parsed)
+    return sorted(out)
+
+
+def issue_is_suspect(issue: Dict[str, Any]) -> bool:
+    issue_type = normalize_text(str(issue.get("type", ""))).upper()
+    if issue_type.endswith("_SUSPECT"):
+        return True
+    return issue_type in {
+        "MISSING_ACTIVE_IN_PMS",
+        "MISSING_ACTIVE_IN_SHEET",
+        "CHANNEL_MISMATCH",
+        "ROOM_MISMATCH",
+        "DATE_MISMATCH",
+        "CHECKIN_MISMATCH",
+        "CHECKOUT_MISMATCH",
+        "NIGHTS_MISMATCH",
+        "PRICE_MISMATCH_SOURCE",
+        "ACTIVE_EXPECTED_BUT_PMS_AUDIT_ANOMALY",
+    }
+
+
+def select_trace_blocks_for_issue(
+    blocks: List[ReservationBlock],
+    issue: Dict[str, Any],
+) -> List[ReservationBlock]:
+    reservation_no = normalize_text(str(issue.get("reservation_no", "")))
+    if not reservation_no:
+        return []
+    target_dates = extract_issue_dates(issue)
+    target_rooms: set[str] = set()
+    for key in ("room_no",):
+        room_text = _normalize_trace_room_token(issue.get(key, ""))
+        if room_text:
+            target_rooms.add(room_text)
+    for key in ("sheet_room_nos", "extra_sheet_room_nos"):
+        values = issue.get(key)
+        if not isinstance(values, (list, tuple, set)):
+            continue
+        for item in values:
+            room_text = _normalize_trace_room_token(item)
+            if room_text:
+                target_rooms.add(room_text)
+
+    matches: List[ReservationBlock] = []
+    for block in blocks:
+        if normalize_text(block.reservation_no) != reservation_no:
+            continue
+        if target_rooms and _normalize_trace_room_token(block.room_no) not in target_rooms:
+            continue
+        if target_dates:
+            if not block.checkin or not block.checkout:
+                continue
+            if not any(block.checkin <= day < block.checkout for day in target_dates):
+                continue
+        matches.append(block)
+
+    if not matches and (target_rooms or target_dates):
+        matches = [
+            block for block in blocks if normalize_text(block.reservation_no) == reservation_no
+        ]
+    return sorted(matches, key=lambda b: (b.row, b.start_col, b.end_col))
+
+
+def build_suspect_trace_artifact(
+    *,
+    cross_issues: List[Dict[str, Any]],
+    blocks: List[ReservationBlock],
+    summary_meta: Dict[str, str],
+) -> Dict[str, Any]:
+    suspects: List[Dict[str, Any]] = []
+    for issue_index, issue in enumerate(cross_issues):
+        if not issue_is_suspect(issue):
+            continue
+        matched_blocks = select_trace_blocks_for_issue(blocks, issue)
+        packets = [build_trace_packet(block, summary_meta) for block in matched_blocks]
+        suspects.append(
+            {
+                "issue_index": issue_index,
+                "type": normalize_text(str(issue.get("type", ""))),
+                "reservation_no": normalize_text(str(issue.get("reservation_no", ""))),
+                "dates": [day.isoformat() for day in extract_issue_dates(issue)],
+                "trace_count": len(packets),
+                "trace_blocks": packets,
+                "issue": issue,
+            }
+        )
+    return {"count": len(suspects), "suspects": suspects}
+
+
+def write_suspect_trace_csv(path: Path, artifact: Dict[str, Any]) -> None:
+    keys = [
+        "type",
+        "reservation_no",
+        "issue_index",
+        "issue_dates",
+        "trace_count",
+        "trace_rows",
+        "trace_rooms",
+        "trace_ranges",
+        "trace_reservation_keys",
+    ]
+    suspects = artifact.get("suspects", [])
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        writer.writeheader()
+        for item in suspects:
+            trace_blocks = item.get("trace_blocks", [])
+            writer.writerow(
+                {
+                    "type": item.get("type", ""),
+                    "reservation_no": item.get("reservation_no", ""),
+                    "issue_index": item.get("issue_index", ""),
+                    "issue_dates": "|".join(item.get("dates", [])),
+                    "trace_count": item.get("trace_count", 0),
+                    "trace_rows": "|".join(str(packet.get("row", "")) for packet in trace_blocks),
+                    "trace_rooms": "|".join(
+                        normalize_text(str(packet.get("room_no", ""))) for packet in trace_blocks
+                    ),
+                    "trace_ranges": "|".join(
+                        normalize_text(str(packet.get("sheet_range_a1", "")))
+                        for packet in trace_blocks
+                    ),
+                    "trace_reservation_keys": "|".join(
+                        normalize_text(str(packet.get("reservation_key", "")))
+                        for packet in trace_blocks
+                    ),
+                }
+            )
+
+
+def room_no_matches_fixed_map(room_no: str) -> bool:
+    for key in room_no_alias_keys(room_no):
+        if ROOM_TYPE_BY_ROOM_NO.get(normalize_room_no_key(key)):
+            return True
+    return False
+
+
+def build_room_rows_vac_artifact(
+    matrix: SheetMatrix,
+    date_cols: List[Any],
+    room_rows: Dict[int, Any],
+    room_row_logs: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    vac_total = 0
+    unknown_total = 0
+    classification_miss = 0
+    structure_noise = 0
+    vac_source_counts: Counter[str] = Counter()
+
+    for date_col in date_cols:
+        date_iso = date_col.date.isoformat()
+        for row_index, room in room_rows.items():
+            cell = matrix.get(row_index, date_col.col)
+            status, _channel, _error = classify_color_cell(
+                cell.background_hex,
+                note=cell.note,
+                formatted_value=cell.formatted_value,
+            )
+            if status != CELL_STATUS_VACANT:
+                continue
+            vac_total += 1
+            room_type = normalize_text(room.room_type)
+            room_type_upper = room_type.upper()
+            room_type_source = normalize_text(getattr(room, "room_type_source", "")).lower()
+            vac_source_counts[room_type_source or "unspecified"] += 1
+            rows.append(
+                {
+                    "date": date_iso,
+                    "row_type": "room_row",
+                    "room_row": row_index + 1,
+                    "branch": normalize_text(getattr(room, "branch", "")).upper(),
+                    "room_no": normalize_text(room.room_no),
+                    "building": normalize_text(getattr(room, "building", "")).upper(),
+                    "room_number": normalize_text(getattr(room, "room_number", "")),
+                    "sheet_room_no": normalize_text(getattr(room, "sheet_room_no", "")).upper(),
+                    "canonical_id": normalize_text(getattr(room, "canonical_id", "")).upper(),
+                    "pms_room_no": normalize_text(getattr(room, "pms_room_no", "")),
+                    "parsed_room_type": room_type,
+                    "room_type_source": room_type_source,
+                    "raw_text": normalize_text(getattr(room, "raw_text", "")),
+                }
+            )
+
+            if room_type_upper == "UNKNOWN_ROOM_TYPE":
+                unknown_total += 1
+                if room_no_matches_fixed_map(room.room_no):
+                    classification_miss += 1
+                else:
+                    structure_noise += 1
+
+    for row_log in room_row_logs:
+        if normalize_text(row_log.get("room_type_source", "")).lower() != "noise":
+            continue
+        rows.append(
+            {
+                "date": "",
+                "row_type": normalize_text(row_log.get("row_type", "noise_row")).lower(),
+                "room_row": row_log.get("room_row", ""),
+                "branch": normalize_text(row_log.get("branch", "")).upper(),
+                "room_no": normalize_text(row_log.get("room_no", "")),
+                "building": normalize_text(row_log.get("building", "")).upper(),
+                "room_number": normalize_text(row_log.get("room_number", "")),
+                "sheet_room_no": normalize_text(row_log.get("sheet_room_no", "")).upper(),
+                "canonical_id": normalize_text(row_log.get("canonical_id", "")).upper(),
+                "pms_room_no": normalize_text(row_log.get("pms_room_no", "")),
+                "parsed_room_type": normalize_text(row_log.get("parsed_room_type", "")),
+                "room_type_source": "noise",
+                "raw_text": normalize_text(row_log.get("raw_text", "")),
+            }
+        )
+
+    unknown_rate = (unknown_total / vac_total) if vac_total else 0.0
+    miss_rate = (classification_miss / unknown_total) if unknown_total else 0.0
+    noise_rate = (structure_noise / unknown_total) if unknown_total else 0.0
+
+    metrics = {
+        "unknown_actual_room_vac": classification_miss,
+        "unknown_total_vac": unknown_total,
+        "vac_total": vac_total,
+        "vac_room_type_source_counts": dict(vac_source_counts),
+        "UNKNOWN_RATE": {
+            "unknown": unknown_total,
+            "total": vac_total,
+            "ratio": round(unknown_rate, 6),
+        },
+        "CLASSIFICATION_MISS_RATE": {
+            "classification_miss": classification_miss,
+            "unknown": unknown_total,
+            "ratio": round(miss_rate, 6),
+        },
+        "STRUCTURE_NOISE_RATE": {
+            "structure_noise": structure_noise,
+            "unknown": unknown_total,
+            "ratio": round(noise_rate, 6),
+        },
+    }
+    return rows, metrics
+
+
+def join_unique_text(values: Iterable[Any]) -> str:
+    out: List[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = normalize_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return "|".join(out)
+
+
+def room_registry_sort_key(value: Any) -> Tuple[int, Any]:
+    text = normalize_text(value)
+    if text.isdigit():
+        return (0, int(text))
+    return (1, text)
+
+
+def as_value_list(value: Any) -> List[Any]:
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return [value]
+
+
+def build_room_registry_issue(
+    *,
+    issue_type: str,
+    branch: str = "",
+    pms_room_no: str = "",
+    canonical_ids: Any = "",
+    sheet_room_nos: Any = "",
+    sheet_rows: Any = "",
+) -> Dict[str, str]:
+    return {
+        "issue_type": normalize_text(issue_type).upper(),
+        "branch": normalize_text(branch).upper(),
+        "pms_room_no": normalize_text(pms_room_no),
+        "canonical_ids": join_unique_text(as_value_list(canonical_ids)).upper(),
+        "sheet_room_nos": join_unique_text(as_value_list(sheet_room_nos)).upper(),
+        "sheet_rows": join_unique_text(as_value_list(sheet_rows)),
+    }
+
+
+def is_valid_room_registry_sheet_pattern(sheet_room_no: str) -> bool:
+    text = normalize_text(sheet_room_no).upper()
+    if not text:
+        return False
+    return any(pattern.fullmatch(text) for pattern in ROOM_REGISTRY_ALLOWED_PATTERNS)
+
+
+def infer_room_floor(room_number: str) -> Optional[int]:
+    text = normalize_text(room_number)
+    if not text.isdigit():
+        return None
+    if len(text) == 3:
+        return int(text[0])
+    if len(text) == 4:
+        return int(text[:2])
+    return None
+
+
+def normalize_room_registry_snapshot_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    normalized: Dict[str, Dict[str, str]] = {}
+    for row in rows or []:
+        canonical_id = normalize_text(row.get("canonical_id", "")).upper()
+        if not canonical_id:
+            continue
+        normalized[canonical_id] = {
+            "canonical_id": canonical_id,
+            "branch": normalize_text(row.get("branch", "")).upper(),
+            "building": normalize_text(row.get("building", "")).upper(),
+            "room_number": normalize_text(row.get("room_number", "")),
+            "sheet_room_no": normalize_text(row.get("sheet_room_no", "")).upper(),
+            "pms_room_no": normalize_text(row.get("pms_room_no", "")),
+        }
+    return [
+        normalized[key]
+        for key in sorted(normalized.keys())
+    ]
+
+
+def _changed_snapshot_fields(before: Dict[str, str], after: Dict[str, str]) -> Tuple[List[str], Dict[str, str], Dict[str, str]]:
+    changed_fields = [field for field in ROOM_REGISTRY_COMPARE_FIELDS if before.get(field) != after.get(field)]
+    if not changed_fields:
+        return [], {}, {}
+    return (
+        changed_fields,
+        {field: before.get(field, "") for field in changed_fields},
+        {field: after.get(field, "") for field in changed_fields},
+    )
+
+
+def diff_room_registry_snapshots(
+    previous_rows: List[Dict[str, Any]],
+    current_rows: List[Dict[str, Any]],
+    *,
+    current_rows_normalized: bool = False,
+) -> Dict[str, Any]:
+    previous = {row["canonical_id"]: row for row in normalize_room_registry_snapshot_rows(previous_rows)}
+    normalized_current = (
+        current_rows if current_rows_normalized else normalize_room_registry_snapshot_rows(current_rows)
+    )
+    current = {row["canonical_id"]: row for row in normalized_current}
+
+    previous_keys = set(previous.keys())
+    current_keys = set(current.keys())
+    added_ids = sorted(current_keys - previous_keys)
+    removed_ids = sorted(previous_keys - current_keys)
+    shared_ids = sorted(previous_keys & current_keys)
+
+    moved: List[Dict[str, Any]] = []
+    for canonical_id in shared_ids:
+        before = previous[canonical_id]
+        after = current[canonical_id]
+        changed_fields, before_changed, after_changed = _changed_snapshot_fields(before, after)
+        if not changed_fields:
+            continue
+        moved.append(
+            {
+                "canonical_id": canonical_id,
+                "changed_fields": changed_fields,
+                "before": before_changed,
+                "after": after_changed,
+            }
+        )
+
+    return {
+        "added": [current[item] for item in added_ids],
+        "removed": [previous[item] for item in removed_ids],
+        "moved": moved,
+        "counts": {
+            "added": len(added_ids),
+            "removed": len(removed_ids),
+            "moved": len(moved),
+        },
+    }
+
+
+def write_room_registry_snapshot_artifact(
+    out_dir: Path,
+    *,
+    spreadsheet_id: str,
+    sheet_name: str,
+    registry_rows: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    latest_path = out_dir / "room_registry_snapshot_latest.json"
+    snapshot_dir = out_dir / "room_registry_snapshots"
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+    previous_payload: Dict[str, Any] = {}
+    if latest_path.exists():
+        try:
+            previous_payload = load_json(latest_path)
+        except Exception:
+            previous_payload = {}
+
+    normalized_rows = normalize_room_registry_snapshot_rows(registry_rows)
+    diff = diff_room_registry_snapshots(
+        previous_payload.get("rows", []),
+        normalized_rows,
+        current_rows_normalized=True,
+    )
+    now = dt.datetime.now()
+    timestamp = now.strftime("%Y%m%d_%H%M%S")
+    payload = {
+        "generated_at": now.isoformat(timespec="seconds"),
+        "spreadsheet_id": normalize_text(spreadsheet_id),
+        "sheet_name": normalize_text(sheet_name),
+        "rows": normalized_rows,
+        "counts": {
+            "rows": len(normalized_rows),
+        },
+    }
+
+    history_path = snapshot_dir / f"room_registry_snapshot_{timestamp}.json"
+    save_json_compact(history_path, payload)
+    save_json_compact(latest_path, payload)
+    save_json_compact(out_dir / "room_registry_snapshot_diff.json", diff)
+
+    return {
+        "latest_path": str(latest_path),
+        "history_path": str(history_path),
+        "has_previous_snapshot": bool(previous_payload),
+        "diff": diff,
+        "current": payload,
+    }
+
+
+def resolve_room_registry_baseline_path(args: argparse.Namespace, out_dir: Path) -> Path:
+    raw = normalize_text(getattr(args, "room_registry_baseline", ""))
+    if not raw:
+        return out_dir / "room_registry_baseline.json"
+    path = Path(raw).expanduser()
+    if path.is_absolute():
+        return path
+    return Path.cwd() / path
+
+
+def build_room_topology_map(snapshot_rows: List[Dict[str, Any]]) -> Dict[str, int]:
+    counts: Counter[str] = Counter()
+    for row in normalize_room_registry_snapshot_rows(snapshot_rows):
+        branch = normalize_text(row.get("branch", "")).upper()
+        if not branch:
+            branch = "UNKNOWN"
+        counts[branch] += 1
+    return {branch: int(counts[branch]) for branch in sorted(counts.keys())}
+
+
+def diff_room_topology(
+    baseline_rows: List[Dict[str, Any]],
+    current_rows: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    baseline = build_room_topology_map(baseline_rows)
+    current = build_room_topology_map(current_rows)
+    branches = sorted(set(baseline.keys()) | set(current.keys()))
+    branch_deltas: List[Dict[str, Any]] = []
+    for branch in branches:
+        baseline_rooms = int(baseline.get(branch, 0))
+        current_rooms = int(current.get(branch, 0))
+        delta = current_rooms - baseline_rooms
+        if delta == 0:
+            continue
+        branch_deltas.append(
+            {
+                "branch": branch,
+                "baseline_rooms": baseline_rooms,
+                "current_rooms": current_rooms,
+                "delta": delta,
+            }
+        )
+    return {
+        "baseline": baseline,
+        "current": current,
+        "branch_deltas": branch_deltas,
+        "counts": {
+            "branches_changed": len(branch_deltas),
+        },
+    }
+
+
+def evaluate_room_registry_schema_lock(
+    args: argparse.Namespace,
+    out_dir: Path,
+    current_snapshot_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    baseline_path = resolve_room_registry_baseline_path(args, out_dir)
+    baseline_path.parent.mkdir(parents=True, exist_ok=True)
+
+    baseline_exists = baseline_path.exists()
+    force_init = bool(getattr(args, "room_registry_baseline_init", False))
+
+    if force_init or (not baseline_exists):
+        save_json(baseline_path, current_snapshot_payload)
+        status = "initialized" if not baseline_exists else "reset"
+        topology = diff_room_topology(
+            current_snapshot_payload.get("rows", []),
+            current_snapshot_payload.get("rows", []),
+        )
+        artifact = {
+            "status": status,
+            "baseline_path": str(baseline_path),
+            "warning": False,
+            "diff": {
+                "added": [],
+                "removed": [],
+                "moved": [],
+                "counts": {"added": 0, "removed": 0, "moved": 0},
+            },
+            "topology": topology,
+        }
+        save_json_compact(out_dir / "room_registry_schema_lock.json", artifact)
+        return artifact
+
+    baseline_payload: Dict[str, Any] = {}
+    baseline_error = ""
+    try:
+        baseline_payload = load_json(baseline_path)
+    except Exception as exc:
+        baseline_error = str(exc)
+
+    if baseline_error:
+        topology = diff_room_topology([], current_snapshot_payload.get("rows", []))
+        artifact = {
+            "status": "baseline_read_error",
+            "baseline_path": str(baseline_path),
+            "warning": True,
+            "error": baseline_error,
+            "diff": {
+                "added": [],
+                "removed": [],
+                "moved": [],
+                "counts": {"added": 0, "removed": 0, "moved": 0},
+            },
+            "topology": topology,
+        }
+        save_json_compact(out_dir / "room_registry_schema_lock.json", artifact)
+        return artifact
+
+    diff = diff_room_registry_snapshots(
+        baseline_payload.get("rows", []),
+        current_snapshot_payload.get("rows", []),
+    )
+    topology = diff_room_topology(
+        baseline_payload.get("rows", []),
+        current_snapshot_payload.get("rows", []),
+    )
+    has_warning = any(int(diff["counts"].get(key, 0)) > 0 for key in ("added", "removed", "moved"))
+    has_warning = has_warning or bool(topology.get("branch_deltas"))
+    artifact = {
+        "status": "checked",
+        "baseline_path": str(baseline_path),
+        "warning": has_warning,
+        "diff": diff,
+        "topology": topology,
+    }
+    save_json_compact(out_dir / "room_registry_schema_lock.json", artifact)
+    return artifact
+
+
+def build_room_registry_artifact(room_rows: Dict[int, Any]) -> Dict[str, Any]:
+    by_canonical: Dict[str, Dict[str, Any]] = {}
+    canonical_observations: Dict[str, List[Dict[str, Any]]] = {}
+    duplicate_rows: List[Dict[str, Any]] = []
+    for row_index, room in sorted(room_rows.items(), key=lambda item: item[0]):
+        canonical_id = normalize_text(getattr(room, "canonical_id", "")).upper()
+        branch = normalize_text(getattr(room, "branch", "")).upper()
+        building = normalize_text(getattr(room, "building", "")).upper()
+        room_number = normalize_text(getattr(room, "room_number", ""))
+        sheet_room_no = normalize_text(getattr(room, "sheet_room_no", "")).upper() or normalize_text(room.room_no).upper()
+        pms_room_no = normalize_text(getattr(room, "pms_room_no", ""))
+        if not canonical_id:
+            canonical_id = normalize_text(f"{branch}-{sheet_room_no}").upper()
+
+        canonical_observations.setdefault(canonical_id, []).append(
+            {
+                "branch": branch,
+                "building": building,
+                "room_number": room_number,
+                "sheet_room_no": sheet_room_no,
+                "pms_room_no": pms_room_no,
+                "sheet_row": row_index + 1,
+            }
+        )
+
+        entry = by_canonical.get(canonical_id)
+        if not entry:
+            by_canonical[canonical_id] = {
+                "branch": branch,
+                "building": building,
+                "room_number": room_number,
+                "sheet_room_no": sheet_room_no,
+                "canonical_id": canonical_id,
+                "pms_room_no": pms_room_no,
+                "sheet_rows": [row_index + 1],
+                "sheet_row_first": row_index + 1,
+            }
+            continue
+        entry["sheet_rows"].append(row_index + 1)
+        if not normalize_text(entry.get("pms_room_no", "")) and pms_room_no:
+            entry["pms_room_no"] = pms_room_no
+        if not normalize_text(entry.get("building", "")) and building:
+            entry["building"] = building
+        if not normalize_text(entry.get("room_number", "")) and room_number:
+            entry["room_number"] = room_number
+        if not normalize_text(entry.get("sheet_room_no", "")) and sheet_room_no:
+            entry["sheet_room_no"] = sheet_room_no
+        duplicate_rows.append(
+            {
+                "canonical_id": canonical_id,
+                "sheet_row": row_index + 1,
+                "sheet_room_no": sheet_room_no,
+            }
+        )
+
+    registry_rows = []
+    for item in sorted(
+        by_canonical.values(),
+        key=lambda value: (value.get("canonical_id", ""), value.get("sheet_row_first", 0)),
+    ):
+        row = dict(item)
+        row["sheet_rows"] = "|".join(str(v) for v in row.get("sheet_rows", []))
+        registry_rows.append(row)
+
+    identity_issues: List[Dict[str, str]] = []
+
+    # Hard Rule 1: canonical -> pms_room_no must be unique.
+    for canonical_id, observations in sorted(canonical_observations.items(), key=lambda item: item[0]):
+        pms_values = sorted(
+            {
+                normalize_text(obs.get("pms_room_no", ""))
+                for obs in observations
+                if normalize_text(obs.get("pms_room_no", ""))
+            },
+            key=room_registry_sort_key,
+        )
+        if len(pms_values) <= 1:
+            continue
+        identity_issues.append(
+            build_room_registry_issue(
+                issue_type="PMS_CANONICAL_COLLISION",
+                branch=observations[0].get("branch", ""),
+                pms_room_no="|".join(pms_values),
+                canonical_ids=canonical_id,
+                sheet_room_nos=[obs.get("sheet_room_no", "") for obs in observations],
+                sheet_rows=[str(obs.get("sheet_row", "")) for obs in observations],
+            )
+        )
+
+    by_branch_pms: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    for item in registry_rows:
+        branch = item.get("branch", "")
+        pms_room_no = item.get("pms_room_no", "")
+        if not branch or not pms_room_no:
+            continue
+        by_branch_pms.setdefault((branch, pms_room_no), []).append(item)
+
+    # Hard Rule 1 (reverse): branch+pms_room_no must not map to multiple canonical rooms.
+    for (branch, pms_room_no), items in sorted(
+        by_branch_pms.items(),
+        key=lambda kv: (kv[0][0], room_registry_sort_key(kv[0][1])),
+    ):
+        if len(items) <= 1:
+            continue
+        identity_issues.append(
+            build_room_registry_issue(
+                issue_type="PMS_ROOM_NO_COLLISION",
+                branch=branch,
+                pms_room_no=pms_room_no,
+                canonical_ids=[item.get("canonical_id", "") for item in items],
+                sheet_room_nos=[item.get("sheet_room_no", "") for item in items],
+                sheet_rows=[item.get("sheet_rows", "") for item in items],
+            )
+        )
+
+    for item in registry_rows:
+        branch = item.get("branch", "")
+        building = item.get("building", "")
+        room_number = item.get("room_number", "")
+        sheet_room_no = item.get("sheet_room_no", "")
+        canonical_id = item.get("canonical_id", "")
+        pms_room_no = item.get("pms_room_no", "")
+        sheet_rows = item.get("sheet_rows", "")
+
+        # Hard Rule 3: only \\d{3,4} and A\\d{3,4} are allowed in the sheet.
+        if not is_valid_room_registry_sheet_pattern(sheet_room_no):
+            identity_issues.append(
+                build_room_registry_issue(
+                    issue_type="INVALID_PATTERN",
+                    branch=branch,
+                    pms_room_no=pms_room_no,
+                    canonical_ids=canonical_id,
+                    sheet_room_nos=sheet_room_no,
+                    sheet_rows=sheet_rows,
+                )
+            )
+
+        # Hard Rule 2: building-floor max range guard.
+        max_floor = ROOM_REGISTRY_BUILDING_MAX_FLOOR.get(building)
+        floor = infer_room_floor(room_number)
+        if max_floor is not None and floor is not None and floor > max_floor:
+            identity_issues.append(
+                build_room_registry_issue(
+                    issue_type="BUILDING_RANGE_VIOLATION",
+                    branch=branch,
+                    pms_room_no=pms_room_no,
+                    canonical_ids=canonical_id,
+                    sheet_room_nos=sheet_room_no,
+                    sheet_rows=sheet_rows,
+                )
+            )
+
+    identity_issues = sorted(
+        identity_issues,
+        key=lambda row: (
+            row.get("issue_type", ""),
+            row.get("branch", ""),
+            room_registry_sort_key(row.get("pms_room_no", "")),
+            row.get("canonical_ids", ""),
+        ),
+    )
+    issue_counts = Counter(row.get("issue_type", "") for row in identity_issues)
+    pms_collision_count = int(issue_counts.get("PMS_ROOM_NO_COLLISION", 0)) + int(
+        issue_counts.get("PMS_CANONICAL_COLLISION", 0)
+    )
+
+    return {
+        "rows": registry_rows,
+        "duplicate_rows": duplicate_rows,
+        "identity_issues": identity_issues,
+        "counts": {
+            "canonical_rooms": len(registry_rows),
+            "duplicate_room_rows": len(duplicate_rows),
+            "identity_issues": len(identity_issues),
+            "pms_room_no_collisions": pms_collision_count,
+            "pms_canonical_collisions": int(issue_counts.get("PMS_CANONICAL_COLLISION", 0)),
+            "invalid_patterns": int(issue_counts.get("INVALID_PATTERN", 0)),
+            "building_range_violations": int(issue_counts.get("BUILDING_RANGE_VIOLATION", 0)),
+        },
+        "issue_counts": dict(issue_counts),
+    }
+
+
 def load_analysis_context(args: argparse.Namespace) -> Dict[str, Any]:
     spreadsheet_id = extract_sheet_id(args.spreadsheet)
     if not spreadsheet_id:
@@ -863,7 +1942,13 @@ def load_analysis_context(args: argparse.Namespace) -> Dict[str, Any]:
         preferred_start_row=preferred_start_row,
         year=year,
     )
-    room_rows = map_room_rows(matrix, date_cols, scan_row_start=date_row + 2)
+    room_row_logs: List[Dict[str, Any]] = []
+    room_rows = map_room_rows(
+        matrix,
+        date_cols,
+        scan_row_start=date_row + 2,
+        room_row_logs=room_row_logs,
+    )
 
     har_records: List[HarRecord] = []
     har_index: Dict[str, HarRecord] = {}
@@ -879,6 +1964,7 @@ def load_analysis_context(args: argparse.Namespace) -> Dict[str, Any]:
         "date_row": date_row,
         "date_cols": date_cols,
         "room_rows": room_rows,
+        "room_row_logs": room_row_logs,
         "har_records": har_records,
         "har_index": har_index,
     }
@@ -889,18 +1975,32 @@ def build_analysis_artifacts(args: argparse.Namespace, context: Dict[str, Any]) 
     date_row = context["date_row"]
     date_cols = context["date_cols"]
     room_rows = context["room_rows"]
+    room_row_logs = list(context.get("room_row_logs", []))
     har_index = context["har_index"]
 
     blocks, scan_meta = extract_reservation_blocks(matrix, date_cols, room_rows)
     daily_stats = list(scan_meta.get("daily_all", []))
     daily_branch_stats = list(scan_meta.get("daily_by_branch", []))
     vac_by_room_type = calculate_vac_by_room_type(matrix, date_cols, room_rows)
+    room_rows_artifact, room_type_kpi = build_room_rows_vac_artifact(
+        matrix=matrix,
+        date_cols=date_cols,
+        room_rows=room_rows,
+        room_row_logs=room_row_logs,
+    )
+    room_registry_artifact = build_room_registry_artifact(room_rows)
+    pms_branch_map = parse_pms_branch_map(args.pms_branch_map)
     source_records = load_source_reservations(
         har_path=args.har,
         wings_file=args.wings_file,
         naver_file=args.naver_file,
         station_file=args.station_file,
         pms_file=args.pms_file,
+        pms_branch_map=pms_branch_map,
+    )
+    filtered_source_records, pms_branch_scope = apply_pms_branch_scope_filter(
+        blocks,
+        source_records,
     )
     enrich_blocks_with_source_metadata(blocks, source_records)
 
@@ -929,6 +2029,16 @@ def build_analysis_artifacts(args: argparse.Namespace, context: Dict[str, Any]) 
         client=context.get("client"),
         ops_sheet_spreadsheet=args.ops_sheet_spreadsheet,
     )
+    cross_issues = cross_validate_sheet_vs_sources(blocks, filtered_source_records)
+    suspect_trace = build_suspect_trace_artifact(
+        cross_issues=cross_issues,
+        blocks=blocks,
+        summary_meta={
+            "summary_json": "",
+            "spreadsheet_id": context["spreadsheet_id"],
+            "sheet_name": context["sheet_name"],
+        },
+    )
 
     return {
         "blocks": blocks,
@@ -936,15 +2046,60 @@ def build_analysis_artifacts(args: argparse.Namespace, context: Dict[str, Any]) 
         "daily_stats": daily_stats,
         "daily_branch_stats": daily_branch_stats,
         "vac_by_room_type": vac_by_room_type,
-        "source_records": source_records,
+        "room_rows_artifact": room_rows_artifact,
+        "room_type_kpi": room_type_kpi,
+        "room_registry_artifact": room_registry_artifact,
+        "source_records": filtered_source_records,
+        "source_records_raw": source_records,
         "source_system_counts": Counter(r.source_system for r in source_records),
+        "source_system_counts_filtered": Counter(r.source_system for r in filtered_source_records),
+        "pms_branch_scope": pms_branch_scope,
+        "pms_branch_map": pms_branch_map,
         "inventory_rows": inventory_rows,
         "channel_reco": channel_reco,
         "issues": reconcile_sheet_vs_har(blocks, har_index) if har_index else [],
-        "cross_issues": cross_validate_sheet_vs_sources(blocks, source_records),
+        "cross_issues": cross_issues,
+        "suspect_trace": suspect_trace,
         "long_tail_candidates": list(scan_meta.get("long_tail_ota_candidates", [])),
         **ops_artifacts,
     }
+
+
+def attach_room_registry_runtime_artifacts(
+    args: argparse.Namespace,
+    context: Dict[str, Any],
+    artifacts: Dict[str, Any],
+    out_dir: Path,
+) -> None:
+    room_registry_artifact = artifacts.get("room_registry_artifact", {})
+    snapshot_artifact = write_room_registry_snapshot_artifact(
+        out_dir,
+        spreadsheet_id=context.get("spreadsheet_id", ""),
+        sheet_name=context.get("sheet_name", ""),
+        registry_rows=room_registry_artifact.get("rows", []),
+    )
+    schema_lock_artifact = evaluate_room_registry_schema_lock(
+        args,
+        out_dir,
+        snapshot_artifact.get("current", {}),
+    )
+
+    artifacts["room_registry_snapshot_artifact"] = snapshot_artifact
+    artifacts["room_registry_schema_lock_artifact"] = schema_lock_artifact
+    room_registry_artifact["snapshot_diff"] = snapshot_artifact.get("diff", {})
+    room_registry_artifact["schema_lock"] = schema_lock_artifact
+
+    snapshot_counts = snapshot_artifact.get("diff", {}).get("counts", {})
+    schema_warning = 1 if bool(schema_lock_artifact.get("warning", False)) else 0
+    topology_counts = schema_lock_artifact.get("topology", {}).get("counts", {})
+    room_registry_artifact.setdefault("counts", {})
+    room_registry_artifact["counts"]["snapshot_added"] = int(snapshot_counts.get("added", 0))
+    room_registry_artifact["counts"]["snapshot_removed"] = int(snapshot_counts.get("removed", 0))
+    room_registry_artifact["counts"]["snapshot_moved"] = int(snapshot_counts.get("moved", 0))
+    room_registry_artifact["counts"]["schema_lock_warnings"] = schema_warning
+    room_registry_artifact["counts"]["topology_branch_changes"] = int(
+        topology_counts.get("branches_changed", 0)
+    )
 
 
 def write_analysis_outputs(out_dir: Path, artifacts: Dict[str, Any]) -> None:
@@ -953,9 +2108,21 @@ def write_analysis_outputs(out_dir: Path, artifacts: Dict[str, Any]) -> None:
     write_daily_csv(out_dir / "vac_daily.csv", artifacts["daily_stats"])
     write_daily_csv(out_dir / "occupancy_daily_by_branch.csv", artifacts["daily_branch_stats"])
     write_room_type_vac_csv(out_dir / "vac_by_room_type.csv", artifacts["vac_by_room_type"])
+    write_room_rows_csv(out_dir / "room_rows.csv", artifacts["room_rows_artifact"])
+    write_room_registry_csv(out_dir / "room_registry.csv", artifacts["room_registry_artifact"]["rows"])
+    write_room_identity_issues_csv(
+        out_dir / "room_identity_issues.csv", artifacts["room_registry_artifact"]["identity_issues"]
+    )
     write_recommendations_csv(out_dir / "channel_recommendations.csv", artifacts["channel_reco"])
     write_cross_validation_csv(out_dir / "cross_validation_issues.csv", artifacts["cross_issues"])
     write_source_reservations_csv(out_dir / "source_reservations.csv", artifacts["source_records"])
+    write_source_reservations_csv(out_dir / "source_reservations_raw.csv", artifacts["source_records_raw"])
+    write_pms_branch_scope_exclusions_csv(
+        out_dir / "pms_branch_scope_exclusions.csv",
+        artifacts["pms_branch_scope"].get("excluded_rows", []),
+    )
+    save_json(out_dir / "suspect_reservations_trace.json", artifacts["suspect_trace"])
+    write_suspect_trace_csv(out_dir / "suspect_reservations_trace.csv", artifacts["suspect_trace"])
     write_long_tail_ota_candidates_csv(
         out_dir / "long_tail_ota_candidates.csv", artifacts["long_tail_candidates"]
     )
@@ -979,15 +2146,54 @@ def build_analysis_summary(
             "room_rows_count": len(context["room_rows"]),
             "date_columns_count": len(context["date_cols"]),
             "har_records_count": len(context["har_records"]),
+            "source_reservations_count_raw": len(artifacts["source_records_raw"]),
             "source_reservations_count": len(artifacts["source_records"]),
             "source_system_counts": dict(artifacts["source_system_counts"]),
+            "source_system_counts_filtered": dict(artifacts["source_system_counts_filtered"]),
+            "pms_branch_map": artifacts["pms_branch_map"],
+            "pms_branch_scope": artifacts["pms_branch_scope"],
         },
         "counts": {
             "reservation_blocks": len(artifacts["blocks"]),
             "daily_rows": len(artifacts["daily_stats"]),
             "daily_branch_rows": len(artifacts["daily_branch_stats"]),
+            "room_registry_rows": int(artifacts["room_registry_artifact"]["counts"].get("canonical_rooms", 0)),
+            "room_registry_duplicates": int(
+                artifacts["room_registry_artifact"]["counts"].get("duplicate_room_rows", 0)
+            ),
+            "room_identity_issues": int(
+                artifacts["room_registry_artifact"]["counts"].get("identity_issues", 0)
+            ),
+            "room_pms_collisions": int(
+                artifacts["room_registry_artifact"]["counts"].get("pms_room_no_collisions", 0)
+            ),
+            "room_invalid_patterns": int(
+                artifacts["room_registry_artifact"]["counts"].get("invalid_patterns", 0)
+            ),
+            "room_building_range_violations": int(
+                artifacts["room_registry_artifact"]["counts"].get("building_range_violations", 0)
+            ),
+            "room_snapshot_added": int(
+                artifacts["room_registry_artifact"]["counts"].get("snapshot_added", 0)
+            ),
+            "room_snapshot_removed": int(
+                artifacts["room_registry_artifact"]["counts"].get("snapshot_removed", 0)
+            ),
+            "room_snapshot_moved": int(
+                artifacts["room_registry_artifact"]["counts"].get("snapshot_moved", 0)
+            ),
+            "room_schema_lock_warnings": int(
+                artifacts["room_registry_artifact"]["counts"].get("schema_lock_warnings", 0)
+            ),
+            "room_topology_branch_changes": int(
+                artifacts["room_registry_artifact"]["counts"].get("topology_branch_changes", 0)
+            ),
             "reconciliation_issues": len(artifacts["issues"]),
             "cross_validation_issues": len(artifacts["cross_issues"]),
+            "suspect_reservations": int(artifacts["suspect_trace"].get("count", 0)),
+            "pms_branch_excluded": int(
+                artifacts["pms_branch_scope"].get("excluded_pms_records", 0)
+            ),
             "orderlist_rows": len(artifacts["orderlist_artifact"]["rows"]),
             "arrival_rows": len(artifacts["arrival_artifact"]["rows"]),
         },
@@ -1005,6 +2211,10 @@ def build_analysis_summary(
             "errors": scan_meta.get("errors", []),
             "long_tail_ota_candidate_count": len(long_tail_candidates),
             "long_tail_ota_counts": scan_meta.get("long_tail_ota_counts", {}),
+            "room_type_kpi": artifacts.get("room_type_kpi", {}),
+            "room_registry": artifacts["room_registry_artifact"],
+            "room_registry_snapshot": artifacts.get("room_registry_snapshot_artifact", {}),
+            "room_registry_schema_lock": artifacts.get("room_registry_schema_lock_artifact", {}),
         },
         "inventory_rows_found": artifacts["inventory_rows"],
         "derived_reports": {
@@ -1012,6 +2222,8 @@ def build_analysis_summary(
         },
         "issues": artifacts["issues"],
         "cross_validation_issues": artifacts["cross_issues"],
+        "suspect_reservations_trace": artifacts["suspect_trace"],
+        "pms_branch_scope": artifacts["pms_branch_scope"],
     }
 
 def apply_no_proxy_if_requested(args: argparse.Namespace) -> None:
@@ -1175,6 +2387,7 @@ def command_analyze(args: argparse.Namespace) -> int:
     analysis_context = load_analysis_context(args)
     artifacts = build_analysis_artifacts(args, analysis_context)
     out_dir = Path(args.out_dir)
+    attach_room_registry_runtime_artifacts(args, analysis_context, artifacts, out_dir)
     write_analysis_outputs(out_dir, artifacts)
     summary = build_analysis_summary(args, analysis_context, artifacts)
     save_json(out_dir / "summary.json", summary)
@@ -1184,8 +2397,62 @@ def command_analyze(args: argparse.Namespace) -> int:
     print(f"- Occupancy dates (ALL): {len(artifacts['daily_stats'])}")
     print(f"- Occupancy rows (branch): {len(artifacts['daily_branch_stats'])}")
     print(f"- Reconciliation issues: {len(artifacts['issues'])}")
-    print(f"- Cross validation source records: {len(artifacts['source_records'])}")
+    print(
+        "- Cross validation source records:"
+        f" raw={len(artifacts['source_records_raw'])},"
+        f" filtered={len(artifacts['source_records'])}"
+    )
+    print(
+        "- PMS branch scope:"
+        f" excluded={int(artifacts['pms_branch_scope'].get('excluded_pms_records', 0))},"
+        f" scope={artifacts['pms_branch_scope'].get('sheet_branch_scope', [])}"
+    )
     print(f"- Cross validation issues: {len(artifacts['cross_issues'])}")
+    print(f"- Suspect reservations: {int(artifacts['suspect_trace'].get('count', 0))}")
+    room_type_kpi = artifacts.get("room_type_kpi", {})
+    room_registry_counts = artifacts.get("room_registry_artifact", {}).get("counts", {})
+    print(
+        "- RoomType KPI:"
+        f" unknown_vac={room_type_kpi.get('unknown_total_vac', 0)},"
+        f" unknown_actual_room_vac={room_type_kpi.get('unknown_actual_room_vac', 0)},"
+        f" vac_total={room_type_kpi.get('vac_total', 0)}"
+    )
+    print(
+        "- Room Registry:"
+        f" canonical_rooms={room_registry_counts.get('canonical_rooms', 0)},"
+        f" duplicate_rows={room_registry_counts.get('duplicate_room_rows', 0)},"
+        f" pms_collisions={room_registry_counts.get('pms_room_no_collisions', 0)},"
+        f" invalid_patterns={room_registry_counts.get('invalid_patterns', 0)},"
+        f" building_range_violations={room_registry_counts.get('building_range_violations', 0)}"
+    )
+    snapshot_counts = (
+        artifacts.get("room_registry_snapshot_artifact", {})
+        .get("diff", {})
+        .get("counts", {})
+    )
+    print(
+        "- Room Registry Snapshot:"
+        f" added={int(snapshot_counts.get('added', 0))},"
+        f" removed={int(snapshot_counts.get('removed', 0))},"
+        f" moved={int(snapshot_counts.get('moved', 0))}"
+    )
+    schema_lock = artifacts.get("room_registry_schema_lock_artifact", {})
+    topology_deltas = schema_lock.get("topology", {}).get("branch_deltas", [])
+    if topology_deltas:
+        compact = ", ".join(
+            f"{item.get('branch', '')}:{int(item.get('delta', 0)):+d}"
+            for item in topology_deltas[:8]
+        )
+        print(f"- Room Topology Delta: {compact}")
+    if bool(schema_lock.get("warning", False)):
+        schema_counts = schema_lock.get("diff", {}).get("counts", {})
+        print(
+            "[WARN] Room registry baseline diff detected:"
+            f" added={int(schema_counts.get('added', 0))},"
+            f" removed={int(schema_counts.get('removed', 0))},"
+            f" moved={int(schema_counts.get('moved', 0))},"
+            f" baseline={schema_lock.get('baseline_path', '')}"
+        )
     print(
         "- Derived reports:"
         f" orderlist={len(artifacts['orderlist_artifact']['rows'])},"
@@ -1418,12 +2685,27 @@ def add_analyze_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--naver-file", default="")
     parser.add_argument("--station-file", default="")
     parser.add_argument("--pms-file", default="")
+    parser.add_argument(
+        "--pms-branch-map",
+        default="",
+        help="PMS 지점 맵핑 (예: 91=COEX,92=GANGNAM,93=BRANCH_THE_SEOLLEUNG)",
+    )
     parser.add_argument("--out-dir", default="output")
     parser.add_argument("--vac-share-limit", type=int, default=2)
     parser.add_argument("--report-date", default="")
     parser.add_argument("--report-start-date", default="")
     parser.add_argument("--report-end-date", default="")
     parser.add_argument("--ops-sheet-spreadsheet", default="")
+    parser.add_argument(
+        "--room-registry-baseline",
+        default="room_registry_baseline.json",
+        help="Room registry schema lock baseline JSON 경로",
+    )
+    parser.add_argument(
+        "--room-registry-baseline-init",
+        action="store_true",
+        help="현재 room registry를 baseline으로 저장(기존 baseline 덮어씀)",
+    )
     parser.add_argument("--access-token", default="")
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE)
     parser.add_argument("--client-id", default=DEFAULT_CLIENT_ID)

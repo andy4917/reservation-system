@@ -35,6 +35,7 @@
         "src/constants.js",
         "src/domain.types.js",
         "src/scan/normalize.js",
+        "src/pms/wings.adapter.js",
         "src/engine/noteKey.js",
         "src/domain/reservationPolicy.js",
         "src/report/report.format.js",

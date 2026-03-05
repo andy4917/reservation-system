@@ -14,6 +14,14 @@
 - 객실 가용/블록차트: `searchListRoomAvaiable.do`, `searchListRoomBlockChart_V03.do`
 - 체크인/폴리오 보조 조회: `searchFITInHouse.do`, `searchListRateByWalkIn.do`, `searchListServiceByWalkIn.do`
 - 메모/배정/계약 조회: `searchListInterMemo.do`, `searchListAssignedRoom.do`, `searchListAccountContract.do`
+
+## 현재 엔드포인트 수(2026-03-05 기준)
+
+- 프리셋으로 고정 사용: **2개**
+  - `searchListGlobalRsvn_v03.do`
+  - `searchListRsvn.do`
+- 알려진 읽기 전용 카탈로그(어댑터 내): **11개**
+- 런타임 허용 규칙: `/pms/biz/.../(search|select|view)*.do` 패턴 전체(읽기 전용 제한)
 - 메뉴/권한 복원: `selectAllMenuList.do`, `selectUserInfo.do`
 
 ## 권장 변경

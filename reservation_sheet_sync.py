@@ -8,9 +8,9 @@ sys.dont_write_bytecode = True
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import re
-import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -29,6 +29,19 @@ from src.domain.sync_policy import (
     PROVIDER_TARGET_MAX,
 )
 from src.io.sheet_loader import load_sheet_matrix_and_dates
+from src.ota.adapters import NaverPartnerAdapter, NaverPartnerAdapterConfig
+from src.ota.base import OTAAdapterError
+from src.channel_executors import NaverExecutor, StationExecutor
+from src.ota.adapters import (
+    AgodaAdapter,
+    AgodaAdapterConfig,
+    AirbnbAdapter,
+    AirbnbAdapterConfig,
+    BookingAdapter,
+    BookingAdapterConfig,
+    TripAdapter,
+    TripAdapterConfig,
+)
 from reservation_sheet_audit import (
     AuditError,
     DEFAULT_CLIENT_ID,
@@ -101,6 +114,71 @@ def parse_id_list(value: str, fallback: List[str]) -> List[str]:
     if not out:
         return list(fallback)
     return out
+
+
+def parse_file_list(value: str) -> List[str]:
+    text = str(value or "").strip()
+    if not text:
+        return []
+    out: List[str] = []
+    for token in re.split(r"[\n,]+", text):
+        item = str(token or "").strip()
+        if item:
+            out.append(item)
+    return out
+
+
+def build_ota_har_source_summary(
+    session: requests.Session,
+    har_paths: List[str],
+    range_start: str,
+    range_end: str,
+) -> Dict[str, Any]:
+    if not har_paths:
+        return {"enabled": False, "providers": {}, "issues": []}
+
+    provider_builders = {
+        "BOOKING": lambda: BookingAdapter(session, BookingAdapterConfig(wings_har_paths=har_paths)),
+        "AGODA": lambda: AgodaAdapter(session, AgodaAdapterConfig(wings_har_paths=har_paths)),
+        "TRIP": lambda: TripAdapter(session, TripAdapterConfig(wings_har_paths=har_paths)),
+        "AIRBNB": lambda: AirbnbAdapter(session, AirbnbAdapterConfig(wings_har_paths=har_paths)),
+    }
+    providers: Dict[str, Any] = {}
+    issues: List[Dict[str, str]] = []
+    for provider, builder in provider_builders.items():
+        try:
+            adapter = builder()
+            reservations = adapter.fetch_reservations(range_start, range_end)
+            changes = adapter.fetch_changes(range_start)
+            canceled = adapter.cancelled_reservations(range_start, range_end)
+            inventory = adapter.get_inventory(range_start, range_end)
+            providers[provider] = {
+                "reservation_count": len(reservations),
+                "change_count": len(changes),
+                "canceled_count": len(canceled),
+                "inventory_count": len(inventory),
+            }
+        except Exception as exc:  # noqa: BLE001
+            providers[provider] = {
+                "reservation_count": 0,
+                "change_count": 0,
+                "canceled_count": 0,
+                "inventory_count": 0,
+            }
+            issues.append(
+                {
+                    "provider": provider,
+                    "code": "OTA_ADAPTER_READ_FAILED",
+                    "message": str(exc),
+                }
+            )
+
+    return {
+        "enabled": True,
+        "har_paths": har_paths,
+        "providers": providers,
+        "issues": issues,
+    }
 
 
 def ensure_bearer(token: str) -> str:
@@ -514,6 +592,11 @@ def initialize_sync_summary(
     return {
         "requestedApply": bool(args.apply),
         "applied": False,
+        "engine": {
+            "architecture": "state_reconciliation",
+            "mode": "full_recalc_diff",
+            "version": "v1",
+        },
         "provider": provider,
         "sheet_stock_mode": mode,
         "sheet": {
@@ -533,14 +616,209 @@ def initialize_sync_summary(
             "station": target_plan["station_validation"],
             "naver": target_plan["naver_validation"],
         },
+        "ota_sources": {
+            "enabled": False,
+            "providers": {},
+            "issues": [],
+        },
         "ui": {
             "forcedCloseOverrides": [],
             "forcedCloseProcessed": [],
+        },
+        "reconciliation": {
+            "providers": {},
+            "counts": {
+                "providers": 0,
+                "drift_dates": 0,
+                "action_dates": 0,
+            },
+            "fingerprint": "",
         },
         "policy": {"blocked": False, "issues": []},
         "station": {},
         "naver": {},
     }
+
+
+def _sorted_int_date_map(values: Dict[str, int]) -> Dict[str, int]:
+    return {day: int(values[day]) for day in sorted(values.keys())}
+
+
+def summarize_station_actual_units_by_date(
+    station_rows: List[Dict[str, Any]],
+    room_ids: List[str],
+) -> Dict[str, int]:
+    room_id_set = {str(rid).strip() for rid in room_ids if str(rid).strip()}
+    by_date: Dict[str, int] = defaultdict(int)
+    for row in station_rows:
+        day = normalize_text(row.get("date", ""))
+        room_id = normalize_text(row.get("roomId", ""))
+        if not day or not room_id:
+            continue
+        if room_id_set and room_id not in room_id_set:
+            continue
+        stock = row.get("stockCount")
+        stock_i = int(stock) if isinstance(stock, int) else 0
+        by_date[day] += max(stock_i, 0)
+    return _sorted_int_date_map(by_date)
+
+
+def summarize_naver_actual_units_by_date(
+    current_by_room: Dict[str, Dict[str, Dict[str, Any]]],
+    room_ids: List[str],
+) -> Dict[str, int]:
+    room_id_set = {str(rid).strip() for rid in room_ids if str(rid).strip()}
+    by_date: Dict[str, int] = defaultdict(int)
+    for room_id, room_map in (current_by_room or {}).items():
+        rid = normalize_text(room_id)
+        if room_id_set and rid not in room_id_set:
+            continue
+        if not isinstance(room_map, dict):
+            continue
+        for day, payload in room_map.items():
+            day_key = normalize_text(day)
+            if not day_key or not isinstance(payload, dict):
+                continue
+            stock = payload.get("stock")
+            stock_i = int(stock) if isinstance(stock, int) else 0
+            by_date[day_key] += max(stock_i, 0)
+    return _sorted_int_date_map(by_date)
+
+
+def summarize_station_action_stats_by_date(actions: List[Dict[str, Any]]) -> Dict[str, Dict[str, int]]:
+    by_date: Dict[str, Dict[str, int]] = {}
+    for action in actions or []:
+        day = normalize_text(action.get("date", ""))
+        if not day:
+            continue
+        row = by_date.setdefault(
+            day,
+            {
+                "action_count": 0,
+                "change_actions": 0,
+                "stock_actions": 0,
+                "sale_day_actions": 0,
+                "mismatch_signals": 0,
+            },
+        )
+        row["action_count"] += 1
+        row["stock_actions"] += 1
+        if bool(action.get("hasChange")):
+            row["change_actions"] += 1
+        row["mismatch_signals"] += max(int(action.get("mismatchCount") or 0), 0)
+    return {day: by_date[day] for day in sorted(by_date.keys())}
+
+
+def summarize_naver_action_stats_by_date(actions: List[Dict[str, Any]]) -> Dict[str, Dict[str, int]]:
+    by_date: Dict[str, Dict[str, int]] = {}
+    for action in actions or []:
+        day = normalize_text(action.get("date", ""))
+        if not day:
+            continue
+        row = by_date.setdefault(
+            day,
+            {
+                "action_count": 0,
+                "change_actions": 0,
+                "stock_actions": 0,
+                "sale_day_actions": 0,
+                "mismatch_signals": 0,
+            },
+        )
+        row["action_count"] += 1
+        row["change_actions"] += 1
+        action_type = normalize_text(action.get("type", "")).lower()
+        if action_type == "stock":
+            row["stock_actions"] += 1
+        elif action_type == "sale-day":
+            row["sale_day_actions"] += 1
+        if bool(action.get("countAsMismatch", True)):
+            row["mismatch_signals"] += 1
+    return {day: by_date[day] for day in sorted(by_date.keys())}
+
+
+def build_provider_reconciliation(
+    provider_key: str,
+    desired_units_by_date: Dict[str, int],
+    actual_units_by_date: Dict[str, int],
+    action_stats_by_date: Dict[str, Dict[str, int]],
+) -> Dict[str, Any]:
+    desired = _sorted_int_date_map(desired_units_by_date or {})
+    actual = _sorted_int_date_map(actual_units_by_date or {})
+    dates = sorted(set(desired.keys()) | set(actual.keys()) | set((action_stats_by_date or {}).keys()))
+    rows: List[Dict[str, Any]] = []
+    drift_dates = 0
+    action_dates = 0
+    total_actions = 0
+    for day in dates:
+        desired_units = int(desired.get(day, 0))
+        actual_units = int(actual.get(day, 0))
+        drift_units = desired_units - actual_units
+        action_stats = action_stats_by_date.get(day, {}) if isinstance(action_stats_by_date, dict) else {}
+        action_count = int(action_stats.get("action_count", 0))
+        stock_actions = int(action_stats.get("stock_actions", 0))
+        sale_day_actions = int(action_stats.get("sale_day_actions", 0))
+        mismatch_signals = int(action_stats.get("mismatch_signals", 0))
+        if drift_units != 0:
+            drift_dates += 1
+        if action_count > 0:
+            action_dates += 1
+        total_actions += action_count
+        rows.append(
+            {
+                "date": day,
+                "desired_units": desired_units,
+                "actual_units": actual_units,
+                "drift_units": drift_units,
+                "action_count": action_count,
+                "stock_actions": stock_actions,
+                "sale_day_actions": sale_day_actions,
+                "mismatch_signals": mismatch_signals,
+            }
+        )
+
+    return {
+        "provider": normalize_text(provider_key).upper(),
+        "mode": "full_recalc_diff",
+        "desired_units_by_date": desired,
+        "actual_units_by_date": actual,
+        "rows": rows,
+        "counts": {
+            "dates": len(rows),
+            "drift_dates": drift_dates,
+            "action_dates": action_dates,
+            "actions": total_actions,
+        },
+    }
+
+
+def compute_reconciliation_fingerprint(summary: Dict[str, Any]) -> str:
+    reconciliation = summary.get("reconciliation", {})
+    providers = reconciliation.get("providers", {})
+    payload = json.dumps(providers, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+
+
+def refresh_reconciliation_counts(summary: Dict[str, Any]) -> None:
+    reconciliation = summary.setdefault("reconciliation", {})
+    providers = reconciliation.get("providers", {})
+    drift_dates = 0
+    action_dates = 0
+    provider_count = 0
+    for key in ("station", "naver"):
+        provider = providers.get(key)
+        if not isinstance(provider, dict):
+            continue
+        provider_count += 1
+        counts = provider.get("counts", {})
+        drift_dates += int(counts.get("drift_dates", 0))
+        action_dates += int(counts.get("action_dates", 0))
+    reconciliation["counts"] = {
+        "providers": provider_count,
+        "drift_dates": drift_dates,
+        "action_dates": action_dates,
+    }
+    reconciliation["fingerprint"] = compute_reconciliation_fingerprint(summary)
 
 
 def prepare_station_sync(
@@ -580,12 +858,21 @@ def prepare_station_sync(
         room_ids=room_ids,
         branch_id=args.station_branch_id,
     )
+    station_actual_units = summarize_station_actual_units_by_date(station_rows, room_ids)
+    station_action_stats = summarize_station_action_stats_by_date(station_actions)
+    reconciliation = build_provider_reconciliation(
+        "STATION",
+        station_targets,
+        station_actual_units,
+        station_action_stats,
+    )
     summary_section = {
         "room_ids": room_ids,
         "target_dates": len(station_targets),
         "actions": station_actions,
         "warnings": station_warnings,
         "results": [],
+        "reconciliation": reconciliation,
     }
     return summary_section, (station_headers, station_actions)
 
@@ -632,11 +919,20 @@ def prepare_naver_sync(
         current_by_room=current_by_room,
         desc=args.naver_desc,
     )
+    naver_actual_units = summarize_naver_actual_units_by_date(current_by_room, room_ids)
+    naver_action_stats = summarize_naver_action_stats_by_date(naver_actions)
+    reconciliation = build_provider_reconciliation(
+        "NAVER",
+        naver_targets,
+        naver_actual_units,
+        naver_action_stats,
+    )
     summary_section = {
         "room_ids": room_ids,
         "target_dates": len(naver_targets),
         "actions": naver_actions,
         "results": [],
+        "reconciliation": reconciliation,
     }
     return summary_section, (naver_headers, naver_actions)
 
@@ -1035,35 +1331,32 @@ def fetch_naver_daily_schedule_map(
     start_date: str,
     end_date: str,
 ) -> Dict[str, Dict[str, Any]]:
-    url = (
-        f"{args.naver_api_base.rstrip('/')}/v3.0/businesses/{args.naver_business_id}"
-        f"/biz-items/{biz_item_id}/daily-schedules"
+    adapter = NaverPartnerAdapter(
+        session=session,
+        config=NaverPartnerAdapterConfig(
+            base_url=args.naver_api_base,
+            business_id=args.naver_business_id,
+            headers=headers,
+            timeout_sec=args.request_timeout_sec,
+        ),
     )
-    payload = request_json(
-        session,
-        "GET",
-        url,
-        headers=headers,
-        timeout_sec=args.request_timeout_sec,
-        params={
-            "startDateTime": f"{start_date}T00:00:00",
-            "endDateTime": f"{end_date}T00:00:00",
-        },
-    )
+
+    try:
+        rows = adapter.get_inventory(
+            start_date=start_date,
+            end_date=end_date,
+            provider_item_ids=[biz_item_id],
+        )
+    except OTAAdapterError as exc:
+        raise AuditError(str(exc)) from exc
+
     out: Dict[str, Dict[str, Any]] = {}
-    if not isinstance(payload, dict):
-        return out
-    for date_key, value in payload.items():
-        if not isinstance(value, dict):
-            continue
-        stock = value.get("stock")
-        if stock is None:
-            stock = value.get("availableStock")
-        stock_i = int(stock) if isinstance(stock, int) else 0
-        sale_day = value.get("isSaleDay")
-        if not isinstance(sale_day, bool):
-            sale_day = stock_i > 0
-        out[str(date_key)] = {"stock": max(stock_i, 0), "isSaleDay": bool(sale_day)}
+    for row in rows:
+        is_sale_day = row.meta.get("is_sale_day") if isinstance(row.meta, dict) else None
+        out[row.date] = {
+            "stock": max(int(row.stock), 0),
+            "isSaleDay": bool(is_sale_day) if isinstance(is_sale_day, bool) else (int(row.stock) > 0),
+        }
     return out
 
 
@@ -1220,25 +1513,18 @@ def apply_station_actions(
     headers: Dict[str, str],
     actions: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    url = f"{args.station_api_base.rstrip('/')}/admin/branch/{args.station_branch_id}/apply/price-set"
-    results = []
-    for action in actions:
-        if not action.get("hasChange"):
-            results.append({"date": action.get("date"), "status": "SKIPPED_NO_CHANGE"})
-            continue
-        payload = action["payload"]
-        request_json(
-            session,
-            "PATCH",
-            url,
-            headers=headers,
-            timeout_sec=args.request_timeout_sec,
-            payload=payload,
-        )
-        results.append({"date": action.get("date"), "status": "APPLIED"})
-        if args.request_sleep_ms > 0:
-            time.sleep(args.request_sleep_ms / 1000.0)
-    return results
+    executor = StationExecutor(
+        base_url=args.station_api_base,
+        branch_id=args.station_branch_id,
+        timeout_sec=args.request_timeout_sec,
+        sleep_ms=args.request_sleep_ms,
+    )
+    return executor.apply_inventory_actions(
+        session=session,
+        headers=headers,
+        actions=actions,
+        request_json=request_json,
+    )
 
 
 def apply_naver_actions(
@@ -1247,38 +1533,18 @@ def apply_naver_actions(
     headers: Dict[str, str],
     actions: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    results = []
-    for action in actions:
-        rid = action["bizItemId"]
-        if action["type"] == "stock":
-            url = (
-                f"{args.naver_api_base.rstrip('/')}/v3.0/businesses/{args.naver_business_id}"
-                f"/biz-items/{rid}/stock-schedules"
-            )
-        else:
-            url = (
-                f"{args.naver_api_base.rstrip('/')}/v3.1/businesses/{args.naver_business_id}"
-                f"/biz-items/{rid}/sale-schedules"
-            )
-        request_json(
-            session,
-            "POST",
-            url,
-            headers=headers,
-            timeout_sec=args.request_timeout_sec,
-            payload=action["payload"],
-        )
-        results.append(
-            {
-                "type": action["type"],
-                "bizItemId": rid,
-                "date": action["date"],
-                "status": "APPLIED",
-            }
-        )
-        if args.request_sleep_ms > 0:
-            time.sleep(args.request_sleep_ms / 1000.0)
-    return results
+    executor = NaverExecutor(
+        base_url=args.naver_api_base,
+        business_id=args.naver_business_id,
+        timeout_sec=args.request_timeout_sec,
+        sleep_ms=args.request_sleep_ms,
+    )
+    return executor.apply_inventory_actions(
+        session=session,
+        headers=headers,
+        actions=actions,
+        request_json=request_json,
+    )
 
 
 def command_sync_inventory(args: argparse.Namespace) -> int:
@@ -1297,6 +1563,7 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
     naver_validation = target_plan["naver_validation"]
     range_start = target_plan["range_start"]
     range_end = target_plan["range_end"]
+    wings_har_paths = parse_file_list(args.wings_har_file)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1307,6 +1574,14 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
     station_apply_context: Optional[Tuple[Dict[str, str], List[Dict[str, Any]]]] = None
     naver_apply_context: Optional[Tuple[Dict[str, str], List[Dict[str, Any]]]] = None
     with requests.Session() as session:
+        if wings_har_paths:
+            summary["ota_sources"] = build_ota_har_source_summary(
+                session=session,
+                har_paths=wings_har_paths,
+                range_start=range_start,
+                range_end=range_end,
+            )
+
         if provider in ("station", "both"):
             station_summary, station_apply_context = prepare_station_sync(
                 session=session,
@@ -1318,6 +1593,7 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
                 station_targets=station_targets,
             )
             summary["station"] = station_summary
+            summary["reconciliation"]["providers"]["station"] = station_summary.get("reconciliation", {})
 
         if provider in ("naver", "both"):
             naver_summary, naver_apply_context = prepare_naver_sync(
@@ -1330,6 +1606,9 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
                 naver_targets=naver_targets,
             )
             summary["naver"] = naver_summary
+            summary["reconciliation"]["providers"]["naver"] = naver_summary.get("reconciliation", {})
+
+        refresh_reconciliation_counts(summary)
 
         summary["policy"] = build_apply_guardrails(summary)
         if args.apply and summary["policy"]["blocked"] and not args.allow_unsafe_apply:
@@ -1368,8 +1647,21 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
         f" station={station_validation['errorCount']}/{station_validation['warnCount']},"
         f" naver={naver_validation['errorCount']}/{naver_validation['warnCount']}"
     )
+    reconciliation_counts = summary.get("reconciliation", {}).get("counts", {})
+    print(
+        "- reconciliation:"
+        f" providers={int(reconciliation_counts.get('providers', 0))},"
+        f" drift_dates={int(reconciliation_counts.get('drift_dates', 0))},"
+        f" action_dates={int(reconciliation_counts.get('action_dates', 0))}"
+    )
     if summary["policy"]["blocked"]:
         print(f"- apply blocks: {len(summary['policy']['issues'])}")
+    ota_sources = summary.get("ota_sources", {})
+    if ota_sources.get("enabled"):
+        provider_rows = ota_sources.get("providers", {})
+        print(f"- ota source providers: {len(provider_rows)}")
+        if ota_sources.get("issues"):
+            print(f"- ota source issues: {len(ota_sources.get('issues', []))}")
 
     return 0
 
@@ -1408,6 +1700,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Deprecated compatibility flag (no-op).",
     )
     parser.add_argument("--out-dir", default="output")
+    parser.add_argument(
+        "--wings-har-file",
+        default="",
+        help="Comma/newline separated WINGS HAR file paths for OTA(HAR) source summary.",
+    )
 
     parser.add_argument("--access-token", default="")
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE)

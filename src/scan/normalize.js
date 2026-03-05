@@ -1630,6 +1630,34 @@
     return missing;
   }
 
+  function sanitizeNaverExecutionConfig(raw) {
+    const cfg = raw && typeof raw === "object" ? raw : {};
+    const modeRaw = normalizeText(cfg.mode || "").toLowerCase();
+    const mode = (() => {
+      if (modeRaw === "verify" || modeRaw === "plan" || modeRaw === "sync") return modeRaw;
+      // Backward compatibility for previously stored modes.
+      if (modeRaw === "monitor") return "verify";
+      if (modeRaw === "assisted") return "plan";
+      if (modeRaw === "auto") return "sync";
+      return "plan";
+    })();
+    const batchWindowMs = Math.max(3000, Number(cfg.batchWindowMs) || 20000);
+    const flushThreshold = Math.max(1, Number(cfg.flushThreshold) || 12);
+    const maxBatchActions = Math.max(1, Number(cfg.maxBatchActions) || 80);
+    const maxChangesPerRun = Math.max(1, Number(cfg.maxChangesPerRun) || 240);
+    const retryLimit = Math.max(0, Number(cfg.retryLimit) || 2);
+    const rateLimitMs = Math.max(0, Number(cfg.rateLimitMs) || DEFAULT_SYNC_SLEEP_MS);
+    return {
+      mode,
+      batchWindowMs,
+      flushThreshold,
+      maxBatchActions,
+      maxChangesPerRun,
+      retryLimit,
+      rateLimitMs
+    };
+  }
+
 
   function sanitizeSyncConfig(raw) {
     const config = applyEmbeddedSyncConfig(raw && typeof raw === "object" ? raw : {});
@@ -1651,6 +1679,7 @@
       goldenExportRedaction: "default",
       reservationPolicyVersion: 1,
       scan: sanitizeScanConfig(config.scan || {}),
+      naverExecution: sanitizeNaverExecutionConfig(config.naverExecution || {}),
       providerApply: sanitizeProviderApplyConfig(config.providerApply || config.applyProviders || {}),
       authBundles: sanitizeStoredAuthBundles(config.authBundles || config.providerAuthBundles || {}),
       pmsReservationUrl: normalizeText(config.pmsReservationUrl || config.pmsApiUrl || config.pmsReservationApiUrl || ""),
@@ -1793,6 +1822,7 @@
     parseAuthBundleMaybe,
     applyEmbeddedSyncConfig,
     getEmbeddedAuthMissingFields,
+    sanitizeNaverExecutionConfig,
     sanitizeSyncConfig,
     loadSyncConfig,
     saveSyncConfig,

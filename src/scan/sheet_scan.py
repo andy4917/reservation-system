@@ -32,6 +32,7 @@ from src.domain.sheet_domain import (
     ROOM_NO_RE,
     ROOM_TYPE_BY_ROOM_NO,
     RESERVATION_NUMBER_RE,
+    RoomIdentity,
     RoomRow,
     TOTAL_ROOMS_EXPECTED,
     AuditError,
@@ -402,6 +403,87 @@ def room_no_alias_keys(room_no: str) -> List[str]:
     return out
 
 
+def is_type_room_header(matrix: SheetMatrix, row: int) -> bool:
+    col_a = normalize_text(matrix.get(row, 0).formatted_value).lower()
+    col_b = normalize_text(matrix.get(row, 1).formatted_value).lower()
+    return col_a == "type" and col_b == "room"
+
+
+def detect_room_section_headers(matrix: SheetMatrix, row_start: int, row_end: int) -> List[int]:
+    headers: List[int] = []
+    for row in matrix.iter_rows(row_start, row_end):
+        if is_type_room_header(matrix, row):
+            headers.append(row)
+    return headers
+
+
+def is_room_section_terminator_row(matrix: SheetMatrix, row: int) -> bool:
+    col_a = normalize_text(matrix.get(row, 0).formatted_value).lower()
+    col_b = normalize_text(matrix.get(row, 1).formatted_value).lower()
+    text = normalize_text(f"{col_a} {col_b}").lower()
+    if not text:
+        return False
+    stop_tokens = (
+        "station",
+        "st ation",
+        "네이버",
+        "naver",
+        "room sold",
+        "취소/변경/결제",
+        "최소투숙",
+        "판매 상태",
+        "cms 연동",
+        "금액 인상",
+        "야놀자",
+    )
+    return any(token in text for token in stop_tokens)
+
+
+def resolve_branch_for_section_header(header_row: int, markers: List[Dict[str, Any]]) -> str:
+    selected = ""
+    for marker in markers:
+        marker_row = int(marker.get("row", -1))
+        if marker_row >= header_row:
+            break
+        selected = normalize_text(marker.get("branch", ""))
+    return selected or branch_from_row(header_row)
+
+
+def build_room_identity(branch: str, room_no: str) -> RoomIdentity:
+    normalized_room_no = normalize_room_no(room_no)
+    building = ""
+    room_number = ""
+    m = re.fullmatch(r"([A-Z])(\d{3,4})", normalized_room_no)
+    if m:
+        building = m.group(1)
+        room_number = m.group(2)
+    elif re.fullmatch(r"\d{3,4}", normalized_room_no):
+        building = "B"
+        room_number = normalized_room_no
+    else:
+        room_number = normalized_room_no
+
+    branch_key = normalize_text(branch).upper()
+    canonical_parts = [part for part in (branch_key, building, room_number) if part]
+    canonical_id = "-".join(canonical_parts)
+    pms_room_no = ""
+    if room_number.isdigit():
+        number = int(room_number)
+        if building == "A":
+            pms_room_no = str(number + 1000)
+        else:
+            pms_room_no = str(number)
+
+    return RoomIdentity(
+        branch=branch_key,
+        building=building,
+        room_number=room_number,
+        sheet_room_no=normalized_room_no,
+        canonical_id=canonical_id,
+        pms_room_no=pms_room_no,
+    )
+
+
 def infer_room_type_from_label(value: str) -> str:
     text = normalize_text(value)
     low = text.lower()
@@ -417,7 +499,10 @@ def infer_room_type_from_label(value: str) -> str:
 
 
 def extract_room_no_from_row(matrix: SheetMatrix, row: int) -> str:
-    probe_cols = (1, 0, 2, 3)
+    # Room number must be read from TYPE/ROOM area only.
+    # Date/value columns (C+) can contain payment amounts like 20,000,
+    # which must never be parsed as room numbers (e.g. "000").
+    probe_cols = (1, 0)
     for col in probe_cols:
         text = normalize_text(matrix.get(row, col).formatted_value)
         if not text:
@@ -441,14 +526,15 @@ def row_has_room_signals(matrix: SheetMatrix, row: int, date_cols: List[DateColu
         hex_color = normalize_text(cell.background_hex).lower()
         if note:
             return True
+        if hex_color in IGNORED_COLOR_HEX:
+            # Payment/helper color blocks must not promote non-room rows.
+            continue
         if hex_color and hex_color != "ffffff":
             return True
         if not txt:
             continue
         low = txt.lower()
         if low in ROOM_STATUS_TEXT_HINTS:
-            return True
-        if re.search(r"\d", txt):
             return True
     return False
 
@@ -725,48 +811,201 @@ def map_room_rows(
     matrix: SheetMatrix,
     date_cols: List[DateColumn],
     scan_row_start: int,
+    room_row_logs: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[int, RoomRow]:
     room_rows: Dict[int, RoomRow] = {}
-    current_room_type = ""
+    branch_markers = detect_branch_markers(matrix, matrix.start_row, matrix.max_row)
+    section_headers = detect_room_section_headers(matrix, matrix.start_row, matrix.max_row)
+    section_ranges: List[Dict[str, Any]] = []
+    if section_headers:
+        sorted_headers = sorted(set(section_headers))
+        for idx, header_row in enumerate(sorted_headers):
+            next_header = sorted_headers[idx + 1] if (idx + 1) < len(sorted_headers) else (matrix.max_row + 1)
+            section_ranges.append(
+                {
+                    "header_row": header_row,
+                    "start_row": header_row + 1,
+                    "end_row": min(next_header - 1, matrix.max_row),
+                    "branch": resolve_branch_for_section_header(header_row, branch_markers),
+                }
+            )
+    else:
+        section_ranges.append(
+            {
+                "header_row": scan_row_start - 1,
+                "start_row": scan_row_start,
+                "end_row": matrix.max_row,
+                "branch": branch_from_row(scan_row_start),
+            }
+        )
 
-    for row in matrix.iter_rows(scan_row_start, matrix.max_row):
-        room_type_raw = normalize_text(matrix.get(row, 0).formatted_value)
-        if room_type_raw:
-            current_room_type = room_type_raw
+    def append_row_log(
+        *,
+        row: int,
+        row_type: str,
+        room_no: str,
+        parsed_room_type: str,
+        room_type_source: str,
+        raw_text: str,
+        branch: str = "",
+        building: str = "",
+        room_number: str = "",
+        sheet_room_no: str = "",
+        canonical_id: str = "",
+        pms_room_no: str = "",
+    ) -> None:
+        if room_row_logs is None:
+            return
+        room_row_logs.append(
+            {
+                "room_row": int(row) + 1,
+                "row_type": normalize_text(row_type).lower(),
+                "branch": normalize_text(branch).upper(),
+                "room_no": normalize_text(room_no),
+                "building": normalize_text(building).upper(),
+                "room_number": normalize_text(room_number),
+                "sheet_room_no": normalize_text(sheet_room_no).upper(),
+                "canonical_id": normalize_text(canonical_id).upper(),
+                "pms_room_no": normalize_text(pms_room_no),
+                "parsed_room_type": normalize_text(parsed_room_type),
+                "room_type_source": normalize_text(room_type_source).lower(),
+                "raw_text": normalize_text(raw_text),
+            }
+        )
 
-        room_no = extract_room_no_from_row(matrix, row)
-        if not room_no:
-            continue
-        if is_skip_row_text(room_type_raw):
-            continue
-        if not ROOM_NO_RE.search(room_no):
-            continue
+    for section in section_ranges:
+        start_row = int(section["start_row"])
+        end_row = int(section["end_row"])
+        section_branch = normalize_text(section.get("branch", ""))
+        current_room_type = ""
+        blank_streak = 0
+        found_room_in_section = False
 
-        explicit_room_type = ""
-        for key in room_no_alias_keys(room_no):
-            mapped = ROOM_TYPE_BY_ROOM_NO.get(normalize_room_no_key(key))
-            if mapped:
-                explicit_room_type = mapped
+        for row in matrix.iter_rows(start_row, end_row):
+            room_type_raw = normalize_text(matrix.get(row, 0).formatted_value)
+            room_col_raw = normalize_text(matrix.get(row, 1).formatted_value)
+            if room_type_raw:
+                current_room_type = room_type_raw
+            raw_text = room_type_raw or current_room_type
+            has_room_signal = row_has_room_signals(matrix, row, date_cols)
+
+            is_blank = (not room_type_raw) and (not room_col_raw) and (not has_room_signal)
+            if is_blank:
+                blank_streak += 1
+            else:
+                blank_streak = 0
+
+            if found_room_in_section and blank_streak >= 3:
                 break
+            if (not found_room_in_section) and blank_streak >= 10:
+                break
+            if is_room_section_terminator_row(matrix, row):
+                if found_room_in_section:
+                    break
+                continue
 
-        inferred_room_type = infer_room_type_from_label(room_type_raw) or infer_room_type_from_label(
-            current_room_type
-        )
+            room_no = extract_room_no_from_row(matrix, row)
+            if not room_no:
+                if has_room_signal:
+                    append_row_log(
+                        row=row,
+                        row_type="noise_row",
+                        room_no="",
+                        parsed_room_type="",
+                        room_type_source="noise",
+                        raw_text=raw_text,
+                        branch=section_branch,
+                    )
+                continue
 
-        # When fixed room map is missing (new branches/renumbered rooms), keep operational rows
-        # only if date area has room-like reservation signals.
-        if not explicit_room_type and not inferred_room_type and not row_has_room_signals(matrix, row, date_cols):
-            continue
+            found_room_in_section = True
+            blank_streak = 0
+            if is_skip_row_text(room_type_raw):
+                append_row_log(
+                    row=row,
+                    row_type="noise_row",
+                    room_no=room_no,
+                    parsed_room_type="",
+                    room_type_source="noise",
+                    raw_text=raw_text,
+                    branch=section_branch,
+                )
+                continue
+            if not ROOM_NO_RE.search(room_no):
+                append_row_log(
+                    row=row,
+                    row_type="noise_row",
+                    room_no=room_no,
+                    parsed_room_type="",
+                    room_type_source="noise",
+                    raw_text=raw_text,
+                    branch=section_branch,
+                )
+                continue
 
-        room_type = explicit_room_type or inferred_room_type or "UNKNOWN_ROOM_TYPE"
-        room_type_norm = room_type.upper()
-        capacity = ROOM_CAPACITY_BY_TYPE.get(room_type_norm)
-        room_rows[row] = RoomRow(
-            row=row,
-            room_type=room_type,
-            room_no=room_no,
-            capacity=capacity,
-        )
+            explicit_room_type = ""
+            for key in room_no_alias_keys(room_no):
+                mapped = ROOM_TYPE_BY_ROOM_NO.get(normalize_room_no_key(key))
+                if mapped:
+                    explicit_room_type = mapped
+                    break
+
+            inferred_room_type = infer_room_type_from_label(room_type_raw) or infer_room_type_from_label(
+                current_room_type
+            )
+
+            # When fixed room map is missing (new branches/renumbered rooms), keep operational rows
+            # only if date area has room-like reservation signals.
+            if not explicit_room_type and not inferred_room_type and not has_room_signal:
+                append_row_log(
+                    row=row,
+                    row_type="noise_row",
+                    room_no=room_no,
+                    parsed_room_type="",
+                    room_type_source="noise",
+                    raw_text=raw_text,
+                    branch=section_branch,
+                )
+                continue
+
+            room_type = explicit_room_type or inferred_room_type or "UNKNOWN_ROOM_TYPE"
+            if explicit_room_type:
+                room_type_source = "explicit"
+            elif inferred_room_type:
+                room_type_source = "inferred"
+            else:
+                room_type_source = "unknown"
+            room_type_norm = room_type.upper()
+            capacity = ROOM_CAPACITY_BY_TYPE.get(room_type_norm)
+            identity = build_room_identity(section_branch, room_no)
+            room_rows[row] = RoomRow(
+                row=row,
+                room_type=room_type,
+                room_no=room_no,
+                capacity=capacity,
+                branch=identity.branch,
+                building=identity.building,
+                room_number=identity.room_number,
+                sheet_room_no=identity.sheet_room_no,
+                canonical_id=identity.canonical_id,
+                pms_room_no=identity.pms_room_no,
+                room_type_source=room_type_source,
+                raw_text=raw_text,
+            )
+            append_row_log(
+                row=row,
+                row_type="room_row",
+                room_no=room_no,
+                parsed_room_type=room_type,
+                room_type_source=room_type_source,
+                raw_text=raw_text,
+                branch=identity.branch,
+                building=identity.building,
+                room_number=identity.room_number,
+                sheet_room_no=identity.sheet_room_no,
+                canonical_id=identity.canonical_id,
+                pms_room_no=identity.pms_room_no,
+            )
 
     if not room_rows:
         raise AuditError("No room rows found from sheet scan.")
@@ -782,8 +1021,15 @@ def extract_reservation_blocks(
     note_cache: Dict[str, Dict[str, Any]] = {}
     branch_markers = detect_branch_markers(matrix, matrix.start_row, matrix.max_row)
     resolve_row_branch = build_row_branch_resolver(branch_markers)
-    branch_assignment_mode = "dynamic_markers" if branch_markers else "split_row_fallback"
-    branch_room_totals = Counter(resolve_row_branch(row) for row in room_rows.keys())
+    uses_room_section_branch = any(normalize_text(room.branch) for room in room_rows.values())
+    if uses_room_section_branch:
+        branch_assignment_mode = "room_section_anchor"
+    else:
+        branch_assignment_mode = "dynamic_markers" if branch_markers else "split_row_fallback"
+    branch_room_totals = Counter(
+        normalize_text(room.branch) or resolve_row_branch(row)
+        for row, room in room_rows.items()
+    )
     total_rooms_detected = len(room_rows)
     blocks: List[ReservationBlock] = []
     long_tail_candidates: List[Dict[str, Any]] = []
@@ -791,7 +1037,7 @@ def extract_reservation_blocks(
     long_tail_counts: Counter[str] = Counter()
     branch_segments: Dict[str, Dict[str, int]] = {}
     for row_index in sorted(room_rows.keys()):
-        branch_key = resolve_row_branch(row_index)
+        branch_key = normalize_text(room_rows[row_index].branch) or resolve_row_branch(row_index)
         seg = branch_segments.setdefault(
             branch_key,
             {
@@ -932,8 +1178,9 @@ def extract_reservation_blocks(
         )
 
     for row in sorted(room_rows.keys()):
-        branch = resolve_row_branch(row)
-        room_no = room_rows[row].room_no
+        room_info = room_rows[row]
+        branch = normalize_text(room_info.branch) or resolve_row_branch(row)
+        room_no = room_info.room_no
         current_run: Optional[Dict[str, Any]] = None
         for dc in sorted_date_cols:
             col = dc.col
