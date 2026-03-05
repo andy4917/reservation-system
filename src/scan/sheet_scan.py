@@ -44,6 +44,11 @@ from src.domain.sheet_domain import (
     parse_money_to_int,
     try_parse_iso_date,
 )
+from src.core_bridge.sheet_scan_bridge import (
+    build_sheet_cells as bridge_build_sheet_cells,
+    detect_block_runs as bridge_detect_block_runs,
+    find_date_columns as bridge_find_date_columns,
+)
 from src.io.sheets_api import GoogleSheetsReadonlyClient
 
 
@@ -74,6 +79,42 @@ def color_to_hex(color: Optional[Dict[str, float]]) -> Optional[str]:
     green = min(max(green, 0), 255)
     blue = min(max(blue, 0), 255)
     return f"{red:02x}{green:02x}{blue:02x}"
+
+
+def _build_sheet_cells_py(
+    start_row: int,
+    start_col: int,
+    row_data: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    cells: List[Dict[str, Any]] = []
+    max_row = start_row
+    max_col = start_col
+    for row_offset, row_obj in enumerate(row_data):
+        abs_row = start_row + row_offset
+        values = row_obj.get("values", [])
+        for col_offset, val in enumerate(values):
+            abs_col = start_col + col_offset
+            cell = parse_api_cell(abs_row, abs_col, val)
+            cells.append(
+                {
+                    "row": abs_row,
+                    "col": abs_col,
+                    "formatted_value": cell.formatted_value,
+                    "note": cell.note,
+                    "background_color": cell.background_color,
+                    "background_hex": cell.background_hex,
+                }
+            )
+            max_col = max(max_col, abs_col)
+        max_row = max(max_row, abs_row)
+    return {"max_row": max_row, "max_col": max_col, "cells": cells}
+
+
+def _collect_formatted_rows(matrix: "SheetMatrix") -> Dict[int, Dict[int, str]]:
+    rows: Dict[int, Dict[int, str]] = {}
+    for (row, col), cell in matrix.cells.items():
+        rows.setdefault(int(row), {})[int(col)] = normalize_text(cell.formatted_value)
+    return rows
 
 
 def parse_note_info(note: str) -> NoteInfo:
@@ -112,17 +153,35 @@ class SheetMatrix:
         self.start_row = start_row
         self.start_col = start_col
         self.cells: Dict[Tuple[int, int], Cell] = {}
-        self.max_row = start_row
-        self.max_col = start_col
-        for row_offset, row_obj in enumerate(row_data):
-            abs_row = start_row + row_offset
-            values = row_obj.get("values", [])
-            for col_offset, val in enumerate(values):
-                abs_col = start_col + col_offset
-                cell = parse_api_cell(abs_row, abs_col, val)
-                self.cells[(abs_row, abs_col)] = cell
-                self.max_col = max(self.max_col, abs_col)
-            self.max_row = max(self.max_row, abs_row)
+        parsed = bridge_build_sheet_cells(
+            start_row,
+            start_col,
+            row_data,
+            fallback=_build_sheet_cells_py,
+        )
+        self.max_row = int(parsed.get("max_row", start_row))
+        self.max_col = int(parsed.get("max_col", start_col))
+
+        cells_raw = parsed.get("cells")
+        if not isinstance(cells_raw, list):
+            cells_raw = []
+        for item in cells_raw:
+            if not isinstance(item, dict):
+                continue
+            row = int(item.get("row", start_row))
+            col = int(item.get("col", start_col))
+            cell = Cell(
+                row=row,
+                col=col,
+                formatted_value=normalize_text(str(item.get("formatted_value", "") or "")),
+                note=str(item.get("note", "") or ""),
+                background_color=item.get("background_color"),
+                background_hex=normalize_text(str(item.get("background_hex", "") or "")).lower() or None,
+                borders=None,
+            )
+            self.cells[(row, col)] = cell
+            self.max_row = max(self.max_row, row)
+            self.max_col = max(self.max_col, col)
 
     def get(self, row: int, col: int) -> Cell:
         return self.cells.get((row, col), Cell(row=row, col=col))
@@ -723,9 +782,13 @@ def parse_stock_value(raw: str) -> InventoryValue:
     return InventoryValue(raw=text, current=None, maximum=None)
 
 
-def find_date_columns(
-    matrix: SheetMatrix, start_row: int, year: int
-) -> Tuple[int, List[DateColumn]]:
+def _find_date_columns_py(
+    matrix: SheetMatrix,
+    start_row: int,
+    _max_row: int,
+    _max_col: int,
+    year: int,
+) -> Tuple[int, List[Dict[str, Any]]]:
     def _build_cols_for_row(row: int) -> List[DateColumn]:
         cols: List[DateColumn] = []
         for col in range(2, matrix.max_col + 1):
@@ -745,7 +808,17 @@ def find_date_columns(
                 item.weekday_label = normalize_text(
                     matrix.get(DATE_WEEKDAY_HINT_ROW, item.col).formatted_value
                 )
-            return DATE_HEADER_HINT_ROW, sorted(hinted_cols, key=lambda x: x.col)
+            out_cols = []
+            for item in sorted(hinted_cols, key=lambda x: x.col):
+                out_cols.append(
+                    {
+                        "col": int(item.col),
+                        "date": item.date.isoformat(),
+                        "label": normalize_text(item.label),
+                        "weekday_label": normalize_text(item.weekday_label),
+                    }
+                )
+            return DATE_HEADER_HINT_ROW, out_cols
 
     best_row = -1
     best_date_cols: List[DateColumn] = []
@@ -765,7 +838,63 @@ def find_date_columns(
         item.weekday_label = normalize_text(
             matrix.get(weekday_row, item.col).formatted_value
         )
-    return best_row, sorted(best_date_cols, key=lambda x: x.col)
+    out_cols: List[Dict[str, Any]] = []
+    for item in sorted(best_date_cols, key=lambda x: x.col):
+        out_cols.append(
+            {
+                "col": int(item.col),
+                "date": item.date.isoformat(),
+                "label": normalize_text(item.label),
+                "weekday_label": normalize_text(item.weekday_label),
+            }
+        )
+    return best_row, out_cols
+
+
+def find_date_columns(
+    matrix: SheetMatrix, start_row: int, year: int
+) -> Tuple[int, List[DateColumn]]:
+    formatted_rows = _collect_formatted_rows(matrix)
+    row_idx, cols_raw = bridge_find_date_columns(
+        formatted_rows=formatted_rows,
+        start_row=start_row,
+        max_row=matrix.max_row,
+        max_col=matrix.max_col,
+        year=year,
+        date_header_hint_row=DATE_HEADER_HINT_ROW,
+        date_header_hint_col=DATE_HEADER_HINT_COL,
+        date_weekday_hint_row=DATE_WEEKDAY_HINT_ROW,
+        fallback=lambda rows, sr, mr, mc, y: _find_date_columns_py(matrix, sr, mr, mc, y),
+    )
+
+    if row_idx < 0 or len(cols_raw) < 7:
+        raise AuditError(
+            "?醫롮? ??삳쐭 ??깆뱽 筌≪뼚? 筌륁궢六??щ빍?? '3??13?? ?類ㅻ뻼???醫롮? ?????겸뫖???? ??녿뮸??덈뼄."
+        )
+
+    cols: List[DateColumn] = []
+    for item in cols_raw:
+        if not isinstance(item, dict):
+            continue
+        date_val = try_parse_iso_date(str(item.get("date", "") or ""))
+        col = int(item.get("col", -1))
+        if date_val is None or col < 0:
+            continue
+        cols.append(
+            DateColumn(
+                col=col,
+                date=date_val,
+                label=normalize_text(str(item.get("label", "") or "")),
+                weekday_label=normalize_text(str(item.get("weekday_label", "") or "")),
+            )
+        )
+    cols.sort(key=lambda x: x.col)
+
+    if len(cols) < 7:
+        raise AuditError(
+            "?醫롮? ??삳쐭 ??깆뱽 筌≪뼚? 筌륁궢六??щ빍?? '3??13?? ?類ㅻ뻼???醫롮? ?????겸뫖???? ??녿뮸??덈뼄."
+        )
+    return int(row_idx), cols
 
 
 def date_columns_from_batch_header_row(
@@ -1011,6 +1140,104 @@ def map_room_rows(
         raise AuditError("No room rows found from sheet scan.")
     return room_rows
 
+
+def _detect_block_runs_py(events_by_row: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    runs: List[Dict[str, Any]] = []
+
+    def flush(run: Optional[Dict[str, Any]]) -> None:
+        if not run:
+            return
+        source_columns = [int(c) for c in run.get("source_columns", [])]
+        nights = len(source_columns)
+        if nights <= 0:
+            return
+        checkin = try_parse_iso_date(str(run.get("checkin", "") or ""))
+        if checkin is None:
+            return
+        checkout = checkin + dt.timedelta(days=nights)
+        runs.append(
+            {
+                "row": int(run.get("row", -1)),
+                "room_type": normalize_text(str(run.get("room_type", "") or "")),
+                "room_no": normalize_text(str(run.get("room_no", "") or "")),
+                "start_col": int(run.get("start_col", -1)),
+                "end_col": int(run.get("end_col", -1)),
+                "checkin": checkin.isoformat(),
+                "checkout": checkout.isoformat(),
+                "nights": nights,
+                "price": parse_money_to_int(str(run.get("formatted_value", "") or "")),
+                "note": str(run.get("note", "") or ""),
+                "reservation_no": normalize_text(str(run.get("reservation_no", "") or "")) or None,
+                "reservation_key": normalize_text(str(run.get("reservation_key", "") or "")) or None,
+                "branch": normalize_text(str(run.get("branch", "") or "")),
+                "channel": normalize_text(str(run.get("channel", "") or "")),
+                "platform": normalize_text(str(run.get("channel", "") or "")),
+                "color_hex": normalize_text(str(run.get("color_hex", "") or "")).lower() or None,
+                "source_columns": source_columns,
+            }
+        )
+
+    for row_item in events_by_row:
+        if not isinstance(row_item, dict):
+            continue
+        row = int(row_item.get("row", -1))
+        room_type = normalize_text(str(row_item.get("room_type", "") or ""))
+        room_no = normalize_text(str(row_item.get("room_no", "") or ""))
+        branch = normalize_text(str(row_item.get("branch", "") or ""))
+        cells = row_item.get("cells", [])
+        if not isinstance(cells, list):
+            continue
+
+        current_run: Optional[Dict[str, Any]] = None
+        for cell in cells:
+            if not isinstance(cell, dict):
+                continue
+            status = normalize_text(str(cell.get("status", "") or "")).upper()
+            reservation_key = normalize_text(str(cell.get("reservation_key", "") or ""))
+            reservation_no = normalize_text(str(cell.get("reservation_no", "") or ""))
+            channel = normalize_text(str(cell.get("channel", "") or ""))
+            col = int(cell.get("col", -1))
+            date_iso = normalize_text(str(cell.get("date", "") or ""))
+
+            if status == CELL_STATUS_OCCUPIED and reservation_key:
+                if (
+                    current_run
+                    and current_run.get("reservation_key") == reservation_key
+                    and int(current_run.get("row", -1)) == row
+                ):
+                    current_run["end_col"] = col
+                    current_run["source_columns"].append(col)
+                    if not current_run.get("reservation_no") and reservation_no:
+                        current_run["reservation_no"] = reservation_no
+                    if not current_run.get("channel") and channel:
+                        current_run["channel"] = channel
+                else:
+                    flush(current_run)
+                    current_run = {
+                        "row": row,
+                        "room_type": room_type,
+                        "room_no": room_no,
+                        "branch": branch,
+                        "start_col": col,
+                        "end_col": col,
+                        "checkin": date_iso,
+                        "source_columns": [col],
+                        "reservation_no": reservation_no or None,
+                        "reservation_key": reservation_key,
+                        "channel": channel,
+                        "note": str(cell.get("note", "") or ""),
+                        "color_hex": normalize_text(str(cell.get("color_hex", "") or "")).lower() or None,
+                        "formatted_value": str(cell.get("formatted_value", "") or ""),
+                    }
+            else:
+                flush(current_run)
+                current_run = None
+        flush(current_run)
+
+    runs.sort(key=lambda item: (int(item.get("row", -1)), int(item.get("start_col", -1)), int(item.get("end_col", -1))))
+    return runs
+
+
 def extract_reservation_blocks(
     matrix: SheetMatrix,
     date_cols: List[DateColumn],
@@ -1138,50 +1365,19 @@ def extract_reservation_blocks(
                 "note_head": " ".join(normalize_text(note).split(" ")[:24]),
             }
         )
-
-    def flush_run(run: Optional[Dict[str, Any]]) -> None:
-        if not run:
-            return
-        room = room_rows[run["row"]]
-        start_col = int(run["start_col"])
-        end_col = int(run["end_col"])
-        source_columns = list(run["source_columns"])
-        checkin = date_by_col.get(start_col)
-        if not checkin:
-            return
-        nights = len(source_columns)
-        if nights <= 0:
-            return
-        checkout = checkin + dt.timedelta(days=nights)
-        note_info = parse_note_info(run["note"])
-        blocks.append(
-            ReservationBlock(
-                row=run["row"],
-                room_type=room.room_type,
-                room_no=room.room_no,
-                start_col=start_col,
-                end_col=end_col,
-                checkin=checkin,
-                checkout=checkout,
-                nights=nights,
-                price=parse_money_to_int(matrix.get(run["row"], start_col).formatted_value),
-                note=run["note"],
-                reservation_no=run["reservation_no"],
-                reservation_key=run["reservation_key"],
-                branch=run["branch"],
-                channel=run["channel"],
-                platform=run["channel"],
-                color_hex=run["color_hex"],
-                source_columns=source_columns,
-                nationality_nights=normalize_text(note_info.nationality_nights),
-            )
-        )
+    events_by_row: List[Dict[str, Any]] = []
 
     for row in sorted(room_rows.keys()):
         room_info = room_rows[row]
         branch = normalize_text(room_info.branch) or resolve_row_branch(row)
         room_no = room_info.room_no
-        current_run: Optional[Dict[str, Any]] = None
+        row_events = {
+            "row": int(row),
+            "branch": normalize_text(branch),
+            "room_type": normalize_text(room_info.room_type),
+            "room_no": normalize_text(room_info.room_no),
+            "cells": [],
+        }
         for dc in sorted_date_cols:
             col = dc.col
             date_val = dc.date
@@ -1291,37 +1487,111 @@ def extract_reservation_blocks(
                     )
             elif status == CELL_STATUS_BLOCKED:
                 increment_day_count(date_val, branch, "blocked")
+            row_events["cells"].append(
+                {
+                    "col": int(col),
+                    "date": date_val.isoformat(),
+                    "status": normalize_text(status).upper(),
+                    "reservation_no": normalize_text(reservation_no) if reservation_no else "",
+                    "reservation_key": normalize_text(reservation_key) if reservation_key else "",
+                    "channel": normalize_text(channel),
+                    "note": note_text,
+                    "color_hex": normalize_text(cell.background_hex).lower(),
+                    "formatted_value": normalize_text(cell.formatted_value),
+                }
+            )
+        events_by_row.append(row_events)
 
-            if status == CELL_STATUS_OCCUPIED and reservation_key:
-                if (
-                    current_run
-                    and current_run["reservation_key"] == reservation_key
-                    and current_run["row"] == row
-                ):
-                    current_run["end_col"] = col
-                    current_run["source_columns"].append(col)
-                    if not current_run["reservation_no"] and reservation_no:
-                        current_run["reservation_no"] = reservation_no
-                    if not current_run["channel"] and channel:
-                        current_run["channel"] = channel
-                else:
-                    flush_run(current_run)
-                    current_run = {
-                        "row": row,
-                        "branch": branch,
-                        "start_col": col,
-                        "end_col": col,
-                        "source_columns": [col],
-                        "reservation_no": reservation_no,
-                        "reservation_key": reservation_key,
-                        "channel": channel,
-                        "note": note_text,
-                        "color_hex": cell.background_hex,
-                    }
-            else:
-                flush_run(current_run)
-                current_run = None
-        flush_run(current_run)
+    detected_runs = bridge_detect_block_runs(
+        events_by_row,
+        fallback=_detect_block_runs_py,
+    )
+    for run in detected_runs:
+        if not isinstance(run, dict):
+            continue
+        row = int(run.get("row", -1))
+        room = room_rows.get(row)
+        if room is None:
+            continue
+
+        start_col = int(run.get("start_col", -1))
+        end_col = int(run.get("end_col", -1))
+        if start_col < 0 or end_col < 0:
+            continue
+
+        source_columns_raw = run.get("source_columns", [])
+        if isinstance(source_columns_raw, (list, tuple)):
+            source_columns = [int(c) for c in source_columns_raw]
+        else:
+            source_columns = []
+        if not source_columns:
+            source_columns = [start_col]
+
+        nights = int(run.get("nights", len(source_columns) or 0))
+        if nights <= 0:
+            nights = len(source_columns)
+        if nights <= 0:
+            continue
+
+        checkin = try_parse_iso_date(str(run.get("checkin", "") or ""))
+        if checkin is None:
+            checkin = date_by_col.get(start_col)
+        if checkin is None:
+            continue
+
+        checkout = try_parse_iso_date(str(run.get("checkout", "") or ""))
+        if checkout is None:
+            checkout = checkin + dt.timedelta(days=nights)
+
+        note_text = str(run.get("note", "") or "")
+        note_info = parse_note_info(note_text)
+
+        price_value = run.get("price")
+        price: Optional[int] = None
+        if isinstance(price_value, bool):
+            price = None
+        elif isinstance(price_value, (int, float)):
+            price = int(price_value)
+        elif isinstance(price_value, str):
+            try:
+                price = int(price_value.strip())
+            except Exception:
+                price = None
+        if price is None:
+            price = parse_money_to_int(matrix.get(row, start_col).formatted_value)
+
+        reservation_no = normalize_text(str(run.get("reservation_no", "") or "")) or None
+        reservation_key = normalize_text(str(run.get("reservation_key", "") or "")) or None
+        branch_out = normalize_text(str(run.get("branch", "") or "")) or (
+            normalize_text(room.branch) or resolve_row_branch(row)
+        )
+        channel_out = normalize_text(str(run.get("channel", "") or ""))
+        room_type_out = normalize_text(str(run.get("room_type", "") or "")) or room.room_type
+        room_no_out = normalize_text(str(run.get("room_no", "") or "")) or room.room_no
+        color_hex_out = normalize_text(str(run.get("color_hex", "") or "")).lower() or None
+
+        blocks.append(
+            ReservationBlock(
+                row=row,
+                room_type=room_type_out,
+                room_no=room_no_out,
+                start_col=start_col,
+                end_col=end_col,
+                checkin=checkin,
+                checkout=checkout,
+                nights=nights,
+                price=price,
+                note=note_text,
+                reservation_no=reservation_no,
+                reservation_key=reservation_key,
+                branch=branch_out,
+                channel=channel_out,
+                platform=channel_out,
+                color_hex=color_hex_out,
+                source_columns=source_columns,
+                nationality_nights=normalize_text(note_info.nationality_nights),
+            )
+        )
 
     blocks.sort(key=lambda b: (b.row, b.start_col, b.end_col))
     annotate_group_parts(blocks)

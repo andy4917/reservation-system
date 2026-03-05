@@ -9,3 +9,10 @@ debug/
 output/
 output_review/
 *.pyc
+build/
+dist/
+# native extension build artifacts
+*.so
+*.pyd
+*.dll
+*.dylib

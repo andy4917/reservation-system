@@ -28,10 +28,21 @@ from src.domain.sync_policy import (
     DEFAULT_STATION_ROOM_IDS,
     PROVIDER_TARGET_MAX,
 )
+from src.domain.inventory_planner import build_inventory_planner_summary
+from src.domain.audit_engine import build_ota_pms_anomaly_report
 from src.io.sheet_loader import load_sheet_matrix_and_dates
 from src.ota.adapters import NaverPartnerAdapter, NaverPartnerAdapterConfig
 from src.ota.base import OTAAdapterError
 from src.channel_executors import NaverExecutor, StationExecutor
+from src.core_bridge.allocation_bridge import (
+    allocate_room_units as bridge_allocate_room_units,
+    allocate_room_units_flexible as bridge_allocate_room_units_flexible,
+)
+from src.core_bridge.reconciliation_bridge import (
+    build_provider_reconciliation as bridge_build_provider_reconciliation,
+    summarize_naver_actual_units_by_date as bridge_summarize_naver_actual_units_by_date,
+    summarize_station_actual_units_by_date as bridge_summarize_station_actual_units_by_date,
+)
 from src.ota.adapters import (
     AgodaAdapter,
     AgodaAdapterConfig,
@@ -58,6 +69,7 @@ from reservation_sheet_audit import (
     get_access_token,
     infer_year_from_sheet_name,
     normalize_text,
+    parse_source_reservations_from_har,
 )
 
 DEFAULT_HAR_HEADER_NAMES = {
@@ -179,6 +191,94 @@ def build_ota_har_source_summary(
         "providers": providers,
         "issues": issues,
     }
+
+
+def build_pms_har_source_summary(
+    har_paths: List[str],
+    range_start: str,
+    range_end: str,
+) -> Dict[str, Any]:
+    if not har_paths:
+        return {"enabled": False, "providers": {}, "issues": []}
+
+    start_day = parse_iso_date(range_start)
+    end_day = parse_iso_date(range_end)
+    providers: Dict[str, Dict[str, int]] = {}
+    issues: List[Dict[str, str]] = []
+
+    for path_text in har_paths:
+        path = Path(str(path_text or "").strip())
+        if not path.exists():
+            issues.append(
+                {
+                    "provider": "PMS",
+                    "code": "PMS_HAR_NOT_FOUND",
+                    "message": f"HAR file not found: {path}",
+                }
+            )
+            continue
+        try:
+            records = parse_source_reservations_from_har(path)
+        except Exception as exc:  # noqa: BLE001
+            issues.append(
+                {
+                    "provider": "PMS",
+                    "code": "PMS_HAR_PARSE_FAILED",
+                    "message": f"{path}: {exc}",
+                }
+            )
+            continue
+
+        for record in records:
+            checkin = getattr(record, "checkin", None)
+            checkout = getattr(record, "checkout", None)
+            if not isinstance(checkin, dt.date) or not isinstance(checkout, dt.date):
+                continue
+            # checkout is exclusive in current reservation model.
+            if checkout <= start_day or checkin > end_day:
+                continue
+            provider = normalize_text(getattr(record, "channel", "")).upper()
+            if not provider:
+                provider = "UNKNOWN"
+            status_bucket = normalize_text(getattr(record, "status_bucket", "")).upper()
+            row = providers.setdefault(
+                provider,
+                {
+                    "reservation_count": 0,
+                    "active_count": 0,
+                    "canceled_count": 0,
+                },
+            )
+            row["reservation_count"] += 1
+            if status_bucket == "CANCELED":
+                row["canceled_count"] += 1
+            else:
+                row["active_count"] += 1
+
+    normalized_providers = {
+        key: {
+            "reservation_count": int(value.get("reservation_count", 0)),
+            "active_count": int(value.get("active_count", 0)),
+            "canceled_count": int(value.get("canceled_count", 0)),
+        }
+        for key, value in sorted(providers.items())
+    }
+    return {
+        "enabled": True,
+        "har_paths": har_paths,
+        "providers": normalized_providers,
+        "issues": issues,
+    }
+
+
+def build_audit_engine_summary(
+    ota_sources: Dict[str, Any],
+    pms_sources: Dict[str, Any],
+) -> Dict[str, Any]:
+    return build_ota_pms_anomaly_report(
+        ota_sources=ota_sources,
+        pms_sources=pms_sources,
+    )
 
 
 def ensure_bearer(token: str) -> str:
@@ -616,10 +716,28 @@ def initialize_sync_summary(
             "station": target_plan["station_validation"],
             "naver": target_plan["naver_validation"],
         },
+        "inventory_planner": {},
         "ota_sources": {
             "enabled": False,
             "providers": {},
             "issues": [],
+        },
+        "pms_sources": {
+            "enabled": False,
+            "providers": {},
+            "issues": [],
+        },
+        "audit_engine": {
+            "enabled": False,
+            "rows": [],
+            "anomalies": [],
+            "counts": {
+                "providers": 0,
+                "mismatches": 0,
+                "anomalies": 0,
+                "warn": 0,
+                "error": 0,
+            },
         },
         "ui": {
             "forcedCloseOverrides": [],
@@ -644,7 +762,7 @@ def _sorted_int_date_map(values: Dict[str, int]) -> Dict[str, int]:
     return {day: int(values[day]) for day in sorted(values.keys())}
 
 
-def summarize_station_actual_units_by_date(
+def _summarize_station_actual_units_by_date_py(
     station_rows: List[Dict[str, Any]],
     room_ids: List[str],
 ) -> Dict[str, int]:
@@ -663,7 +781,18 @@ def summarize_station_actual_units_by_date(
     return _sorted_int_date_map(by_date)
 
 
-def summarize_naver_actual_units_by_date(
+def summarize_station_actual_units_by_date(
+    station_rows: List[Dict[str, Any]],
+    room_ids: List[str],
+) -> Dict[str, int]:
+    return bridge_summarize_station_actual_units_by_date(
+        station_rows,
+        room_ids,
+        fallback=_summarize_station_actual_units_by_date_py,
+    )
+
+
+def _summarize_naver_actual_units_by_date_py(
     current_by_room: Dict[str, Dict[str, Dict[str, Any]]],
     room_ids: List[str],
 ) -> Dict[str, int]:
@@ -683,6 +812,17 @@ def summarize_naver_actual_units_by_date(
             stock_i = int(stock) if isinstance(stock, int) else 0
             by_date[day_key] += max(stock_i, 0)
     return _sorted_int_date_map(by_date)
+
+
+def summarize_naver_actual_units_by_date(
+    current_by_room: Dict[str, Dict[str, Dict[str, Any]]],
+    room_ids: List[str],
+) -> Dict[str, int]:
+    return bridge_summarize_naver_actual_units_by_date(
+        current_by_room,
+        room_ids,
+        fallback=_summarize_naver_actual_units_by_date_py,
+    )
 
 
 def summarize_station_action_stats_by_date(actions: List[Dict[str, Any]]) -> Dict[str, Dict[str, int]]:
@@ -737,7 +877,7 @@ def summarize_naver_action_stats_by_date(actions: List[Dict[str, Any]]) -> Dict[
     return {day: by_date[day] for day in sorted(by_date.keys())}
 
 
-def build_provider_reconciliation(
+def _build_provider_reconciliation_py(
     provider_key: str,
     desired_units_by_date: Dict[str, int],
     actual_units_by_date: Dict[str, int],
@@ -790,6 +930,21 @@ def build_provider_reconciliation(
             "actions": total_actions,
         },
     }
+
+
+def build_provider_reconciliation(
+    provider_key: str,
+    desired_units_by_date: Dict[str, int],
+    actual_units_by_date: Dict[str, int],
+    action_stats_by_date: Dict[str, Dict[str, int]],
+) -> Dict[str, Any]:
+    return bridge_build_provider_reconciliation(
+        provider_key,
+        desired_units_by_date,
+        actual_units_by_date,
+        action_stats_by_date,
+        fallback=_build_provider_reconciliation_py,
+    )
 
 
 def compute_reconciliation_fingerprint(summary: Dict[str, Any]) -> str:
@@ -1104,7 +1259,7 @@ def analyze_target_map(
     }
 
 
-def allocate_room_units(
+def _allocate_room_units_py(
     room_ids: List[str],
     current_stock_by_room: Dict[str, int],
     target_units: int,
@@ -1128,7 +1283,20 @@ def allocate_room_units(
     return {rid: (1 if rid in selected_set else 0) for rid in ordered}
 
 
-def allocate_room_units_flexible(
+def allocate_room_units(
+    room_ids: List[str],
+    current_stock_by_room: Dict[str, int],
+    target_units: int,
+) -> Dict[str, int]:
+    return bridge_allocate_room_units(
+        room_ids,
+        current_stock_by_room,
+        target_units,
+        fallback=_allocate_room_units_py,
+    )
+
+
+def _allocate_room_units_flexible_py(
     room_ids: List[str],
     current_stock_by_room: Dict[str, int],
     target_units: int,
@@ -1158,6 +1326,19 @@ def allocate_room_units_flexible(
         idx += 1
 
     return out
+
+
+def allocate_room_units_flexible(
+    room_ids: List[str],
+    current_stock_by_room: Dict[str, int],
+    target_units: int,
+) -> Dict[str, int]:
+    return bridge_allocate_room_units_flexible(
+        room_ids,
+        current_stock_by_room,
+        target_units,
+        fallback=_allocate_room_units_flexible_py,
+    )
 
 
 def fetch_station_calendar(
@@ -1564,6 +1745,9 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
     range_start = target_plan["range_start"]
     range_end = target_plan["range_end"]
     wings_har_paths = parse_file_list(args.wings_har_file)
+    pms_har_paths = parse_file_list(args.pms_har_file)
+    if not pms_har_paths and wings_har_paths:
+        pms_har_paths = list(wings_har_paths)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1580,6 +1764,17 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
                 har_paths=wings_har_paths,
                 range_start=range_start,
                 range_end=range_end,
+            )
+        if pms_har_paths:
+            summary["pms_sources"] = build_pms_har_source_summary(
+                har_paths=pms_har_paths,
+                range_start=range_start,
+                range_end=range_end,
+            )
+        if summary.get("ota_sources", {}).get("enabled") and summary.get("pms_sources", {}).get("enabled"):
+            summary["audit_engine"] = build_audit_engine_summary(
+                summary.get("ota_sources", {}),
+                summary.get("pms_sources", {}),
             )
 
         if provider in ("station", "both"):
@@ -1611,6 +1806,11 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
         refresh_reconciliation_counts(summary)
 
         summary["policy"] = build_apply_guardrails(summary)
+        summary["inventory_planner"] = build_inventory_planner_summary(
+            summary,
+            requested_apply=bool(args.apply),
+            approve_plan_token=args.approve_plan_token,
+        )
         if args.apply and summary["policy"]["blocked"] and not args.allow_unsafe_apply:
             with summary_path.open("w", encoding="utf-8") as f:
                 json.dump(summary, f, ensure_ascii=False, indent=2)
@@ -1618,6 +1818,16 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
                 "Apply blocked by guardrails. "
                 "Review sync_inventory_summary.json or re-run with --allow-unsafe-apply "
                 "only after resolving the blocking warnings."
+            )
+        planner_approve = summary.get("inventory_planner", {}).get("stages", {}).get("approve", {})
+        if args.apply and planner_approve.get("required") and not planner_approve.get("approved"):
+            with summary_path.open("w", encoding="utf-8") as f:
+                json.dump(summary, f, ensure_ascii=False, indent=2)
+            required_token = str(planner_approve.get("required_token") or "").strip()
+            raise AuditError(
+                "Apply requires explicit approval token. "
+                "Run dry-run first, then re-run with "
+                f"--approve-plan-token {required_token}"
             )
 
         apply_sync_actions(
@@ -1656,12 +1866,40 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
     )
     if summary["policy"]["blocked"]:
         print(f"- apply blocks: {len(summary['policy']['issues'])}")
+    planner = summary.get("inventory_planner", {})
+    planner_stages = planner.get("stages", {}) if isinstance(planner, dict) else {}
+    planner_approve = planner_stages.get("approve", {}) if isinstance(planner_stages, dict) else {}
+    if planner_stages:
+        print(
+            "- planner:"
+            f" actions={int((planner.get('totals') or {}).get('planned_actions', 0))},"
+            f" approval_required={bool(planner_approve.get('required'))},"
+            f" approved={bool(planner_approve.get('approved'))}"
+        )
+        if planner_approve.get("required"):
+            print(f"- planner approval token: {planner_approve.get('required_token', '')}")
     ota_sources = summary.get("ota_sources", {})
     if ota_sources.get("enabled"):
         provider_rows = ota_sources.get("providers", {})
         print(f"- ota source providers: {len(provider_rows)}")
         if ota_sources.get("issues"):
             print(f"- ota source issues: {len(ota_sources.get('issues', []))}")
+    pms_sources = summary.get("pms_sources", {})
+    if pms_sources.get("enabled"):
+        provider_rows = pms_sources.get("providers", {})
+        print(f"- pms source providers: {len(provider_rows)}")
+        if pms_sources.get("issues"):
+            print(f"- pms source issues: {len(pms_sources.get('issues', []))}")
+    audit_engine = summary.get("audit_engine", {})
+    if audit_engine.get("enabled"):
+        counts = audit_engine.get("counts", {})
+        print(
+            "- audit engine:"
+            f" mismatches={int(counts.get('mismatches', 0))},"
+            f" anomalies={int(counts.get('anomalies', 0))},"
+            f" warn={int(counts.get('warn', 0))},"
+            f" error={int(counts.get('error', 0))}"
+        )
 
     return 0
 
@@ -1699,11 +1937,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=2,
         help="Deprecated compatibility flag (no-op).",
     )
+    parser.add_argument(
+        "--approve-plan-token",
+        default="",
+        help="Explicit approval token from dry-run inventory_planner before --apply.",
+    )
     parser.add_argument("--out-dir", default="output")
     parser.add_argument(
         "--wings-har-file",
         default="",
         help="Comma/newline separated WINGS HAR file paths for OTA(HAR) source summary.",
+    )
+    parser.add_argument(
+        "--pms-har-file",
+        default="",
+        help="Comma/newline separated HAR file paths for PMS(WINGS) audit summary.",
     )
 
     parser.add_argument("--access-token", default="")

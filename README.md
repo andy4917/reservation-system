@@ -12,6 +12,23 @@
 아키텍처 참고:
 - OTA Adapter Layer: `docs/integrations/OTA_ADAPTER_LAYER.md`
   - 운영 모드: NAVER 직접 API, BOOKING/AGODA/TRIP/AIRBNB는 WINGS HAR 기반
+- Inventory Planner: `docs/integrations/INVENTORY_PLANNER.md`
+
+## Python/C++ 런타임 권장 상태
+
+- Python runtime 고정: `python3.10`
+- Native module 유지: `inventory_cpp_core.cpython-310-x86_64-linux-gnu.so`
+- 제거 대상: `inventory_cpp_core.cpython-311-*.so`
+- Wrapper 기본 모드(운영): `INVENTORY_CPP_MODE=auto`
+- 강제 검증 모드: `INVENTORY_CPP_MODE=required`
+
+빌드 산출물 관리:
+- `build/`와 `*.so`는 산출물로 취급하며 저장소 추적 대상이 아닙니다.
+- 필요 시 시스템 Python 3.10에서 재빌드:
+
+```bash
+python3.10 setup.py build_ext --inplace
+```
 
 ## 대상 페이지
 
@@ -175,7 +192,7 @@ https://pms.sanhait.com/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do
 전체 회귀:
 
 ```bash
-python3 tests/run_regressions.py
+INVENTORY_CPP_MODE=required python3.10 tests/run_regressions.py
 ```
 
 개별 실행 예시:
