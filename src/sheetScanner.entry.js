@@ -12,7 +12,6 @@
     FIXED_STATION_BRANCH_ID,
     PMS_ORIGINS,
     PREF_KEY,
-    ONBOARDING_HIDE_KEY,
     SYNC_CFG_KEY,
     SYNC_APPLY_KEY,
     SYNC_FEATURE_KEY_LEGACY,
@@ -67,16 +66,29 @@
   const sheetSnapshotCache = runtime.sheetSnapshotCache || (runtime.sheetSnapshotCache = new Map());
   let stationTokenCache = runtime.stationTokenCache || (runtime.stationTokenCache = { token: null, expiresAt: 0 });
   let naverBizItemsCache = runtime.naverBizItemsCache || (runtime.naverBizItemsCache = { ts: 0, items: [] });
+  const productFlow = App.ui?.productFlow || {};
+  const {
+    detectProviderTypeFromHost,
+    evaluateProductFlow
+  } = productFlow;
 
   function detectContext() {
-    const host = location.host.toLowerCase();
-    if (host.includes("partner.booking.naver.com")) {
-      return { providerType: "naver-partner", siteName: TEXT.naver };
-    }
-    if (host.includes("admin.admin-stationbyuhc.com")) {
-      return { providerType: "admin-station", siteName: TEXT.station };
-    }
-    return null;
+    const providerType =
+      typeof detectProviderTypeFromHost === "function"
+        ? detectProviderTypeFromHost(location.host)
+        : location.host.toLowerCase().includes("partner.booking.naver.com")
+          ? "naver-partner"
+          : location.host.toLowerCase().includes("admin.admin-stationbyuhc.com")
+            ? "admin-station"
+            : "";
+    if (!providerType) return null;
+    const siteName =
+      providerType === "admin-station"
+        ? TEXT.station
+        : providerType === "wings-pms"
+          ? "WINGS"
+          : TEXT.naver;
+    return { providerType, siteName };
   }
 
   const context = detectContext();
@@ -334,6 +346,7 @@
     typeof createPanelDom !== "function" ||
     typeof collectPanelUi !== "function" ||
     typeof bindPanelEvents !== "function" ||
+    typeof evaluateProductFlow !== "function" ||
     typeof STYLE !== "string" ||
     typeof HTML !== "string"
   ) {
@@ -346,11 +359,23 @@
   const ui = collectPanelUi(shadow);
 
   const state = {
-    started: false,
+    bootstrapped: false,
     loading: false,
     syncRunning: false,
     loadingAction: "",
-    panelPosition: null,
+    activeTask: "NAVER_STATION_SYNC",
+    fitMode: "auto",
+    densityMode: "standard",
+    panelWidthMode: "standard",
+    secondarySurfaceKind: "evidence",
+    activeEvidenceTab: "result",
+    activeUtilityTab: "scope",
+    lastUtilityTab: "scope",
+    lastEvidenceTab: "result",
+    scopeDrawerOpen: false,
+    utilityMode: "none",
+    rangeSource: "shell",
+    rangeSourceDetail: "manual",
     syncErrorCellKeys: new Set(),
     syncErrorCellDetailByKey: new Map(),
     monthCursor: monthStart(new Date()),
@@ -384,18 +409,820 @@
     syncApprovalChecked: false,
     syncApprovalFingerprint: "",
     secretsMasked: true,
-    onboardingDismissed: false,
     opsSectionExpanded: false,
+    lastStatusTone: "info",
+    productFlow: evaluateProductFlow({ providerType: context.providerType }),
+    lastActionTimes: {
+      query: "-",
+      comparison: "-",
+      application: READ_ONLY_TOOL_MODE === true ? "읽기 전용" : "-"
+    },
     naverQueue: runtime.naverQueue || (runtime.naverQueue = new Map()),
     naverQueueMeta: runtime.naverQueueMeta || (runtime.naverQueueMeta = { lastFlushedAt: 0 })
   };
-  const PANEL_ANIM_MS = 140;
+  const PANEL_ANIM_MS = 220;
   let panelAnimTimer = 0;
+  let hostOverflowRestore = null;
+  let hostViewportShiftRestore = null;
+  let hostViewportShiftTimer = 0;
+
+  function taskLabelById(taskId) {
+    const task = normalizeText(taskId || "").toUpperCase();
+    if (task === "PMS_RESERVATION_VALIDATION") return "예약 읽기 / 검증";
+    if (task === "SHEET_MAPPING_REVIEW") return "시트 매핑 / 검토";
+    if (task === "OTA_PMS_COMPARISON") return "OTA / PMS 대조";
+    return "재고 조회 / 비교";
+  }
+
+  function taskClassById(taskId) {
+    const task = normalizeText(taskId || "").toUpperCase();
+    if (task === "PMS_RESERVATION_VALIDATION") return "task-reservation";
+    if (task === "SHEET_MAPPING_REVIEW") return "task-sheet";
+    if (task === "OTA_PMS_COMPARISON") return "task-audit";
+    return "task-inventory";
+  }
+
+  function normalizeDensityMode(mode) {
+    const text = normalizeText(mode || "").toLowerCase();
+    if (text === "focus") return "focus";
+    if (text === "compact") return "compact";
+    return "standard";
+  }
+
+  function normalizeEvidenceTab(tab) {
+    const text = normalizeText(tab || "").toLowerCase();
+    if (text === "blocking") return "blocking";
+    if (text === "validation") return "validation";
+    if (text === "trace") return "trace";
+    if (text === "export") return "export";
+    return "result";
+  }
+
+  function normalizeUtilityTab(tab) {
+    const text = normalizeText(tab || "").toLowerCase();
+    if (text === "settings") return "settings";
+    if (text === "ops") return "ops";
+    if (text === "debug") return "debug";
+    return "scope";
+  }
+
+  function normalizePanelWidthMode(mode) {
+    const text = normalizeText(mode || "").toLowerCase();
+    if (text === "collapsed") return "collapsed";
+    if (text === "expanded") return "expanded";
+    return "standard";
+  }
+
+  function syncDerivedSurfaceState() {
+    state.scopeDrawerOpen = state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "scope";
+    state.settingsOpen = state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "settings";
+    state.opsSectionExpanded = state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "ops";
+    state.debugExpanded = state.secondarySurfaceKind === "evidence" && state.activeEvidenceTab === "trace";
+    state.utilityMode = state.secondarySurfaceKind === "utility" ? state.activeUtilityTab : "none";
+    if (state.densityMode !== "focus" && state.panelWidthMode === "expanded") {
+      state.panelWidthMode = "standard";
+    }
+  }
+
+  function hasSheetConfigReady(config = state.syncConfig) {
+    return Boolean(
+      normalizeText(config?.spreadsheet || "") &&
+      normalizeText(config?.sheetName || "") &&
+      Number(config?.startRow || 0) > 0 &&
+      Number(config?.year || 0) > 0
+    );
+  }
+
+  function hasSheetAuthReady(config = state.syncConfig) {
+    if (normalizeText(config?.accessToken || "")) return true;
+    if (hasGoogleRefreshCredentials(config)) return true;
+    return getEmbeddedAuthMissingFields(config).length <= 0;
+  }
+
+  function hasPmsConfigReady(config = state.syncConfig) {
+    return Boolean(
+      normalizeText(config?.pmsReservationUrl || config?.pmsApiUrl || config?.pmsReservationApiUrl || "")
+    );
+  }
+
+  function hasPmsAuthReady(config = state.syncConfig) {
+    const bundle = config?.pmsAuthBundle;
+    if (!bundle || typeof bundle !== "object") return false;
+    const headers = bundle.headers && typeof bundle.headers === "object" ? Object.keys(bundle.headers) : [];
+    return Boolean(
+      normalizeText(bundle.authorization || "") ||
+      normalizeText(bundle.cookieHeader || "") ||
+      normalizeText(bundle.csrfToken || "") ||
+      normalizeText(bundle.requestBody || "") ||
+      headers.length > 0 ||
+      (Array.isArray(bundle.cookies) && bundle.cookies.length > 0)
+    );
+  }
+
+  async function probeProviderSessionReady() {
+    try {
+      const bundle = await captureProviderAuthBundle(context.providerType);
+      return Boolean(bundle);
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function currentTaskFlowAccess(taskId = state.activeTask) {
+    const key = normalizeText(taskId || "").toUpperCase();
+    return state.productFlow?.tasks?.[key] || {
+      blocked: false,
+      reason: "",
+      utilityTab: "scope"
+    };
+  }
+
+  function directEntryHostLabelsText() {
+    const labels = (state.productFlow?.directEntryHosts || [])
+      .map((host) => normalizeText(host?.directEntryLabel))
+      .filter(Boolean);
+    return labels.length ? labels.join(" / ") : "지원 시작 호스트";
+  }
+
+  function inventoryProviderKeyFor(providerType = context.providerType) {
+    if (providerType === "admin-station") return "STATION";
+    if (providerType === "naver-partner") return "NAVER";
+    return "";
+  }
+
+  function requireInventoryProviderKey(providerType = context.providerType) {
+    const providerKey = inventoryProviderKeyFor(providerType);
+    if (providerKey) return providerKey;
+    throw new Error("WINGS 시작 호스트에서는 재고 Task를 직접 실행할 수 없습니다. Naver 또는 Station 관리자 페이지에서 다시 시작하세요.");
+  }
+
+  function capabilityUiStatus(capabilityKey) {
+    const capability = state.productFlow?.capabilities?.[capabilityKey];
+    if (!capability) {
+      return {
+        label: "GUARD",
+        className: "guard",
+        summary: "지원 정책을 다시 확인하세요."
+      };
+    }
+    if (capability.ready === true) {
+      return {
+        label: "READY",
+        className: "ready",
+        summary:
+          capabilityKey === "provider-session"
+            ? "현재 호스트 세션이 확인되어 작업면에 진입할 수 있습니다."
+            : "현재 워크플로에서 바로 사용할 수 있습니다."
+      };
+    }
+    if (capabilityKey === "provider-session") {
+      return {
+        label: "BLOCKED",
+        className: "blocked",
+        summary: `${context.siteName} 관리자 페이지 로그인 상태를 먼저 확인하세요.`
+      };
+    }
+    if (capability.configured !== true) {
+      return {
+        label: "GUARD",
+        className: "guard",
+        summary: "직접 시작 호스트가 아니며 Utility > Settings에서 설정이 필요합니다."
+      };
+    }
+    return {
+      label: "GUARD",
+      className: "guard",
+      summary: "설정은 있으나 인증 정보가 준비되지 않았습니다."
+    };
+  }
+
+  function buildPolicyItemHtml(label, status, body) {
+    return (
+      `<div class="policy-item">` +
+      `<div class="policy-item-head">` +
+      `<span>${escapeHtml(label)}</span>` +
+      `<span class="policy-item-status ${escapeHtml(status.className)}">${escapeHtml(status.label)}</span>` +
+      `</div>` +
+      `<div class="policy-item-body">${escapeHtml(body)}</div>` +
+      `</div>`
+    );
+  }
+
+  function renderSupportPolicySurface() {
+    const directHosts = directEntryHostLabelsText();
+    const providerStatus = capabilityUiStatus("provider-session");
+    const sheetsStatus = capabilityUiStatus("sheets");
+    const wingsStatus = capabilityUiStatus("wings");
+    const items = [
+      buildPolicyItemHtml(
+        "Direct Entry Hosts",
+        { label: "READY", className: "ready" },
+        `${directHosts}에서만 직접 시작할 수 있습니다. Google Sheets는 보조 연동 서비스입니다.`
+      ),
+      buildPolicyItemHtml("Provider Session", providerStatus, providerStatus.summary),
+      buildPolicyItemHtml("Google Sheets", sheetsStatus, sheetsStatus.summary),
+      buildPolicyItemHtml("WINGS/PMS", wingsStatus, wingsStatus.summary)
+    ].join("");
+
+    if (ui.supportPolicyList) ui.supportPolicyList.innerHTML = items;
+    if (ui.flowGateSupportList) ui.flowGateSupportList.innerHTML = items;
+    if (ui.supportPolicySummary) {
+      ui.supportPolicySummary.textContent =
+        state.productFlow?.workspaceAccess === true
+          ? `직접 시작은 ${directHosts}에서 허용됩니다. Google Sheets는 Utility 설정을 거쳐 보조 연동으로 사용합니다.`
+          : `${context.siteName} 세션을 확인한 뒤 작업면에 진입합니다.`;
+    }
+  }
+
+  function activeFlowGate() {
+    if (state.productFlow?.workspaceAccess !== true) {
+      return {
+        kicker: "Start Gate",
+        title: `${context.siteName} 세션 확인 필요`,
+        summary: `확장 아이콘으로만 시작할 수 있습니다. ${context.siteName} 관리자 페이지 로그인 상태를 확인한 뒤 상태를 다시 확인하세요.`,
+        utilityLabel: "지원 정책 보기",
+        utilityTab: "scope"
+      };
+    }
+    const taskAccess = currentTaskFlowAccess();
+    if (!taskAccess.blocked) return null;
+    if (taskAccess.reason === "sheets") {
+      return {
+        kicker: "Task Guard",
+        title: "Google Sheets 설정 필요",
+        summary: "Sheet Mapping과 시트 비교 플로우는 Google Sheets 설정과 인증이 준비된 뒤에만 열립니다.",
+        utilityLabel: "Utility > Settings",
+        utilityTab: "settings"
+      };
+    }
+    if (taskAccess.reason === "wings") {
+      return {
+        kicker: "Task Guard",
+        title: "WINGS/PMS 설정 필요",
+        summary: "Reservation Validation과 OTA/PMS Audit는 WINGS/PMS 조회 URL과 인증 번들이 준비된 뒤에만 진입할 수 있습니다.",
+        utilityLabel: "Utility > Settings",
+        utilityTab: "settings"
+      };
+    }
+    if (taskAccess.reason === "host-scope") {
+      const entryHostLabel = normalizeText(state.productFlow?.entryHost?.directEntryLabel || context.siteName);
+      return {
+        kicker: "Task Guard",
+        title: "현재 시작 호스트에서는 이 Task를 열 수 없음",
+        summary: `${entryHostLabel} 시작 호스트에서는 현재 세션 캡처와 설정 정리까지만 직접 지원합니다. 실행이 필요한 Task는 Naver 또는 Station 관리자 페이지에서 이어서 여세요.`,
+        utilityLabel: "Utility > Settings",
+        utilityTab: "settings"
+      };
+    }
+    return null;
+  }
+
+  function syncFlowSurfaceState() {
+    if (state.productFlow?.workspaceAccess !== true) {
+      state.secondarySurfaceKind = "utility";
+      state.activeUtilityTab = "scope";
+      state.lastUtilityTab = "scope";
+      syncDerivedSurfaceState();
+      return;
+    }
+    const taskAccess = currentTaskFlowAccess();
+    if (!taskAccess.blocked) return;
+    state.secondarySurfaceKind = "utility";
+    state.activeUtilityTab = normalizeUtilityTab(taskAccess.utilityTab || "settings");
+    state.lastUtilityTab = state.activeUtilityTab;
+    syncDerivedSurfaceState();
+  }
+
+  async function refreshProductFlowState(options = {}) {
+    const providerSessionReady = await probeProviderSessionReady();
+    state.productFlow = evaluateProductFlow({
+      providerType: context.providerType,
+      providerSessionReady,
+      sheetConfigured: hasSheetConfigReady(state.syncConfig),
+      sheetAuthReady: hasSheetAuthReady(state.syncConfig),
+      pmsConfigured: hasPmsConfigReady(state.syncConfig),
+      pmsAuthReady: hasPmsAuthReady(state.syncConfig)
+    });
+    syncFlowSurfaceState();
+    renderSupportPolicySurface();
+    if (options.render !== false) renderWorkspaceShellState();
+    return state.productFlow;
+  }
+
+  function openEvidenceTab(tab = "result") {
+    state.secondarySurfaceKind = "evidence";
+    state.activeEvidenceTab = normalizeEvidenceTab(tab);
+    state.lastEvidenceTab = state.activeEvidenceTab;
+    syncDerivedSurfaceState();
+    renderWorkspaceShellState();
+  }
+
+  function openUtilityTab(tab = "scope") {
+    state.secondarySurfaceKind = "utility";
+    state.activeUtilityTab = normalizeUtilityTab(tab);
+    state.lastUtilityTab = state.activeUtilityTab;
+    syncDerivedSurfaceState();
+    renderWorkspaceShellState();
+  }
+
+  function setPanelWidthMode(mode) {
+    const nextMode = normalizePanelWidthMode(mode);
+    if (nextMode === "expanded" && normalizeDensityMode(state.densityMode) !== "focus") {
+      state.panelWidthMode = "standard";
+    } else {
+      state.panelWidthMode = nextMode;
+    }
+    renderWorkspaceShellState();
+  }
+
+  function preferredEvidenceTabForTask(taskId = state.activeTask) {
+    const task = normalizeText(taskId || "").toUpperCase();
+    if (task === "PMS_RESERVATION_VALIDATION") return "validation";
+    if (task === "OTA_PMS_COMPARISON") return "validation";
+    if (task === "SHEET_MAPPING_REVIEW") return "trace";
+    if (Number(state.syncPreview?.errorCount || 0) > 0) return "blocking";
+    return "result";
+  }
+
+  function preferredUtilityTabForTask(taskId = state.activeTask) {
+    const task = normalizeText(taskId || "").toUpperCase();
+    const taskAccess = currentTaskFlowAccess(task);
+    if (taskAccess.blocked) return normalizeUtilityTab(taskAccess.utilityTab || "settings");
+    if (task === "SHEET_MAPPING_REVIEW") return "settings";
+    if (task === "PMS_RESERVATION_VALIDATION" || task === "OTA_PMS_COMPARISON") return "ops";
+    return "scope";
+  }
+
+  function openTaskEvidenceSurface(taskId = state.activeTask) {
+    openEvidenceTab(preferredEvidenceTabForTask(taskId));
+  }
+
+  function openTaskUtilitySurface(taskId = state.activeTask) {
+    openUtilityTab(preferredUtilityTabForTask(taskId));
+  }
+
+  function resolveTaskGuideModel(taskId = state.activeTask) {
+    const task = normalizeText(taskId || "").toUpperCase();
+    const mismatchCount = isSyncPreviewForActiveQuery() ? Number(state.syncPreview?.mismatchCount || 0) : 0;
+    const errorCount = Number(state.syncPreview?.errorCount || 0);
+    const warnCount = Number(state.verificationReport?.warnCount || 0);
+    const failCount = Number(state.verificationReport?.failCount || 0);
+    const reservationCount = Array.isArray(state.providerReservations) ? state.providerReservations.length : 0;
+    const anomalyCount = countReservationAuditAnomalies();
+    const sheetRows = Array.isArray(state.sheetValueRows) ? state.sheetValueRows.length : 0;
+    const scanMode = normalizeText(state.syncConfig?.scan?.mode || "auto") || "auto";
+
+    if (task === "PMS_RESERVATION_VALIDATION") {
+      return {
+        title: "Reservation Validation",
+        summary: `PMS 예약과 읽은 예약을 검증하고 anomaly, 누락, 분류 오류를 먼저 확인합니다. 예약 ${reservationCount}건 / 경고 ${warnCount}건 / 실패 ${failCount}건 / anomaly ${anomalyCount}건`,
+        action: reservationCount > 0 ? "누락/분류 오류와 anomaly를 검토하세요." : "먼저 예약을 읽어 검증 기준을 만드세요.",
+        primaryView: "검증 상태 / anomaly 요약",
+        evidence: "Validation Basis",
+        utility: "Ops",
+        evidenceButton: "Evidence > Validation Basis",
+        utilityButton: "Utility > Ops"
+      };
+    }
+    if (task === "SHEET_MAPPING_REVIEW") {
+      return {
+        title: "Sheet Mapping",
+        summary: `시트 구조, 좌표, 맵핑 규칙을 검토해 엔진 정합성을 유지합니다. 스캔 모드 ${scanMode} / 시트 행 ${sheetRows}건`,
+        action: state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "settings"
+          ? "좌표와 맵핑 규칙을 검토하고 저장하세요."
+          : "시트 구조와 맵핑 규칙의 정합성을 확인하세요.",
+        primaryView: "시트 구조 / 맵핑 상태",
+        evidence: "Trace / Log",
+        utility: "Settings",
+        evidenceButton: "Evidence > Trace / Log",
+        utilityButton: "Utility > Settings"
+      };
+    }
+    if (task === "OTA_PMS_COMPARISON") {
+      return {
+        title: "OTA/PMS Audit",
+        summary: `OTA / PMS / Sheet를 교차 대조해 운영 리스크를 조기에 발견합니다. 예약 ${reservationCount}건 / 경고 ${warnCount}건 / 실패 ${failCount}건 / anomaly ${anomalyCount}건`,
+        action: reservationCount > 0 ? "교차 대조 결과와 운영 리스크를 검토하세요." : "먼저 예약과 조회 데이터를 읽어 대조 근거를 확보하세요.",
+        primaryView: "감사 요약 / 교차 검증 상태",
+        evidence: "Validation Basis",
+        utility: "Ops",
+        evidenceButton: "Evidence > Validation Basis",
+        utilityButton: "Utility > Ops"
+      };
+    }
+    return {
+      title: "Inventory",
+      summary: `사이트와 시트 재고를 비교하고 불일치와 보정 미리보기를 검토합니다. 불일치 ${mismatchCount}건 / 차단 ${errorCount}건`,
+      action: !state.selectedStart || !state.selectedEnd
+        ? "먼저 범위를 선택하세요."
+        : !hasLoadedBothInventoryForQuery(resolveActiveQuery())
+          ? "사이트와 시트를 함께 조회해 비교 기준을 만드세요."
+          : mismatchCount > 0
+            ? "불일치와 보정 미리보기를 검토하세요."
+            : "비교 결과를 확인하고 필요 시 보정 미리보기를 실행하세요.",
+      primaryView: "사이트 vs 시트 비교 / 불일치 리뷰",
+      evidence: errorCount > 0 ? "Blocking" : "Result",
+      utility: "Scope",
+      evidenceButton: errorCount > 0 ? "Evidence > Blocking" : "Evidence > Result",
+      utilityButton: "Utility > Scope"
+    };
+  }
+
+  function renderTaskGuideCard() {
+    if (!ui.taskGuideTitle || !ui.taskGuideSummary || !ui.taskGuideAction || !ui.taskGuidePrimaryView || !ui.taskGuideEvidence || !ui.taskGuideUtility) return;
+    const model = resolveTaskGuideModel(state.activeTask);
+    ui.taskGuideTitle.textContent = model.title;
+    ui.taskGuideSummary.textContent = model.summary;
+    ui.taskGuideAction.textContent = model.action;
+    ui.taskGuidePrimaryView.textContent = model.primaryView;
+    ui.taskGuideEvidence.textContent = model.evidence;
+    ui.taskGuideUtility.textContent = model.utility;
+    if (ui.taskGuideEvidenceBtn) ui.taskGuideEvidenceBtn.textContent = model.evidenceButton;
+    if (ui.taskGuideUtilityBtn) ui.taskGuideUtilityBtn.textContent = model.utilityButton;
+  }
+
+  function stepLabelText() {
+    const step = resolveWorkflowStep();
+    if (step === "period") return TEXT.flowStepPeriod;
+    if (step === "load") return TEXT.flowStepLoad;
+    if (step === "apply") return "결과 확인";
+    return TEXT.flowStepReview;
+  }
+
+  function formatActionStamp(date = new Date()) {
+    const hh = String(date.getHours()).padStart(2, "0");
+    const mm = String(date.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+
+  function markActionTime(key) {
+    const target = normalizeText(key || "");
+    if (!target || !state.lastActionTimes || !(target in state.lastActionTimes)) return;
+    state.lastActionTimes[target] = formatActionStamp(new Date());
+    renderHostContextBar();
+  }
+
+  function lockHostScroll(flag) {
+    const shouldLock = Boolean(flag);
+    const root = document.documentElement;
+    if (!root) return;
+    if (shouldLock) {
+      if (!hostOverflowRestore) {
+        hostOverflowRestore = {
+          html: root.style.overflow || "",
+          body: document.body?.style?.overflow || ""
+        };
+      }
+      root.style.overflow = "hidden";
+      if (document.body) document.body.style.overflow = "hidden";
+      return;
+    }
+    if (!hostOverflowRestore) return;
+    root.style.overflow = hostOverflowRestore.html;
+    if (document.body) document.body.style.overflow = hostOverflowRestore.body;
+    hostOverflowRestore = null;
+  }
+
+  function releaseHostViewportShift(restoreTransition = true) {
+    const body = document.body;
+    if (!body || !hostViewportShiftRestore) return;
+    if (hostViewportShiftTimer) {
+      window.clearTimeout(hostViewportShiftTimer);
+      hostViewportShiftTimer = 0;
+    }
+    body.style.transform = hostViewportShiftRestore.transform;
+    body.style.transformOrigin = hostViewportShiftRestore.transformOrigin;
+    body.style.willChange = hostViewportShiftRestore.willChange;
+    if (restoreTransition) body.style.transition = hostViewportShiftRestore.transition;
+    hostViewportShiftRestore = null;
+  }
+
+  function syncHostViewportShift(flag) {
+    const body = document.body;
+    if (!body) return;
+    const shouldShift = Boolean(flag) && Number(window.innerWidth || 0) >= 1280;
+    if (!shouldShift) {
+      if (!hostViewportShiftRestore) return;
+      if (hostViewportShiftTimer) {
+        window.clearTimeout(hostViewportShiftTimer);
+        hostViewportShiftTimer = 0;
+      }
+      body.style.transition = `transform ${PANEL_ANIM_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+      body.style.transform = hostViewportShiftRestore.transform;
+      body.style.transformOrigin = hostViewportShiftRestore.transformOrigin || "top center";
+      body.style.willChange = "transform";
+      hostViewportShiftTimer = window.setTimeout(() => {
+        releaseHostViewportShift(true);
+      }, PANEL_ANIM_MS + 40);
+      return;
+    }
+    if (hostViewportShiftTimer) {
+      window.clearTimeout(hostViewportShiftTimer);
+      hostViewportShiftTimer = 0;
+    }
+    if (!hostViewportShiftRestore) {
+      hostViewportShiftRestore = {
+        transform: body.style.transform || "",
+        transition: body.style.transition || "",
+        transformOrigin: body.style.transformOrigin || "",
+        willChange: body.style.willChange || ""
+      };
+    }
+    const panelWidth = Math.max(360, Math.round(ui.panel?.getBoundingClientRect?.().width || ui.panel?.offsetWidth || 420));
+    const baseTransform =
+      hostViewportShiftRestore.transform && hostViewportShiftRestore.transform !== "none"
+        ? hostViewportShiftRestore.transform
+        : "";
+    const maxShift = Math.max(0, Math.floor((Number(window.innerWidth || 0) - 960) / 2));
+    const shift = Math.max(0, Math.min(panelWidth + 20, maxShift));
+    body.style.transition = `transform ${PANEL_ANIM_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+    body.style.transformOrigin = "top center";
+    body.style.willChange = "transform";
+    body.style.transform = `${baseTransform}${baseTransform ? " " : ""}translate3d(-${shift}px, 0, 0)`;
+  }
+
+  function resolveContextEntityText() {
+    if (context.providerType === "admin-station") {
+      return `지점 ${resolveActiveStationBranchId(state.syncConfig)} / PMS ${normalizeText(state.syncConfig?.pmsPropertyNo || "") || "-"}`;
+    }
+    if (context.providerType === "wings-pms") {
+      return `WINGS ${location.host} / PMS ${normalizeText(state.syncConfig?.pmsPropertyNo || "") || "-"}`;
+    }
+    return `비즈니스 ${FIXED_NAVER_BUSINESS_ID} / PMS ${normalizeText(state.syncConfig?.pmsPropertyNo || "") || "-"}`;
+  }
+
+  function currentCapabilityLabel() {
+    if (state.productFlow?.workspaceAccess !== true) return "세션 확인 필요";
+    const taskAccess = currentTaskFlowAccess();
+    if (taskAccess.blocked && taskAccess.reason === "host-scope") return "호스트 가드";
+    if (taskAccess.blocked && taskAccess.reason === "sheets") return "시트 가드";
+    if (taskAccess.blocked && taskAccess.reason === "wings") return "PMS 가드";
+    if (READ_ONLY_TOOL_MODE === true) return "읽기 전용 / 비교 가능";
+    if (!isCurrentProviderApplyAllowed()) return "비교 가능 / 반영 차단";
+    if (Boolean(state.syncPreview?.policy?.blocked)) return "비교 가능 / 검토 차단";
+    return "반영 가능";
+  }
+
+  function nextActionLabel() {
+    const query = resolveActiveQuery();
+    const task = normalizeText(state.activeTask || "").toUpperCase();
+    const taskAccess = currentTaskFlowAccess(task);
+    if (state.loading) return "처리 중";
+    if (state.productFlow?.workspaceAccess !== true) return "로그인 확인";
+    if (taskAccess.blocked && taskAccess.reason === "host-scope") return "호스트 전환";
+    if (taskAccess.blocked && taskAccess.reason === "sheets") return "시트 설정";
+    if (taskAccess.blocked && taskAccess.reason === "wings") return "PMS 설정";
+    if (!state.selectedStart || !state.selectedEnd) return "범위 선택";
+    if (task === "SHEET_MAPPING_REVIEW") {
+      return state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "settings" ? "설정 저장" : "시트 검토";
+    }
+    if (task === "PMS_RESERVATION_VALIDATION" || task === "OTA_PMS_COMPARISON") {
+      return state.providerReservations.length > 0 ? "차이 검토" : "예약 읽기";
+    }
+    if (!hasLoadedBothInventoryForQuery(query)) return TEXT.loadAll;
+    return normalizeText(ui.syncBtnLabel?.textContent || "") || TEXT.syncRun;
+  }
+
+  function currentRangeSourceLabel() {
+    if (state.rangeSource === "host") {
+      if (state.rangeSourceDetail === "url") return "호스트(URL)";
+      if (state.rangeSourceDetail === "dom") return "호스트(DOM)";
+      return "호스트";
+    }
+    return "셸";
+  }
+
+  function syncViewportFitMode() {
+    if (!ui.wrap || !ui.panel) return;
+    const densityMode = normalizeDensityMode(state.densityMode || state.fitMode);
+    const widthMode = normalizePanelWidthMode(state.panelWidthMode);
+    ui.wrap.classList.toggle("fit-auto", densityMode === "standard");
+    ui.wrap.classList.toggle("fit-standard", densityMode === "standard");
+    ui.wrap.classList.toggle("fit-focus", densityMode === "focus");
+    ui.wrap.classList.toggle("fit-compact", densityMode === "compact");
+    ui.wrap.classList.toggle("width-collapsed", widthMode === "collapsed");
+    ui.wrap.classList.toggle("width-standard", widthMode === "standard");
+    ui.wrap.classList.toggle("width-expanded", widthMode === "expanded");
+    [ui.fitAutoBtn, ui.fitFocusBtn, ui.fitCompactBtn].forEach((btn) => btn?.classList.remove("is-active"));
+    if (densityMode === "focus") ui.fitFocusBtn?.classList.add("is-active");
+    else if (densityMode === "compact") ui.fitCompactBtn?.classList.add("is-active");
+    else ui.fitAutoBtn?.classList.add("is-active");
+    [ui.widthCollapsedBtn, ui.widthStandardBtn, ui.widthExpandedBtn].forEach((btn) => btn?.classList.remove("is-active", "is-disabled"));
+    if (widthMode === "collapsed") ui.widthCollapsedBtn?.classList.add("is-active");
+    else if (widthMode === "expanded") ui.widthExpandedBtn?.classList.add("is-active");
+    else ui.widthStandardBtn?.classList.add("is-active");
+    if (densityMode !== "focus") ui.widthExpandedBtn?.classList.add("is-disabled");
+
+    const vw = Math.max(360, Number(window.innerWidth || 0));
+    const vh = Math.max(520, Number(window.innerHeight || 0));
+    const mobile = vw <= 820;
+    const rightSafe = mobile ? 8 : 14;
+    const topSafe = mobile ? 68 : 72;
+    const bottomSafe = mobile ? 8 : 14;
+    const widthRatio =
+      widthMode === "expanded" ? 0.41 :
+      widthMode === "collapsed" ? 0.31 :
+      0.35;
+    const hardMax = Math.floor(vw * 0.44);
+    const targetWidth = Math.min(hardMax, Math.round(vw * widthRatio));
+    const maxWidth = Math.max(320, vw - (mobile ? 16 : 28));
+    const width = Math.min(maxWidth, targetWidth);
+    ui.panel.style.left = "auto";
+    ui.panel.style.top = `${Math.round(topSafe)}px`;
+    ui.panel.style.right = `${Math.round(rightSafe)}px`;
+    ui.panel.style.bottom = `${Math.round(bottomSafe)}px`;
+    ui.panel.style.width = `${width}px`;
+    ui.panel.style.height = "auto";
+    syncHostViewportShift(isPanelVisible());
+  }
+
+  function renderHostContextBar() {
+    if (!ui.contextHostBadge || !ui.contextEntityName || !ui.contextConnectionStatus || !ui.contextPermissionState || !ui.contextLastRun) return;
+    ui.contextHostBadge.textContent =
+      context.providerType === "admin-station"
+        ? "STATION"
+        : context.providerType === "wings-pms"
+          ? "WINGS"
+          : "NAVER";
+    ui.contextEntityName.textContent = resolveContextEntityText();
+    ui.contextPermissionState.textContent = currentCapabilityLabel();
+    ui.contextConnectionStatus.textContent =
+      state.loading ? "조회 중" :
+      state.lastStatusTone === "error" ? "연결 주의" :
+      state.lastStatusTone === "warn" ? "검토 주의" :
+      "연결됨";
+    ui.contextLastRun.textContent =
+      `Last Query ${state.lastActionTimes.query} / Compare ${state.lastActionTimes.comparison} / Apply ${state.lastActionTimes.application}`;
+  }
+
+  function renderFlowGateCard() {
+    const gate = activeFlowGate();
+    if (ui.flowGateCard) ui.flowGateCard.classList.toggle("hidden", !gate);
+    if (!gate) return;
+    if (ui.flowGateKicker) ui.flowGateKicker.textContent = gate.kicker;
+    if (ui.flowGateTitle) ui.flowGateTitle.textContent = gate.title;
+    if (ui.flowGateSummary) ui.flowGateSummary.textContent = gate.summary;
+    if (ui.flowGateUtilityBtn) ui.flowGateUtilityBtn.textContent = gate.utilityLabel;
+  }
+
+  function renderWorkspaceShellState() {
+    if (!ui.wrap) return;
+    syncDerivedSurfaceState();
+    const workspaceBlocked = state.productFlow?.workspaceAccess !== true;
+    const taskFlowAccess = currentTaskFlowAccess();
+    const taskGuarded = !workspaceBlocked && taskFlowAccess.blocked === true;
+    const showMainWorkspace = !workspaceBlocked && !taskGuarded;
+    const showVerification = ["PMS_RESERVATION_VALIDATION", "OTA_PMS_COMPARISON"].includes(normalizeText(state.activeTask || "").toUpperCase());
+    if (!showVerification && state.secondarySurfaceKind === "evidence" && state.activeEvidenceTab === "validation") {
+      state.activeEvidenceTab = "result";
+      state.lastEvidenceTab = "result";
+      syncDerivedSurfaceState();
+    }
+    ui.wrap.classList.remove("task-inventory", "task-reservation", "task-sheet", "task-audit", "scope-open", "utility-open", "secondary-evidence", "secondary-utility");
+    ui.wrap.classList.add(taskClassById(state.activeTask));
+    ui.wrap.classList.add("sidebar-docked");
+    ui.wrap.classList.toggle("workspace-blocked", workspaceBlocked || taskGuarded);
+    ui.wrap.classList.toggle("scope-open", state.scopeDrawerOpen);
+    ui.wrap.classList.toggle("utility-open", state.secondarySurfaceKind === "utility");
+    ui.wrap.classList.toggle("secondary-evidence", state.secondarySurfaceKind === "evidence");
+    ui.wrap.classList.toggle("secondary-utility", state.secondarySurfaceKind === "utility");
+    ui.wrap.classList.toggle("panel-open", isPanelVisible());
+
+    if (ui.evidenceSurface) ui.evidenceSurface.classList.toggle("is-active", state.secondarySurfaceKind === "evidence");
+    if (ui.utilitySurface) ui.utilitySurface.classList.toggle("is-active", state.secondarySurfaceKind === "utility");
+    if (ui.scopeToggleBtn) ui.scopeToggleBtn.textContent = state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "scope" ? "범위 닫기" : "범위";
+    if (ui.toggleConfig) ui.toggleConfig.textContent = state.secondarySurfaceKind === "utility" ? "Utility 닫기" : "Utility";
+    if (ui.workspaceTaskPill) ui.workspaceTaskPill.textContent = taskLabelById(state.activeTask);
+    if (ui.workspaceContextSummary) {
+      ui.workspaceContextSummary.textContent = `현재 단계: ${stepLabelText()} / 기간 기준: ${currentRangeSourceLabel()} / 다음 행동: ${nextActionLabel()} / Density ${state.densityMode} / Width ${state.panelWidthMode}`;
+    }
+    renderTaskGuideCard();
+    renderFlowGateCard();
+    [
+      [ui.taskNavInventoryBtn, "NAVER_STATION_SYNC"],
+      [ui.taskNavReservationBtn, "PMS_RESERVATION_VALIDATION"],
+      [ui.taskNavSheetBtn, "SHEET_MAPPING_REVIEW"],
+      [ui.taskNavAuditBtn, "OTA_PMS_COMPARISON"]
+    ].forEach(([btn, taskId]) => {
+      const taskAccess = state.productFlow?.tasks?.[taskId] || { blocked: false };
+      btn?.classList.toggle("is-active", normalizeText(state.activeTask || "").toUpperCase() === taskId);
+      if (btn) btn.disabled = workspaceBlocked ? false : taskAccess.blocked === true;
+    });
+
+    [
+      [ui.workspaceFlow, showMainWorkspace],
+      [ui.status, showMainWorkspace],
+      [ui.readOnlyNotice, showMainWorkspace],
+      [ui.primarySummary, showMainWorkspace],
+      [ui.userOpsSummary, showMainWorkspace],
+      [ui.userOpsHint, showMainWorkspace],
+      [ui.taskGuideCard, showMainWorkspace],
+      [ui.severityBanner, showMainWorkspace && !ui.severityBanner?.classList.contains("hidden")],
+      [ui.workspaceActionPrimary, showMainWorkspace],
+      [ui.workspaceActionSecondary, showMainWorkspace],
+      [ui.reviewSection, showMainWorkspace],
+      [ui.comparisonSection, showMainWorkspace]
+    ].forEach(([el, visible]) => {
+      if (!el) return;
+      if (el === ui.severityBanner) {
+        el.classList.toggle("hidden", !visible);
+        return;
+      }
+      el.classList.toggle("hidden", !visible);
+    });
+
+    [
+      [ui.evidenceResultTabBtn, "result", state.activeEvidenceTab, state.secondarySurfaceKind],
+      [ui.evidenceBlockingTabBtn, "blocking", state.activeEvidenceTab, state.secondarySurfaceKind],
+      [ui.evidenceValidationTabBtn, "validation", state.activeEvidenceTab, state.secondarySurfaceKind],
+      [ui.evidenceTraceTabBtn, "trace", state.activeEvidenceTab, state.secondarySurfaceKind],
+      [ui.evidenceExportTabBtn, "export", state.activeEvidenceTab, state.secondarySurfaceKind]
+    ].forEach(([btn, tabId, activeTab, kind]) => btn?.classList.toggle("is-active", kind === "evidence" && activeTab === tabId));
+    [
+      [ui.utilityScopeTabBtn, "scope", state.activeUtilityTab, state.secondarySurfaceKind],
+      [ui.utilitySettingsTabBtn, "settings", state.activeUtilityTab, state.secondarySurfaceKind],
+      [ui.utilityOpsTabBtn, "ops", state.activeUtilityTab, state.secondarySurfaceKind],
+      [ui.utilityDebugTabBtn, "debug", state.activeUtilityTab, state.secondarySurfaceKind]
+    ].forEach(([btn, tabId, activeTab, kind]) => btn?.classList.toggle("is-active", kind === "utility" && activeTab === tabId));
+
+    [
+      [ui.evidenceResultPanel, state.secondarySurfaceKind === "evidence" && state.activeEvidenceTab === "result"],
+      [ui.evidenceBlockingPanel, state.secondarySurfaceKind === "evidence" && state.activeEvidenceTab === "blocking"],
+      [ui.evidenceValidationPanel, state.secondarySurfaceKind === "evidence" && state.activeEvidenceTab === "validation"],
+      [ui.evidenceTracePanel, state.secondarySurfaceKind === "evidence" && state.activeEvidenceTab === "trace"],
+      [ui.evidenceExportPanel, state.secondarySurfaceKind === "evidence" && state.activeEvidenceTab === "export"],
+      [ui.utilityScopePanel, state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "scope"],
+      [ui.utilitySettingsPanel, state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "settings"],
+      [ui.utilityOpsPanel, state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "ops"],
+      [ui.utilityDebugPanel, state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "debug"]
+    ].forEach(([el, visible]) => el?.classList.toggle("hidden", !visible));
+
+    if (ui.evidenceValidationTabBtn) ui.evidenceValidationTabBtn.classList.toggle("hidden", !showVerification);
+    const showResults = state.syncResultVisible === true || Number(state.syncPreview?.errorCount || 0) > 0 || state.activeEvidenceTab === "result";
+    if (ui.syncResultWrap) ui.syncResultWrap.classList.toggle("hidden", !showResults);
+    if (ui.flowGateCard) ui.flowGateCard.classList.toggle("hidden", !(workspaceBlocked || taskGuarded));
+    syncViewportFitMode();
+    renderHostContextBar();
+  }
+
+  function setFitMode(mode) {
+    const normalized = normalizeText(mode || "").toLowerCase();
+    const nextMode = normalized === "focus" || normalized === "compact" ? normalized : "standard";
+    state.densityMode = nextMode;
+    state.fitMode = nextMode === "standard" ? "auto" : nextMode;
+    if (nextMode !== "focus" && state.panelWidthMode === "expanded") {
+      state.panelWidthMode = "standard";
+    }
+    syncDerivedSurfaceState();
+    lockHostScroll(false);
+    renderWorkspaceShellState();
+  }
+
+  function setScopeDrawerOpen(flag) {
+    if (flag) {
+      openUtilityTab("scope");
+      return;
+    }
+    if (state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "scope") {
+      state.secondarySurfaceKind = "evidence";
+      syncDerivedSurfaceState();
+    }
+    renderWorkspaceShellState();
+  }
+
+  function setActiveTask(taskId, options = {}) {
+    state.activeTask = normalizeText(taskId || "").toUpperCase() || "NAVER_STATION_SYNC";
+    const preferredEvidenceTab = preferredEvidenceTabForTask(state.activeTask);
+    const preferredUtilityTab = preferredUtilityTabForTask(state.activeTask);
+    state.lastEvidenceTab = preferredEvidenceTab;
+    state.lastUtilityTab = preferredUtilityTab;
+    if (options.openSettings === true) openUtilityTab("settings");
+    else if (options.openScope === true) openUtilityTab("scope");
+    else if (!state.selectedStart || !state.selectedEnd) openUtilityTab("scope");
+    else openEvidenceTab(preferredEvidenceTab);
+    syncFlowSurfaceState();
+    renderWorkspaceShellState();
+  }
 
   function releasePanelSessionMemory() {
-    state.started = false;
+    state.bootstrapped = false;
     state.loading = false;
     state.loadingAction = "";
+    state.densityMode = "standard";
+    state.panelWidthMode = "standard";
+    state.secondarySurfaceKind = "evidence";
+    state.activeEvidenceTab = "result";
+    state.activeUtilityTab = "scope";
+    state.lastUtilityTab = "scope";
+    state.lastEvidenceTab = "result";
+    state.scopeDrawerOpen = false;
+    state.settingsOpen = false;
+    state.utilityMode = "none";
+    state.rangeSource = "shell";
+    state.rangeSourceDetail = "manual";
+    state.fitMode = "auto";
+    state.densityMode = "standard";
+    state.panelWidthMode = "standard";
     state.rows = [];
     state.dates = [];
     state.valueRows = [];
@@ -409,10 +1236,13 @@
     state.syncApprovalFingerprint = "";
     state.verificationReport = null;
     state.statusLogs = [];
+    state.productFlow = evaluateProductFlow({ providerType: context.providerType });
     clearSyncErrorCellMarkers();
     if (ui.siteBody) tableCellFlashCache.set(ui.siteBody, new Map());
     if (ui.sheetBody) tableCellFlashCache.set(ui.sheetBody, new Map());
     if (ui.insightBody) tableCellFlashCache.set(ui.insightBody, new Map());
+    lockHostScroll(false);
+    syncHostViewportShift(false);
   }
 
   function isPanelVisible() {
@@ -433,6 +1263,9 @@
       requestAnimationFrame(() => {
         ui.panel.classList.add("is-open");
         ui.backdrop.classList.add("is-open");
+        lockHostScroll(false);
+        renderWorkspaceShellState();
+        syncHostViewportShift(true);
       });
       emitUiEvent("main_panel_open", { provider: context.providerType || "" });
       return;
@@ -443,14 +1276,14 @@
     ui.wrap.classList.remove("panel-open");
     ui.panel.classList.add("is-closing");
     ui.backdrop.classList.add("is-closing");
+    syncHostViewportShift(false);
     panelAnimTimer = window.setTimeout(() => {
       ui.panel.classList.remove("is-closing");
       ui.backdrop.classList.remove("is-closing");
       ui.panel.classList.add("hidden");
       ui.backdrop.classList.add("hidden");
-      if (!state.loading && state.syncRunning !== true) {
-        releasePanelSessionMemory();
-      }
+      lockHostScroll(false);
+      renderWorkspaceShellState();
       panelAnimTimer = 0;
     }, PANEL_ANIM_MS);
   }
@@ -577,7 +1410,7 @@
     ui.syncApprovalCheck.checked = state.syncApprovalChecked === true;
     ui.syncApprovalCheck.disabled = Boolean(state.loading) || !required;
     renderWorkflowProgress();
-    renderOnboardingChecklist();
+    renderSupportPolicySurface();
   }
 
   function resolveWorkflowStep() {
@@ -661,13 +1494,13 @@
       hint = "읽기 전용 모드입니다. 시트/OTA 쓰기 없이 조회와 비교 결과만 제공합니다.";
     } else if (blocked) {
       syncState = "차단됨";
-      hint = "적용은 차단 상태입니다. 상세 사유와 정책 근거는 설정 > 운영 전용에서 확인하세요.";
+      hint = "적용은 차단 상태입니다. 차단 사유는 Evidence > Blocking에서, 정책 근거는 Utility > Ops에서 확인하세요.";
     } else if (mismatchCount > 0) {
       syncState = "검토 필요";
-      hint = "불일치가 있어 검토가 필요합니다. 상세 불일치와 soft-match 근거는 설정 > 운영 전용에서 확인하세요.";
+      hint = "불일치가 있어 검토가 필요합니다. 상세 불일치는 Evidence에서, 정책과 soft-match 근거는 Utility > Ops에서 확인하세요.";
     } else if (hasSite && hasSheet) {
       syncState = "적용 가능";
-      hint = "사이트/시트 조회가 완료되었습니다. 사용자 화면에는 상태만 표시되고 운영 상세는 설정 화면으로 분리됩니다.";
+      hint = "사이트/시트 조회가 완료되었습니다. Task에는 상태만 표시되고 상세 근거는 Evidence / Utility로 분리됩니다.";
     }
 
     ui.userSyncState.textContent = syncState;
@@ -681,9 +1514,10 @@
           : "미조회";
     ui.userLoadState.textContent = hasSite && hasSheet ? "사이트+시트" : hasSite ? "사이트" : hasSheet ? "시트" : "대기";
     if (anomalyCount > 0 && !state.loading) {
-      hint = `${hint}\n- night audit anomaly 후보 ${anomalyCount}건은 운영 전용 섹션에서만 표시됩니다.`;
+      hint = `${hint}\n- night audit anomaly 후보 ${anomalyCount}건은 Utility > Ops에서 확인하세요.`;
     }
     ui.userOpsHint.textContent = hint;
+    renderHostContextBar();
   }
 
   function renderOpsMetaSummary() {
@@ -720,55 +1554,223 @@
     }
   }
 
-  function setChecklistItem(el, label, done) {
-    if (!el) return;
-    const doneFlag = Boolean(done);
-    el.className = `onboarding-item${doneFlag ? " done" : ""}`;
-    el.textContent = `${doneFlag ? "✓" : "·"} ${label}: ${doneFlag ? "완료" : "필요"}`;
+  function buildDateKeyFromParts(yearRaw, monthRaw, dayRaw) {
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    const day = Number(dayRaw);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return "";
+    if (month < 1 || month > 12 || day < 1 || day > 31) return "";
+    const candidate = new Date(year, month - 1, day);
+    if (
+      candidate.getFullYear() !== year ||
+      candidate.getMonth() !== month - 1 ||
+      candidate.getDate() !== day
+    ) {
+      return "";
+    }
+    candidate.setHours(0, 0, 0, 0);
+    return toDateKey(candidate);
   }
 
-  function hasLoadedTestDataForSelectedRange() {
-    if (!state.selectedStart || !state.selectedEnd) return false;
-    const targetStart = state.selectedStart;
-    const targetEnd = state.selectedEnd;
-    const hasSite = Boolean(
-      state.query &&
-      state.query.startDate === targetStart &&
-      state.query.endDate === targetEnd &&
-      Array.isArray(state.rows) &&
-      state.rows.length > 0
-    );
-    const hasSheet = Boolean(
-      state.sheetQuery &&
-      state.sheetQuery.startDate === targetStart &&
-      state.sheetQuery.endDate === targetEnd &&
-      state.sheetSnapshot
-    );
-    return hasSite || hasSheet;
+  function parseLooseDateKey(rawValue) {
+    const text = normalizeText(rawValue || "");
+    if (!text) return "";
+    const directMatches = [
+      text.match(/(?:^|[^0-9])((?:19|20)\d{2})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})(?:\s*일)?(?=$|[^0-9])/),
+      text.match(/(?:^|[^0-9])((?:19|20)\d{2})(\d{2})(\d{2})(?=$|[^0-9])/)
+    ];
+    for (const match of directMatches) {
+      if (!match) continue;
+      const key = buildDateKeyFromParts(match[1], match[2], match[3]);
+      if (key) return key;
+    }
+    return "";
   }
 
-  function renderOnboardingChecklist() {
-    if (!ui.onboardingBox) return;
-    const cfg = state.syncConfig || {};
-    const hasSheetConfig = Boolean(
-      normalizeText(cfg.spreadsheet || "") &&
-      normalizeText(cfg.sheetName || "") &&
-      Number(cfg.startRow || 0) > 0 &&
-      Number(cfg.year || 0) > 0
-    );
-    const missingAuth = getEmbeddedAuthMissingFields(state.syncConfig || {});
-    const hasAuth = missingAuth.length <= 0;
-    const hasRange = Boolean(state.selectedStart && state.selectedEnd);
-    const hasTest = hasLoadedTestDataForSelectedRange();
-    setChecklistItem(ui.onboardingSheetItem, TEXT.onboardingSheet, hasSheetConfig);
-    setChecklistItem(ui.onboardingAuthItem, TEXT.onboardingAuth, hasAuth);
-    setChecklistItem(ui.onboardingRangeItem, TEXT.onboardingRange, hasRange);
-    setChecklistItem(ui.onboardingTestItem, TEXT.onboardingTest, hasTest);
-    const allDone = hasSheetConfig && hasAuth && hasRange && hasTest;
-    ui.onboardingBox.classList.toggle("hidden", state.onboardingDismissed || allDone);
+  function extractLooseDateKeys(rawValue, limit = 2) {
+    const text = normalizeText(rawValue || "");
+    if (!text) return [];
+    const out = [];
+    const pushKey = (key) => {
+      if (!key || out.includes(key)) return;
+      out.push(key);
+    };
+    const pattern = /((?:19|20)\d{2})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})(?:\s*일)?/g;
+    let match = null;
+    while ((match = pattern.exec(text)) !== null) {
+      pushKey(buildDateKeyFromParts(match[1], match[2], match[3]));
+      if (out.length >= limit) return out;
+    }
+    const compactPattern = /((?:19|20)\d{2})(\d{2})(\d{2})/g;
+    while ((match = compactPattern.exec(text)) !== null) {
+      pushKey(buildDateKeyFromParts(match[1], match[2], match[3]));
+      if (out.length >= limit) return out;
+    }
+    return out;
   }
 
-  function setSelectedRangeFromDates(startDate, endDate) {
+  function readElementDateHints(el) {
+    if (!el) return [];
+    const values = [];
+    const pushValue = (value) => {
+      const text = normalizeText(value || "");
+      if (!text) return;
+      if (text.length > 120) return;
+      if (!values.includes(text)) values.push(text);
+    };
+    pushValue(el.value);
+    pushValue(el.textContent);
+    pushValue(el.getAttribute?.("aria-label"));
+    pushValue(el.getAttribute?.("title"));
+    pushValue(el.getAttribute?.("placeholder"));
+    if (el.dataset && typeof el.dataset === "object") {
+      Object.values(el.dataset).forEach((value) => pushValue(value));
+    }
+    return values;
+  }
+
+  function normalizeRangeParamKey(keyRaw) {
+    return normalizeText(keyRaw || "").replace(/[_\-\s]/g, "").toLowerCase();
+  }
+
+  function tryReadHostRangeFromLocation() {
+    let url = null;
+    try {
+      url = new URL(location.href);
+    } catch (_err) {
+      return null;
+    }
+    const startKeys = new Set(["startdate", "fromdate", "checkin", "begindate", "datefrom", "searchstartdate", "sdate"]);
+    const endKeys = new Set(["enddate", "todate", "checkout", "finishdate", "dateto", "searchenddate", "edate"]);
+    const findFromParams = (params, targetKeys) => {
+      for (const [key, value] of params.entries()) {
+        if (!targetKeys.has(normalizeRangeParamKey(key))) continue;
+        const parsed = parseLooseDateKey(value);
+        if (parsed) return parsed;
+      }
+      return "";
+    };
+    const startDate = findFromParams(url.searchParams, startKeys);
+    const endDate = findFromParams(url.searchParams, endKeys);
+    if (startDate && endDate) {
+      return { startDate, endDate, source: "url" };
+    }
+    const hashQueryIndex = String(url.hash || "").indexOf("?");
+    if (hashQueryIndex >= 0) {
+      const hashParams = new URLSearchParams(String(url.hash || "").slice(hashQueryIndex + 1));
+      const hashStart = findFromParams(hashParams, startKeys);
+      const hashEnd = findFromParams(hashParams, endKeys);
+      if (hashStart && hashEnd) {
+        return { startDate: hashStart, endDate: hashEnd, source: "url" };
+      }
+    }
+    const joinedParamValues = [];
+    url.searchParams.forEach((value) => joinedParamValues.push(value));
+    if (hashQueryIndex >= 0) {
+      const hashParams = new URLSearchParams(String(url.hash || "").slice(hashQueryIndex + 1));
+      hashParams.forEach((value) => joinedParamValues.push(value));
+    }
+    for (const value of joinedParamValues) {
+      const keys = extractLooseDateKeys(value, 2);
+      if (keys.length >= 2) {
+        return { startDate: keys[0], endDate: keys[1], source: "url" };
+      }
+    }
+    return null;
+  }
+
+  function collectDateKeysFromSelectors(selectors, limit = 6) {
+    const out = [];
+    selectors.forEach((selector) => {
+      const nodes = document.querySelectorAll(selector);
+      nodes.forEach((el) => {
+        readElementDateHints(el).forEach((value) => {
+          const key = parseLooseDateKey(value);
+          if (!key || out.includes(key)) return;
+          out.push(key);
+        });
+      });
+    });
+    return out.slice(0, limit);
+  }
+
+  function tryReadHostRangeFromDom() {
+    const datasetRangeEl = document.querySelector("[data-start-date][data-end-date]");
+    if (datasetRangeEl) {
+      const startDate = parseLooseDateKey(datasetRangeEl.getAttribute("data-start-date"));
+      const endDate = parseLooseDateKey(datasetRangeEl.getAttribute("data-end-date"));
+      if (startDate && endDate) {
+        return { startDate, endDate, source: "dom" };
+      }
+    }
+
+    const startCandidates = collectDateKeysFromSelectors([
+      'input[name*="start" i]',
+      'input[id*="start" i]',
+      'input[name*="from" i]',
+      'input[id*="from" i]',
+      'input[name*="checkin" i]',
+      'input[id*="checkin" i]',
+      'input[name*="date" i][name*="start" i]',
+      'input[id*="date" i][id*="start" i]'
+    ]);
+    const endCandidates = collectDateKeysFromSelectors([
+      'input[name*="end" i]',
+      'input[id*="end" i]',
+      'input[name*="to" i]',
+      'input[id*="to" i]',
+      'input[name*="checkout" i]',
+      'input[id*="checkout" i]',
+      'input[name*="date" i][name*="end" i]',
+      'input[id*="date" i][id*="end" i]'
+    ]);
+    if (startCandidates.length > 0 && endCandidates.length > 0) {
+      return { startDate: startCandidates[0], endDate: endCandidates[0], source: "dom" };
+    }
+
+    const combinedSelectors = [
+      '[class*="range" i]',
+      '[id*="range" i]',
+      '[class*="period" i]',
+      '[id*="period" i]',
+      '[class*="date" i]',
+      '[id*="date" i]',
+      '[aria-label*="기간"]',
+      '[aria-label*="날짜"]',
+      '[title*="기간"]',
+      '[title*="날짜"]'
+    ];
+    for (const selector of combinedSelectors) {
+      const nodes = document.querySelectorAll(selector);
+      for (const el of nodes) {
+        for (const value of readElementDateHints(el)) {
+          const keys = extractLooseDateKeys(value, 2);
+          if (keys.length >= 2) {
+            return { startDate: keys[0], endDate: keys[1], source: "dom" };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  function readDateRangeFromHost() {
+    return tryReadHostRangeFromLocation() || tryReadHostRangeFromDom() || null;
+  }
+
+  function syncSelectedRangeFromHost(options = {}) {
+    const hostRange = readDateRangeFromHost();
+    if (!hostRange?.startDate || !hostRange?.endDate) return false;
+    setSelectedRangeFromDates(hostRange.startDate, hostRange.endDate, {
+      source: "host",
+      sourceDetail: hostRange.source || "dom",
+      emit: options.emit === true,
+      silent: options.silent !== false
+    });
+    return true;
+  }
+
+  function setSelectedRangeFromDates(startDate, endDate, options = {}) {
     const start = startDate instanceof Date ? startDate : new Date(startDate);
     const end = endDate instanceof Date ? endDate : new Date(endDate);
     start.setHours(0, 0, 0, 0);
@@ -782,13 +1784,18 @@
     }
     state.selectedStart = startKey;
     state.selectedEnd = endKey;
+    state.rangeSource = options.source === "host" ? "host" : "shell";
+    state.rangeSourceDetail = normalizeText(options.sourceDetail || (state.rangeSource === "host" ? "dom" : "manual")) || (state.rangeSource === "host" ? "dom" : "manual");
     const firstDay = fromDateKey(startKey);
     if (firstDay) state.monthCursor = monthStart(firstDay);
     renderCalendar();
-    emitUiEvent("date_range_change", {
-      startDate: state.selectedStart || "",
-      endDate: state.selectedEnd || ""
-    });
+    renderWorkspaceShellState();
+    if (options.silent !== true || options.emit === true) {
+      emitUiEvent("date_range_change", {
+        startDate: state.selectedStart || "",
+        endDate: state.selectedEnd || ""
+      });
+    }
   }
 
   function applyQuickRange(type) {
@@ -830,10 +1837,11 @@
   }
 
   function renderDebugPanel() {
-    if (!ui.debugWrap || !ui.debugDiag || !ui.debugLog || !ui.toggleDebugBtn) return;
+    if (!ui.debugWrap || !ui.debugDiag || !ui.debugLog) return;
     const logCount = Number(state.statusLogs?.length || 0);
-    syncSectionVisible(ui.debugWrap, state.debugExpanded);
-    ui.toggleDebugBtn.textContent = `${state.debugExpanded ? TEXT.debugHide : TEXT.debugToggle} (${logCount})`;
+    if (ui.toggleDebugBtn) {
+      ui.toggleDebugBtn.textContent = `${TEXT.debugToggle} (${logCount})`;
+    }
     ui.debugDiag.textContent = String(state.debugDetails || "-");
     const logs = Array.isArray(state.statusLogs) ? state.statusLogs : [];
     if (!logs.length) {
@@ -855,8 +1863,11 @@
   }
 
   function setDebugExpanded(flag, options = {}) {
+    if (flag) openEvidenceTab("trace");
+    else if (state.secondarySurfaceKind === "evidence" && state.activeEvidenceTab === "trace") openEvidenceTab("result");
     state.debugExpanded = Boolean(flag);
     renderDebugPanel();
+    renderWorkspaceShellState();
   }
 
   function setDebugDetails(text) {
@@ -914,16 +1925,13 @@
       ui.headerStatusPill.classList.remove("warn", "error", "loading");
       if (statusUi.className) ui.headerStatusPill.classList.add(statusUi.className);
     }
-    if (ui.launcherDot) {
-      ui.launcherDot.classList.remove("warn", "error", "loading");
-      if (statusUi.className) ui.launcherDot.classList.add(statusUi.className);
-    }
   }
 
   function setStatus(message, kind = "info") {
     const tone = kind === "warn" || kind === "error" ? kind : "info";
     const text = redactSensitiveText(message).trim() || "-";
     const toneLabel = tone === "error" ? "ERROR" : tone === "warn" ? "WARN" : "INFO";
+    state.lastStatusTone = tone;
     ui.status.className = `status ${tone === "info" ? "" : tone}`.trim();
     ui.status.setAttribute("aria-live", tone === "error" ? "assertive" : "polite");
     ui.status.innerHTML = `<span class="status-k">${toneLabel}</span><span class="status-msg">${escapeHtml(text).replace(/\n/g, "<br>")}</span>`;
@@ -936,6 +1944,7 @@
     renderWorkflowProgress();
     renderUserOpsSummary();
     renderOpsMetaSummary();
+    renderWorkspaceShellState();
   }
 
   async function loadSyncApplyEnabled() {
@@ -1001,6 +2010,7 @@
     renderWorkflowProgress();
     renderUserOpsSummary();
     renderOpsMetaSummary();
+    renderWorkspaceShellState();
   }
 
   function hasLoadedInventoryForCorrection() {
@@ -1033,7 +2043,7 @@
   }
 
   function activeProviderKey() {
-    return context.providerType === "admin-station" ? "STATION" : "NAVER";
+    return inventoryProviderKeyFor(context.providerType);
   }
 
   function clearCorrectionArtifacts() {
@@ -1232,7 +2242,6 @@
       ui.presetRange2d,
       ui.presetRange7d,
       ui.presetRangeMonth,
-      ui.hideOnboardingBtn,
       ui.saveSyncCfg,
       ui.cfgManualRangeSampleBtn,
       ui.toggleConfig,
@@ -1294,9 +2303,10 @@
     applySyncFeatureUiState();
     updateSyncButtonText();
     updateCorrectionButtonState();
-    renderOnboardingChecklist();
+    renderSupportPolicySurface();
     renderUserOpsSummary();
     renderOpsMetaSummary();
+    renderWorkspaceShellState();
   }
 
   function formatPickedText() {
@@ -1322,7 +2332,7 @@
   }
 
   function resolveCopyTemplateRows(query, providerType) {
-    const providerKey = providerType === "admin-station" ? "STATION" : providerType === "naver-partner" ? "NAVER" : "";
+    const providerKey = inventoryProviderKeyFor(providerType);
     if (!providerKey) return [];
     if (!query || !state.sheetSnapshot || !state.sheetQuery || !isSameQuery(query, state.sheetQuery)) return [];
     const rows = state.sheetSnapshot?.inventoryDataRows?.[providerKey];
@@ -1361,6 +2371,8 @@
   }
 
   function onDateClick(dateKey) {
+    state.rangeSource = "shell";
+    state.rangeSourceDetail = "manual";
     if (!state.selectedStart || (state.selectedStart && state.selectedEnd)) {
       state.selectedStart = dateKey;
       state.selectedEnd = null;
@@ -1371,6 +2383,7 @@
       state.selectedEnd = dateKey;
     }
     renderCalendar();
+    renderWorkspaceShellState();
     if (state.selectedStart && state.selectedEnd) {
       emitUiEvent("date_range_change", {
         startDate: state.selectedStart,
@@ -1380,9 +2393,12 @@
   }
 
   function onDateDoubleClick(dateKey) {
+    state.rangeSource = "shell";
+    state.rangeSourceDetail = "manual";
     state.selectedStart = dateKey;
     state.selectedEnd = dateKey;
     renderCalendar();
+    renderWorkspaceShellState();
     emitUiEvent("date_range_change", {
       startDate: state.selectedStart,
       endDate: state.selectedEnd
@@ -1392,6 +2408,8 @@
   function resetDateRange() {
     state.selectedStart = null;
     state.selectedEnd = null;
+    state.rangeSource = "shell";
+    state.rangeSourceDetail = "cleared";
     state.query = null;
     state.rows = [];
     state.providerReservations = [];
@@ -1424,6 +2442,7 @@
   }
 
   function getSelectedQuery() {
+    syncSelectedRangeFromHost({ emit: false, silent: true });
     if (!state.selectedStart || !state.selectedEnd) {
       throw new Error(TEXT.statusSelectRange);
     }
@@ -1439,10 +2458,11 @@
     ui.sumPeriod.textContent = state.query ? `${state.query.startDate} ~ ${state.query.endDate}` : TEXT.noPeriod;
     renderUserOpsSummary();
     renderOpsMetaSummary();
+    renderWorkspaceShellState();
   }
 
   function renderSheetSummary(query, snapshot) {
-    const providerKey = context.providerType === "admin-station" ? "STATION" : "NAVER";
+    const providerKey = inventoryProviderKeyFor();
     const diagnostics = snapshot?.derivedCorrections?.[providerKey]?.diagnostics || {};
     const roomRows = Number(diagnostics?.roomRows || 0);
     ui.sumRows.textContent = String(roomRows > 0 ? roomRows : (state.sheetValueRows || []).length || 0);
@@ -1451,6 +2471,7 @@
     ui.sumPeriod.textContent = query ? `${query.startDate} ~ ${query.endDate}` : TEXT.noPeriod;
     renderUserOpsSummary();
     renderOpsMetaSummary();
+    renderWorkspaceShellState();
   }
 
   function clearSheetInsightPanel(noteText = "자동보정 이슈 요약\n- 상태: 대기") {
@@ -2296,7 +3317,8 @@
       addVerificationPass(report);
     }
 
-    const providerKey = context.providerType === "admin-station" ? "STATION" : "NAVER";
+    const providerKey = inventoryProviderKeyFor();
+    if (!providerKey) return;
     const roomValueMaps = resolveProviderRoomValueMaps(state.sheetSnapshot, providerKey);
     const allowProviderFallback = shouldAllowProviderFallback(
       state.sheetSnapshot,
@@ -3113,22 +4135,26 @@
   }
 
   function setSettingsOpen(flag, options = {}) {
-    state.settingsOpen = Boolean(flag);
-    syncSectionVisible(ui.sheetBox, state.settingsOpen);
-    ui.toggleConfig.title = state.settingsOpen ? TEXT.settingsClose : TEXT.settingsOpen;
+    if (flag) openUtilityTab("settings");
+    else if (state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "settings") {
+      state.secondarySurfaceKind = "evidence";
+      syncDerivedSurfaceState();
+    }
+    if (ui.toggleConfig) ui.toggleConfig.title = state.secondarySurfaceKind === "utility" ? "Utility 닫기" : "Utility";
+    renderWorkspaceShellState();
   }
 
   async function setOpsSectionExpanded(flag, options = {}) {
-    state.opsSectionExpanded = Boolean(flag);
-    syncSectionVisible(ui.opsSection, state.opsSectionExpanded);
-    if (ui.toggleOpsSectionBtn) {
-      ui.toggleOpsSectionBtn.textContent = state.opsSectionExpanded ? TEXT.opsSectionHide : TEXT.opsSectionShow;
-      ui.toggleOpsSectionBtn.className = `btn ${state.opsSectionExpanded ? "secondary" : "gray"}`;
+    if (flag) openUtilityTab("ops");
+    else if (state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "ops") {
+      state.secondarySurfaceKind = "evidence";
+      syncDerivedSurfaceState();
+      renderWorkspaceShellState();
     }
     if (options.persist === true && state.syncConfig) {
       state.syncConfig = sanitizeSyncConfig({
         ...state.syncConfig,
-        opsUiCollapsed: !state.opsSectionExpanded
+        opsUiCollapsed: !(state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "ops")
       });
       await saveSyncConfig(state.syncConfig);
     }
@@ -3156,8 +4182,10 @@
 
   function setSyncResultVisible(flag) {
     state.syncResultVisible = Boolean(flag);
+    if (state.syncResultVisible) openEvidenceTab("result");
     if (!ui.syncResultWrap) return;
     syncSectionVisible(ui.syncResultWrap, state.syncResultVisible);
+    renderWorkspaceShellState();
   }
 
   function setErrorExpanded(flag) {
@@ -3165,6 +4193,7 @@
     syncSectionVisible(ui.errorWrap, state.errorExpanded);
     const errorCount = Number(state.syncPreview?.errorCount || 0);
     ui.toggleErrorBtn.textContent = `${state.errorExpanded ? TEXT.errorHide : TEXT.errorToggle} (${errorCount})`;
+    renderWorkspaceShellState();
   }
 
   function renderIssueTable(headEl, bodyEl, rows) {
@@ -3241,6 +4270,7 @@
     applySyncFeatureUiState();
     renderUserOpsSummary();
     renderOpsMetaSummary();
+    renderWorkspaceShellState();
   }
 
   function setFieldValue(el, value) {
@@ -3253,16 +4283,20 @@
   }
 
   function currentProviderApplyKey() {
-    return context.providerType === "admin-station" ? "admin-station" : "naver-partner";
+    if (context.providerType === "admin-station") return "admin-station";
+    if (context.providerType === "naver-partner") return "naver-partner";
+    return "";
   }
 
   function currentProviderApplyLabel() {
+    if (!currentProviderApplyKey()) return "WINGS 시작 호스트에서는 OTA 쓰기 설정을 사용하지 않습니다.";
     return currentProviderApplyKey() === "admin-station"
       ? TEXT.syncProviderApplyHintStation
       : TEXT.syncProviderApplyHintNaver;
   }
 
   function isCurrentProviderApplyAllowed(config = state.syncConfig || {}) {
+    if (!currentProviderApplyKey()) return false;
     const providerApply = config?.providerApply && typeof config.providerApply === "object"
       ? config.providerApply
       : {};
@@ -3524,11 +4558,12 @@
     setFieldValue(ui.cfgPmsAuthBundle, formatAuthBundleForTextarea(cfg.pmsAuthBundle || null));
     setFieldValue(ui.cfgAuthBundle, formatAuthBundleForTextarea(cfg.authBundles?.[context.providerType] || null));
     state.opsSectionExpanded = cfg.opsUiCollapsed !== true;
+    state.lastUtilityTab = state.opsSectionExpanded ? "ops" : state.lastUtilityTab || "scope";
     updateScanModeUiState();
     renderPmsPresetPreview();
-    setOpsSectionExpanded(state.opsSectionExpanded);
+    syncDerivedSurfaceState();
     setSecretsMasked(state.secretsMasked);
-    renderOnboardingChecklist();
+    renderSupportPolicySurface();
     renderUserOpsSummary();
     renderOpsMetaSummary();
   }
@@ -3542,6 +4577,7 @@
     const hasManualFrame = Boolean(dateAnchor) || parsedManualRanges.hasAny;
     const selectedMode = normalizeText(getFieldValue(ui.cfgScanMode)).toLowerCase() === "manual" ? "manual" : "auto";
     const effectiveMode = hasManualFrame ? "manual" : selectedMode;
+    const providerApplyKey = currentProviderApplyKey();
     const raw = {
       spreadsheet: getFieldValue(ui.cfgSpreadsheet),
       sheetName: getFieldValue(ui.cfgSheetName),
@@ -3584,7 +4620,7 @@
       clientSecret: getFieldValue(ui.cfgClientSecret),
       providerApply: {
         ...((state.syncConfig?.providerApply && typeof state.syncConfig.providerApply === "object") ? state.syncConfig.providerApply : {}),
-        [currentProviderApplyKey()]: ui.cfgProviderApply?.checked === true
+        ...(providerApplyKey ? { [providerApplyKey]: ui.cfgProviderApply?.checked === true } : {})
       },
       naverExecution: sanitizeNaverExecutionConfig(state.syncConfig?.naverExecution || {}),
       accessToken: tokenBundle?.accessToken || getFieldValue(ui.cfgAccessToken),
@@ -3594,7 +4630,7 @@
       pmsAuthBundle: parseAuthBundleMaybe(getFieldValue(ui.cfgPmsAuthBundle), null),
       accessTokenExpiresAt: tokenBundle?.expiresAt || state.syncConfig.accessTokenExpiresAt || 0,
       sleepMs: state.syncConfig.sleepMs || DEFAULT_SYNC_SLEEP_MS,
-      opsUiCollapsed: state.opsSectionExpanded !== true,
+      opsUiCollapsed: !(state.lastUtilityTab === "ops" || (state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "ops")),
       authBundles: { ...(state.syncConfig.authBundles || {}) },
       stationBranchId:
         context.providerType === "admin-station"
@@ -5148,7 +6184,7 @@
   async function reloadSheetSnapshot(query) {
     const syncConfig = await persistSyncConfig(false);
     const snapshot = await fetchSheetSnapshot(syncConfig, query, false, false, { blockDetailMode: "light" });
-    const providerKey = context.providerType === "admin-station" ? "STATION" : "NAVER";
+    const providerKey = requireInventoryProviderKey();
     assertProviderInventorySource(snapshot, providerKey);
 
     state.sheetQuery = query;
@@ -5184,7 +6220,7 @@
       state.sheetSnapshot = preview.snapshot;
       state.sheetQuery = query;
       if (preview.snapshot !== prevSnapshotRef) {
-        const providerKey = context.providerType === "admin-station" ? "STATION" : "NAVER";
+        const providerKey = requireInventoryProviderKey();
         const model = buildSheetValueModel(preview.snapshot, providerKey, { applyCorrections: state.correctionsApplied === true });
         state.sheetDates = model.dates;
         state.sheetValueRows = model.valueRows;
@@ -5207,6 +6243,7 @@
         errors: buildValidationRows(preview.validation)
       });
     }
+    markActionTime("comparison");
     return preview;
   }
 
@@ -5222,7 +6259,7 @@
     }
 
     if (state.sheetSnapshot && state.sheetQuery) {
-      const providerKey = context.providerType === "admin-station" ? "STATION" : "NAVER";
+      const providerKey = requireInventoryProviderKey();
       const sheetModel = buildSheetValueModel(state.sheetSnapshot, providerKey, {
         applyCorrections: state.correctionsApplied === true
       });
@@ -5588,6 +6625,7 @@
     });
     updateSyncButtonText();
     renderMismatchRows(null, preview?.query || resolveActiveQuery());
+    markActionTime("comparison");
   }
 
   function assertSyncRunReady(query) {
@@ -5796,6 +6834,7 @@
       setStatus(
         `${TEXT.statusLoadedSite} (${sourceLabel}): ${rows.length}건 (객실타입 ${roomTypeCount} x ${dayCount}일, 원본 표시${sourceMixLabel}${reservationLabel})`
       );
+      markActionTime("query");
       ui.status.classList.add("ok");
     } catch (error) {
       setStatus(error?.message ?? String(error), "error");
@@ -5826,7 +6865,7 @@
         });
       }
       renderSheetSummary(query, state.sheetSnapshot);
-      const providerKey = context.providerType === "admin-station" ? "STATION" : "NAVER";
+      const providerKey = requireInventoryProviderKey();
       const correctedCount = countCorrectedCells(state.sheetValueRows);
       const derivedCorrectionCount = Number(state.sheetSnapshot?.derivedCorrections?.[providerKey]?.count || 0);
       const correctedLabel = correctedCount > 0 ? `, 보정표시: ${correctedCount}` : "";
@@ -6033,6 +7072,7 @@
       setStatus(
         `${TEXT.statusLoadedSheet}: ${state.sheetDates.length}일 (원본 표시${correctedLabel})`
       );
+      markActionTime("query");
       ui.status.classList.add(hasTypeMismatch || hasPartitionMismatch ? "warn" : "ok");
     } catch (error) {
       setDebugDetails(`시트 재고 조회 오류\n${error?.message ?? String(error)}`);
@@ -6202,7 +7242,7 @@
     try {
       if (!state.sheetValueRows.length) {
         if (!state.sheetSnapshot || !state.sheetQuery) throw new Error(TEXT.statusNeedSheetLoad);
-        const providerKey = context.providerType === "admin-station" ? "STATION" : "NAVER";
+        const providerKey = requireInventoryProviderKey();
         const model = buildSheetValueModel(state.sheetSnapshot, providerKey, { applyCorrections: state.correctionsApplied === true });
         state.sheetDates = model.dates;
         state.sheetValueRows = model.valueRows;
@@ -6245,7 +7285,6 @@
     navigatorRef: navigator,
     actions: {
       TEXT,
-      ONBOARDING_HIDE_KEY,
       PREF_KEY,
       isPanelVisible,
       setPanelOpen,
@@ -6283,9 +7322,19 @@
       renderWorkflowProgress,
       renderUserOpsSummary,
       renderOpsMetaSummary,
+      setActiveTask,
+      setFitMode,
+      setPanelWidthMode,
+      setScopeDrawerOpen,
+      openEvidenceTab,
+      openUtilityTab,
+      openTaskEvidenceSurface,
+      openTaskUtilitySurface,
+      syncSelectedRangeFromHost,
+      refreshProductFlowState,
+      renderWorkspaceShellState,
+      syncViewportFitMode,
       applyQuickRange,
-      storageSet,
-      renderOnboardingChecklist,
       setLoadingAction,
       loadInventory,
       loadAllInventory,

@@ -143,95 +143,6 @@
       line-height: 1.5;
       pointer-events: none;
     }
-    .wrap.panel-open .launcher {
-      opacity: 0;
-      transform: translateY(6px) scale(0.96);
-      pointer-events: none;
-    }
-
-    .launcher {
-      position: fixed;
-      right: 14px;
-      bottom: 14px;
-      width: 52px;
-      height: 52px;
-      border-radius: 14px;
-      border: 1px solid color-mix(in srgb, var(--c-primary) 24%, #c9d6e6 76%);
-      background:
-        linear-gradient(180deg, color-mix(in srgb, var(--c-primary) 12%, #ffffff 88%), #ffffff 72%),
-        radial-gradient(120% 100% at 20% 0%, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0));
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.05),
-        0 10px 26px -18px rgba(15, 23, 42, 0.45);
-      color: var(--c-primary);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      pointer-events: auto;
-      transition: transform 0.14s ease, box-shadow 0.14s ease, color 0.14s ease, border-color 0.14s ease;
-    }
-    .launcher:hover {
-      color: var(--c-accent);
-      border-color: color-mix(in srgb, var(--c-primary) 38%, #ffffff 62%);
-      transform: translateY(-1px);
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.96),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.05),
-        0 14px 32px -18px rgba(15, 23, 42, 0.5);
-    }
-    .launcher::after {
-      content: attr(data-tooltip);
-      position: absolute;
-      right: calc(100% + 8px);
-      top: 50%;
-      transform: translateY(-50%) translateX(4px);
-      background: #1f2937;
-      color: #ffffff;
-      border-radius: 6px;
-      padding: 6px 8px;
-      font-size: 12px;
-      font-weight: 600;
-      white-space: nowrap;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.12s ease, transform 0.12s ease;
-    }
-    .launcher:hover::after,
-    .launcher:focus-visible::after {
-      opacity: 1;
-      transform: translateY(-50%) translateX(0);
-    }
-    .launcher-icon {
-      font-size: 20px;
-      font-weight: 700;
-      line-height: 1;
-    }
-    .launcher-label {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      margin: -1px;
-      padding: 0;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      border: 0;
-    }
-    .launcher-dot {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #0f9d58;
-      box-shadow: 0 0 0 2px #ffffff;
-    }
-    .launcher-dot.warn { background: #f59e0b; }
-    .launcher-dot.error { background: #d93025; }
-    .launcher-dot.loading { background: #1a73e8; }
-
     .hidden {
       display: none !important;
     }
@@ -265,8 +176,8 @@
       width: min(var(--sidebar-width), 60vw, calc(100vw - 18px));
       max-width: min(60vw, calc(100vw - 18px));
       min-width: min(480px, calc(100vw - 18px));
-      height: min(70vh, calc(100vh - 24px));
-      max-height: min(70vh, calc(100vh - 24px));
+      height: calc(100vh - 24px);
+      max-height: calc(100vh - 24px);
       min-height: 300px;
       background: var(--bg-panel);
       border: 1px solid var(--border-color);
@@ -294,12 +205,6 @@
       transform: translateY(6px) scale(0.98);
       pointer-events: none;
     }
-    .panel.is-dragging {
-      transition: none;
-      cursor: grabbing;
-      user-select: none;
-    }
-
     /* Header */
     .header {
       position: sticky;
@@ -312,9 +217,9 @@
       background: var(--bg-header);
       border-bottom: 1px solid var(--border-color);
       flex-shrink: 0;
-      cursor: grab;
-      user-select: none;
-      touch-action: none;
+      cursor: default;
+      user-select: auto;
+      touch-action: auto;
     }
     .header-main {
       display: flex;
@@ -479,63 +384,74 @@
       background: #edf8f1;
       color: #1f6b3e;
     }
-    .panel-quick-switch {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: var(--r-card);
-      padding: 6px;
+    .flow-gate,
+    .policy-box {
+      display: grid;
+      gap: 10px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 252, 0.96));
+      border: 1px solid rgba(214, 221, 232, 0.94);
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: 0 12px 28px -26px rgba(15, 23, 42, 0.28);
     }
-    .quick-switch-btn {
-      height: 30px;
-      padding: 0 10px;
-      border: 1px solid var(--border-color);
-      border-radius: 999px;
-      background: #ffffff;
-      color: var(--text-main);
+    .flow-gate {
+      border-color: color-mix(in srgb, var(--c-primary) 24%, rgba(214, 221, 232, 0.94) 76%);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--c-primary) 6%, #ffffff 94%), rgba(246, 249, 252, 0.98)),
+        radial-gradient(120% 120% at 0% 0%, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0));
+    }
+    .policy-box-title {
       font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
-    }
-    .quick-switch-btn:hover {
-      background: var(--bg-hover);
-      border-color: #c5d5e6;
-    }
-    .quick-switch-btn.is-active {
-      background: color-mix(in srgb, var(--c-primary) 12%, #ffffff 88%);
-      border-color: color-mix(in srgb, var(--c-primary) 40%, #ffffff 60%);
-      color: var(--text-main);
       font-weight: 700;
+      color: var(--text-main);
     }
-    .onboarding {
+    .policy-grid {
       display: grid;
       gap: 8px;
-      background: #fff8eb;
-      border: 1px solid #f1debe;
-      border-radius: var(--r-card);
-      padding: 10px;
-      box-shadow: none;
     }
-    .onboarding-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: #7c2d12;
-    }
-    .onboarding-items {
+    .policy-item {
       display: grid;
-      gap: 5px;
+      gap: 4px;
+      padding: 10px 12px;
+      border: 1px solid rgba(223, 228, 237, 0.98);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.92);
     }
-    .onboarding-item {
+    .policy-item-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
       font-size: 11px;
-      color: #8a5b1f;
-      line-height: 1.35;
-      font-weight: 600;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-main);
     }
-    .onboarding-item.done {
-      color: #166534;
+    .policy-item-status {
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eef2f7;
+      color: var(--text-sub);
+      font-size: 10px;
+      font-weight: 800;
+    }
+    .policy-item-status.ready {
+      background: #e8f6ee;
+      color: #146c43;
+    }
+    .policy-item-status.blocked {
+      background: #fff2f0;
+      color: #b42318;
+    }
+    .policy-item-status.guard {
+      background: #fff8e6;
+      color: #9a6700;
+    }
+    .policy-item-body {
+      font-size: 12px;
+      color: var(--text-sub);
+      line-height: 1.55;
     }
 
     /* =========================================
@@ -1613,7 +1529,6 @@
       .panel { min-width: 0; width: min(96vw, 380px); right: 0; }
       .flow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .sync-approval-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .panel-quick-switch { gap: 5px; }
       .quick-presets { gap: 4px; }
       .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .review-grid { grid-template-columns: 1fr; }
@@ -1645,14 +1560,12 @@
     }
     @media (max-width: 640px) {
       .panel { width: calc(100vw - 16px); right: 8px; bottom: 8px; max-height: calc(100vh - 16px); min-width: 0; min-height: 280px; }
-      .launcher { right: 8px; bottom: 8px; }
       .header { padding: 16px 16px 12px; }
       .header-main { padding-right: 58px; }
       .title { font-size: 17px; }
       .body { padding: 12px 14px 14px; }
       .flow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .sync-approval-summary { grid-template-columns: 1fr; }
-      .quick-switch-btn { flex: 1 1 calc(50% - 4px); text-align: center; }
       .quick-presets { padding: 8px 10px 10px; }
       .preset-btn { flex: 1 1 calc(33.33% - 4px); min-width: 0; text-align: center; }
       .summary { grid-template-columns: repeat(2, 1fr); }
@@ -1683,324 +1596,1156 @@
     }
   `;
 
-  const HTML = `
-    <div id="wrap" class="wrap">
-      <button id="launcher" class="launcher" type="button" data-tooltip="재고 관리 열기" aria-label="재고 관리 열기">
-        <span class="launcher-icon" aria-hidden="true">⋯</span>
-        <span id="launcherDot" class="launcher-dot" aria-hidden="true"></span>
-        <span class="launcher-label">재고 관리</span>
-      </button>
+  const HTML = ``;
+
+  const SHELL_STYLE = `${STYLE}
+    .wrap {
+      --context-bar-h: 48px;
+      --rail-w: 48px;
+      --sidebar-width: 420px;
+      --sidebar-top: 72px;
+      --workspace-bottom: 14px;
+      --sidebar-gap: 14px;
+      --workspace-left: auto;
+      --workspace-top: var(--sidebar-top);
+      --workspace-width: min(var(--sidebar-width), calc(100vw - 28px));
+      --workspace-height: calc(100vh - var(--sidebar-top) - var(--workspace-bottom));
+      background: transparent;
+    }
+    .wrap.sidebar-docked .host-context-bar {
+      opacity: 0;
+      transform: translate3d(20px, 0, 0);
+      pointer-events: none;
+      transition: opacity 0.22s var(--ease-out), transform 0.22s var(--ease-out);
+    }
+    .wrap.sidebar-docked.panel-open .host-context-bar {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+      pointer-events: auto;
+    }
+    .host-context-bar {
+      position: fixed;
+      top: 14px;
+      left: auto;
+      right: 14px;
+      width: min(calc(var(--sidebar-width) - 8px), calc(100vw - 28px));
+      min-height: var(--context-bar-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 10px 16px;
+      border: 1px solid rgba(207, 216, 232, 0.9);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 16px 44px -34px rgba(15, 23, 42, 0.45);
+      z-index: 4;
+    }
+    .host-context-main,
+    .host-context-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .host-context-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .host-badge {
+      min-width: 58px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--c-primary) 14%, #ffffff 86%);
+      border: 1px solid color-mix(in srgb, var(--c-primary) 30%, #d8e1ef 70%);
+      color: var(--text-main);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+    .context-entity {
+      font-size: 12px;
+      color: var(--text-sub);
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .context-pill {
+      display: inline-flex;
+      align-items: center;
+      height: 28px;
+      padding: 0 11px;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--text-main);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .context-pill.subtle {
+      color: var(--text-sub);
+      border-color: color-mix(in srgb, var(--border-color) 82%, #ffffff 18%);
+    }
+    .context-last {
+      font-size: 11px;
+      color: var(--text-sub);
+      white-space: nowrap;
+    }
+    .backdrop {
+      transition: opacity 0.18s ease;
+    }
+    .backdrop.is-open {
+      opacity: 1;
+      background: transparent;
+      pointer-events: auto;
+    }
+    .wrap.fit-focus .backdrop.is-open {
+      background: transparent;
+    }
+    .panel {
+      top: var(--workspace-top);
+      left: auto;
+      right: 14px;
+      bottom: var(--workspace-bottom);
+      width: var(--workspace-width);
+      height: auto;
+      max-width: none;
+      max-height: none;
+      min-width: 360px;
+      min-height: 420px;
+      border-radius: 28px;
+      border-color: rgba(211, 217, 232, 0.95);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 248, 252, 0.86)),
+        radial-gradient(120% 100% at 0% 0%, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0));
+      backdrop-filter: blur(24px);
+      box-shadow: 0 34px 80px -46px rgba(15, 23, 42, 0.56);
+      z-index: 7;
+      transform: translate3d(34px, 0, 0);
+      transition: opacity 0.18s ease, transform 0.22s var(--ease-out);
+      will-change: opacity, transform;
+    }
+    .panel.is-open {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+    .panel.is-closing {
+      opacity: 0;
+      transform: translate3d(24px, 0, 0);
+    }
+    .header {
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 18px 16px 14px;
+      background: transparent;
+      cursor: default;
+      user-select: auto;
+      touch-action: auto;
+    }
+    .workspace-header-main {
+      width: 100%;
+      padding-right: 0;
+      align-items: flex-start;
+      text-align: left;
+      gap: 6px;
+    }
+    .workspace-header-top {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .workspace-mode-stack {
+      display: inline-grid;
+      gap: 6px;
+      justify-items: end;
+    }
+    .mode-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .mode-row-help {
+      font-size: 10px;
+      color: var(--text-sub);
+      line-height: 1.45;
+      text-align: right;
+    }
+    .mode-label {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: var(--text-sub);
+      text-transform: uppercase;
+    }
+    .workspace-task-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--c-primary) 12%, #ffffff 88%);
+      border: 1px solid color-mix(in srgb, var(--c-primary) 32%, #d8e2ef 68%);
+      color: var(--text-main);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+    .fit-switch {
+      display: inline-flex;
+      gap: 4px;
+      padding: 3px;
+      border-radius: 999px;
+      background: rgba(245, 247, 250, 0.96);
+      border: 1px solid rgba(219, 225, 236, 0.92);
+    }
+    .fit-btn {
+      height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      border: 0;
+      background: transparent;
+      color: var(--text-sub);
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .fit-btn.is-active {
+      background: rgba(255, 255, 255, 0.96);
+      color: var(--text-main);
+      box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.62);
+    }
+    .fit-btn.is-disabled {
+      opacity: 0.48;
+      cursor: not-allowed;
+    }
+    .header-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .close {
+      position: static;
+      min-width: 52px;
+    }
+    .body {
+      padding: 10px 14px 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+      overflow-y: auto;
+      background: transparent;
+      align-content: stretch;
+    }
+    .wrap.scope-open .body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .wrap.utility-open .body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .wrap.scope-open.utility-open .body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .scope-drawer,
+    .workspace-main-col,
+    .workspace-utility {
+      min-height: auto;
+      overflow: hidden;
+      border: 1px solid rgba(221, 226, 237, 0.96);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.84);
+      box-shadow: 0 14px 36px -30px rgba(15, 23, 42, 0.32);
+    }
+    .scope-drawer,
+    .workspace-utility {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .workspace-main-col {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .task-guide-card {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      border: 1px solid rgba(221, 226, 237, 0.94);
+      border-radius: 20px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 253, 0.94)),
+        radial-gradient(120% 100% at 0% 0%, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0));
+      box-shadow: 0 14px 34px -30px rgba(15, 23, 42, 0.36);
+    }
+    .task-guide-head {
+      display: grid;
+      gap: 4px;
+    }
+    .task-guide-kicker {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: var(--text-sub);
+      text-transform: uppercase;
+    }
+    .task-guide-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+    .task-guide-summary {
+      font-size: 12px;
+      color: var(--text-sub);
+      line-height: 1.6;
+    }
+    .task-guide-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .task-guide-item {
+      display: grid;
+      gap: 4px;
+      padding: 12px;
+      border: 1px solid rgba(225, 229, 238, 0.98);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.88);
+    }
+    .task-guide-item .k {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: var(--text-sub);
+      text-transform: uppercase;
+    }
+    .task-guide-item .v {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1.5;
+    }
+    .task-guide-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .task-guide-actions .btn {
+      flex: 1 1 160px;
+    }
+    .wrap.workspace-blocked .task-navigation {
+      display: none;
+    }
+    .site {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .summary-primary {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .table-surface,
+    .verification-section,
+    .result-section {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid rgba(221, 226, 237, 0.94);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.92);
+    }
+    .verification-section,
+    .result-section {
+      padding: 14px 16px;
+    }
+    .sync-feature-section {
+      display: grid;
+      gap: 12px;
+      padding: 14px 16px;
+      border: 1px solid rgba(221, 226, 237, 0.94);
+      border-radius: 20px;
+      background: rgba(251, 252, 255, 0.92);
+    }
+    .actions.sync-cta {
+      justify-content: flex-end;
+    }
+    .actions.sync-cta #syncBtn {
+      min-width: 180px;
+      margin-left: auto;
+    }
+    .read-only-note {
+      margin-top: -2px;
+    }
+    .workspace-utility .sheet-title,
+    .result-wrap .sheet-title {
+      margin-bottom: 0;
+    }
+    .wrap.task-sheet #siteTableSection,
+    .wrap.task-sheet #syncFeatureSection,
+    .wrap.task-sheet #resultSection {
+      display: none;
+    }
+    .wrap.task-sheet #verificationSection {
+      display: none;
+    }
+    .wrap.task-reservation #comparisonSection,
+    .wrap.task-reservation #syncFeatureSection {
+      display: none;
+    }
+    .wrap.task-audit #syncFeatureSection {
+      display: none;
+    }
+    .wrap.task-reservation #siteTableSection,
+    .wrap.task-reservation #sheetTableSection,
+    .wrap.task-audit #siteTableSection,
+    .wrap.task-audit #sheetTableSection {
+      display: none;
+    }
+    .wrap.task-reservation #reviewSection,
+    .wrap.task-audit #reviewSection {
+      display: none;
+    }
+    .wrap.task-reservation #verificationSection,
+    .wrap.task-audit #verificationSection,
+    .wrap.task-sheet #sheetTableSection {
+      display: grid;
+    }
+    .wrap.task-reservation .workspace-main-col,
+    .wrap.task-audit .workspace-main-col {
+      gap: 14px;
+    }
+    .workspace-main-col::-webkit-scrollbar,
+    .scope-drawer::-webkit-scrollbar,
+    .workspace-utility::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .workspace-main-col::-webkit-scrollbar-thumb,
+    .scope-drawer::-webkit-scrollbar-thumb,
+    .workspace-utility::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.7);
+      border-radius: 999px;
+    }
+    @media (max-width: 1280px) {
+      .panel {
+        min-width: 0;
+      }
+      .summary-primary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 1080px) {
+      .host-context-status {
+        display: none;
+      }
+    }
+    .workspace-shell {
+      display: grid;
+      gap: 12px;
+      min-height: 100%;
+      align-content: start;
+    }
+    .task-navigation {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 6px;
+      border: 1px solid rgba(221, 226, 237, 0.94);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.84);
+      box-shadow: 0 14px 36px -30px rgba(15, 23, 42, 0.32);
+    }
+    .task-nav-btn {
+      min-height: 40px;
+      border: 1px solid rgba(211, 217, 231, 0.95);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.98);
+      color: var(--text-sub);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+    }
+    .task-nav-btn:hover,
+    .task-nav-btn.is-active {
+      transform: translateY(-1px);
+      color: var(--text-main);
+      border-color: color-mix(in srgb, var(--c-primary) 36%, #cbd5e1 64%);
+      background: color-mix(in srgb, var(--c-primary) 9%, #ffffff 91%);
+    }
+    .workspace-shell-inner {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.86fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .secondary-surface {
+      min-height: auto;
+      overflow: hidden;
+      border: 1px solid rgba(221, 226, 237, 0.96);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.84);
+      box-shadow: 0 14px 36px -30px rgba(15, 23, 42, 0.32);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .secondary-tabs {
+      display: grid;
+      gap: 10px;
+      padding: 14px 14px 0;
+    }
+    .secondary-tab-group {
+      display: grid;
+      gap: 6px;
+    }
+    .secondary-tab-label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: var(--text-sub);
+      text-transform: uppercase;
+    }
+    .secondary-tab-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .secondary-tab {
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(211, 217, 231, 0.95);
+      background: rgba(255, 255, 255, 0.96);
+      color: var(--text-sub);
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+    }
+    .secondary-tab:hover,
+    .secondary-tab.is-active {
+      transform: translateY(-1px);
+      color: var(--text-main);
+      border-color: color-mix(in srgb, var(--c-primary) 34%, #cbd5e1 66%);
+      background: color-mix(in srgb, var(--c-primary) 10%, #ffffff 90%);
+    }
+    .secondary-panel-wrap {
+      padding: 12px 14px 14px;
+      display: grid;
+      gap: 12px;
+      overflow-y: auto;
+      min-height: 0;
+    }
+    .secondary-pane {
+      display: none;
+      gap: 12px;
+    }
+    .secondary-pane.is-active {
+      display: grid;
+    }
+    .secondary-surface .scope-drawer,
+    .secondary-surface .workspace-utility,
+    .secondary-surface .verification-section,
+    .secondary-surface .result-section {
+      box-shadow: none;
+      background: rgba(255, 255, 255, 0.92);
+    }
+    .surface-panel.hidden {
+      display: none !important;
+    }
+    .secondary-footnote {
+      font-size: 11px;
+      color: var(--text-sub);
+      line-height: 1.5;
+    }
+    .utility-debug-panel {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid rgba(221, 226, 237, 0.94);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.92);
+    }
+    .utility-debug-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .utility-debug-actions .btn {
+      flex: 1 1 140px;
+    }
+    .wrap.secondary-evidence #secondarySurface {
+      border-color: color-mix(in srgb, var(--c-primary) 24%, rgba(221, 226, 237, 0.96) 76%);
+    }
+    .wrap.secondary-utility #secondarySurface {
+      border-color: rgba(200, 208, 226, 0.96);
+    }
+    .wrap.fit-focus .panel {
+      --sidebar-width: min(42vw, 44vw);
+    }
+    .wrap.fit-standard .panel {
+      --sidebar-width: min(36vw, 44vw);
+    }
+    .wrap.fit-compact .panel {
+      --sidebar-width: min(32vw, 44vw);
+    }
+    .wrap.width-collapsed .panel {
+      --sidebar-width: min(32vw, 44vw);
+    }
+    .wrap.width-standard .panel {
+      --sidebar-width: min(36vw, 44vw);
+    }
+    .wrap.width-expanded .panel {
+      --sidebar-width: min(42vw, 44vw);
+    }
+    @media (max-width: 1280px) {
+      .workspace-shell-inner {
+        grid-template-columns: 1fr;
+      }
+      .secondary-surface {
+        min-height: 0;
+      }
+      .task-guide-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 820px) {
+      .host-context-bar {
+        width: calc(100vw - 24px);
+        left: 12px;
+        right: auto;
+        top: 12px;
+      }
+      .panel {
+        top: 68px;
+        right: 8px;
+        left: auto;
+        width: calc(100vw - 16px);
+        height: calc(100vh - 136px);
+        min-width: 0;
+      }
+      .header {
+        flex-direction: column;
+      }
+      .workspace-header-top {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .workspace-mode-stack {
+        width: 100%;
+        justify-items: stretch;
+      }
+      .mode-row {
+        justify-content: space-between;
+      }
+      .header-actions {
+        width: 100%;
+        justify-content: flex-end;
+      }
+      .body {
+        padding: 12px 14px 14px;
+      }
+      .task-navigation {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  `;
+
+  const SHELL_HTML = `
+    <div id="wrap" class="wrap fit-auto fit-standard width-standard sidebar-docked">
+      <div id="hostContextBar" class="host-context-bar">
+        <div class="host-context-main">
+          <div id="contextHostBadge" class="host-badge">HOST</div>
+          <div class="host-context-copy">
+            <div id="siteLabel" class="site"></div>
+            <div id="contextEntityName" class="context-entity">컨텍스트 확인 중</div>
+          </div>
+        </div>
+        <div class="host-context-status">
+          <span id="contextConnectionStatus" class="context-pill">연결 확인</span>
+          <span id="contextPermissionState" class="context-pill subtle">읽기 전용</span>
+          <div id="contextLastRun" class="context-last">조회 - / 비교 - / 반영 -</div>
+        </div>
+      </div>
+
       <div id="backdrop" class="backdrop hidden"></div>
+
       <section id="panel" class="panel hidden">
         <div id="panelHeader" class="header">
-          <div class="header-main">
-            <div class="title-eyebrow">Floating Tool</div>
+          <div class="header-main workspace-header-main">
+            <div class="workspace-header-top">
+              <span id="workspaceTaskPill" class="workspace-task-pill">재고 조회 / 비교</span>
+              <div class="workspace-mode-stack">
+                <div class="mode-row">
+                  <span class="mode-label">Density</span>
+                  <div class="fit-switch" aria-label="Density mode">
+                    <button id="fitCompactBtn" class="fit-btn" type="button">Compact</button>
+                    <button id="fitAutoBtn" class="fit-btn is-active" type="button">Standard</button>
+                    <button id="fitFocusBtn" class="fit-btn" type="button">Focus</button>
+                  </div>
+                </div>
+                <div class="mode-row">
+                  <span class="mode-label">Width</span>
+                  <div class="fit-switch" aria-label="Width mode">
+                    <button id="widthCollapsedBtn" class="fit-btn" type="button">Collapsed</button>
+                    <button id="widthStandardBtn" class="fit-btn is-active" type="button">Standard</button>
+                    <button id="widthExpandedBtn" class="fit-btn" type="button">Expanded</button>
+                  </div>
+                </div>
+                <div class="mode-row-help">Expanded는 Focus에서만 활성화됩니다. Task와 Evidence / Utility를 함께 볼 때만 폭을 넓힙니다.</div>
+              </div>
+            </div>
             <div class="title-row">
               <div id="panelTitle" class="title">${TEXT.toggle}</div>
               <span id="headerStatusPill" class="header-status-pill">정상</span>
             </div>
-            <div class="title-sub">페이지를 가리지 않는 읽기 전용 조회/검토 패널</div>
+            <div id="workspaceContextSummary" class="title-sub">현재 단계와 다음 행동을 확인하세요.</div>
           </div>
-          <button id="close" class="close">${TEXT.close}</button>
+          <div class="header-actions">
+            <button id="scopeToggleBtn" class="btn gray" type="button">범위</button>
+            <button id="toggleConfig" class="btn secondary" type="button" title="Utility">Utility</button>
+            <button id="close" class="close" type="button">${TEXT.close}</button>
+          </div>
         </div>
+
         <div class="body">
-          <div id="siteLabel" class="site"></div>
-          <div class="flow" aria-label="${TEXT.flowTitle}">
-            <div class="flow-title">${TEXT.flowTitle}</div>
-            <div class="flow-steps" id="flowSteps">
-              <div id="flowStepPeriod" class="flow-step">${TEXT.flowStepPeriod}</div>
-              <div id="flowStepLoad" class="flow-step">${TEXT.flowStepLoad}</div>
-              <div id="flowStepReview" class="flow-step">${TEXT.flowStepReview}</div>
-              <div id="flowStepApply" class="flow-step">${TEXT.flowStepApply}</div>
-            </div>
-          </div>
-          <div id="panelQuickSwitch" class="panel-quick-switch" aria-label="${TEXT.quickSwitchTitle}">
-            <button id="quickSwitchMain" type="button" class="quick-switch-btn is-active" data-target="main" aria-pressed="true">${TEXT.quickSwitchMain}</button>
-            <button id="quickSwitchSync" type="button" class="quick-switch-btn" data-target="sync" aria-pressed="false">${TEXT.quickSwitchSync}</button>
-            <button id="quickSwitchSettings" type="button" class="quick-switch-btn" data-target="settings" aria-pressed="false">${TEXT.quickSwitchSettings}</button>
-            <button id="quickSwitchOps" type="button" class="quick-switch-btn" data-target="ops" aria-pressed="false">${TEXT.quickSwitchOps}</button>
-          </div>
-          <div id="onboardingBox" class="onboarding hidden">
-            <div class="onboarding-title">${TEXT.onboardingTitle}</div>
-            <div class="onboarding-items">
-              <div id="onboardingSheetItem" class="onboarding-item"></div>
-              <div id="onboardingAuthItem" class="onboarding-item"></div>
-              <div id="onboardingRangeItem" class="onboarding-item"></div>
-              <div id="onboardingTestItem" class="onboarding-item"></div>
-            </div>
-            <div class="actions">
-              <button id="hideOnboardingBtn" class="btn secondary">${TEXT.onboardingHide}</button>
-            </div>
-          </div>
+          <div class="workspace-shell">
+            <nav id="taskNavigation" class="task-navigation" aria-label="Task Navigation">
+              <button id="taskNavInventoryBtn" class="task-nav-btn is-active" type="button">Inventory</button>
+              <button id="taskNavReservationBtn" class="task-nav-btn" type="button">Reservation Validation</button>
+              <button id="taskNavSheetBtn" class="task-nav-btn" type="button">Sheet Mapping</button>
+              <button id="taskNavAuditBtn" class="task-nav-btn" type="button">OTA/PMS Audit</button>
+            </nav>
 
-          <div class="calendar">
-            <div class="cal-head">
-              <div id="monthLabel" class="cal-title"></div>
-              <div class="cal-nav">
-                <button id="prevMonth" class="cal-btn">&#8249;</button>
-                <button id="nextMonth" class="cal-btn">&#8250;</button>
-              </div>
-            </div>
-            <div class="week">
-              <span>${TEXT.daySun}</span><span>${TEXT.dayMon}</span><span>${TEXT.dayTue}</span><span>${TEXT.dayWed}</span><span>${TEXT.dayThu}</span><span>${TEXT.dayFri}</span><span>${TEXT.daySat}</span>
-            </div>
-            <div id="dateGrid" class="dates"></div>
-            <div class="picked">
-              <div id="pickedText">${TEXT.selectedNone}</div>
-              <button id="resetDate" class="reset">${TEXT.resetDate}</button>
-            </div>
-            <div class="quick-presets">
-              <button id="presetRange2d" class="preset-btn">${TEXT.quickRange2d}</button>
-              <button id="presetRange7d" class="preset-btn">${TEXT.quickRange7d}</button>
-              <button id="presetRangeMonth" class="preset-btn">${TEXT.quickRangeMonth}</button>
-            </div>
-          </div>
-
-          <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true"><span class="status-k">INFO</span><span class="status-msg">${TEXT.statusIdle}</span></div>
-          <div id="readOnlyNotice" class="range-hint read-only-note">읽기 전용 모드: 시트/OTA 쓰기 없이 조회와 비교만 수행합니다.</div>
-
-          <div class="summary">
-            <div class="card kpi-rows">${TEXT.sumRows}<b id="sumRows">0</b></div>
-            <div class="card kpi-open">${TEXT.sumOpen}<b id="sumOpen">0</b></div>
-            <div class="card kpi-closed">${TEXT.sumClosed}<b id="sumClosed">0</b></div>
-            <div class="card kpi-period">${TEXT.sumPeriod}<b id="sumPeriod">${TEXT.noPeriod}</b></div>
-          </div>
-          <div id="userOpsSummary" class="summary user-summary">
-            <div class="card kpi-sync">${TEXT.userSyncState}<b id="userSyncState">대기</b></div>
-            <div class="card kpi-mismatch">${TEXT.userMismatchSummary}<b id="userMismatchCount">0</b></div>
-            <div class="card kpi-pms">${TEXT.userPmsSummary}<b id="userPmsStatus">미조회</b></div>
-            <div class="card kpi-load">${TEXT.userLoadSummary}<b id="userLoadState">대기</b></div>
-          </div>
-          <div id="userOpsHint" class="range-hint user-hint">${TEXT.userHintIdle}</div>
-          <div class="actions wide">
-            <button id="loadAll" class="btn has-inline-spinner">${TEXT.loadAll}</button>
-          </div>
-
-          <div class="actions">
-            <button id="load" class="btn has-inline-spinner">${TEXT.loadSite}</button>
-            <button id="loadSheet" class="btn has-inline-spinner">${TEXT.loadSheet}</button>
-            <button id="syncFeatureToggle" class="btn gray hidden"></button>
-          </div>
-
-          <div id="severityBanner" class="severity-banner hidden" role="alert" aria-live="assertive" aria-atomic="true">
-            <span id="severityPill" class="severity-pill">${TEXT.severityApi}</span>
-            <span id="severityText" class="severity-text">-</span>
-          </div>
-          <div class="review-shell">
-            <div class="section-head review-head">
-              <div class="section-title">${TEXT.reviewTitle}</div>
-              <div id="reviewMismatchCount" class="review-count">0건</div>
-            </div>
-            <div class="review-direction">${TEXT.reviewDirectionGuide}</div>
-            <div id="mismatchReviewList" class="review-list">
-              <div class="review-empty">${TEXT.reviewEmpty}</div>
-            </div>
-          </div>
-
-          <div id="syncFeatureSection" class="sync-feature-section">
-            <div id="syncApprovalWrap" class="sync-approval hidden">
-              <div class="sync-approval-title">${TEXT.syncApproveTitle}</div>
-              <div class="sync-approval-summary">
-                <div class="sync-approval-item">${TEXT.syncApproveMismatch}<b id="syncApprovalMismatch">0</b></div>
-                <div class="sync-approval-item">${TEXT.syncApproveClosed}<b id="syncApprovalClosed">0</b></div>
-                <div class="sync-approval-item">${TEXT.syncApprovePeriod}<b id="syncApprovalPeriod">${TEXT.noPeriod}</b></div>
-              </div>
-              <label class="sync-approval-check">
-                <input id="syncApprovalCheck" type="checkbox" />
-                <span>${TEXT.syncApproveConfirmLabel}</span>
-              </label>
-            </div>
-            <div class="actions sync-cta">
-              <button id="toggleConfig" class="btn secondary" title="${TEXT.settingsOpen}">⚙</button>
-              <button id="syncBtn" class="btn gray">
-                <span id="syncBtnSpinner" class="btn-spinner hidden" aria-hidden="true"></span>
-                <span id="syncBtnLabel" class="btn-label"></span>
-              </button>
-            </div>
-
-            <div id="syncResultWrap" class="result-wrap hidden">
-              <div class="sheet-title">${TEXT.syncResult}</div>
-              <div class="summary">
-                <div class="card">${TEXT.resultTotal}<b id="resTotal">0</b></div>
-                <div class="card">${TEXT.resultSuccess}<b id="resSuccess">0</b></div>
-                <div class="card">${TEXT.resultFail}<b id="resFail">0</b></div>
-                <div class="card">${TEXT.resultClosed}<b id="resClosed">0</b></div>
-              </div>
-            </div>
-            <div id="sheetBox" class="sheet hidden">
-              <div class="sheet-title">${TEXT.settingsOpen}</div>
-              <div class="sheet-grid">
-                <label class="field full">${TEXT.syncSheet}<input id="cfgSpreadsheet" type="text" /></label>
-                <label class="field">${TEXT.syncSheetName}<input id="cfgSheetName" type="text" /></label>
-                <label class="field">${TEXT.syncStartRow}<input id="cfgStartRow" type="number" min="1" /></label>
-                <label class="field">${TEXT.syncYear}<input id="cfgYear" type="number" min="2000" max="2100" /></label>
-                <label class="field">${TEXT.syncStockMode}
-                  <select id="cfgStockMode">
-                    <option value="available">${TEXT.syncModeAvailable}</option>
-                    <option value="current">${TEXT.syncModeCurrent}</option>
-                  </select>
-                </label>
-                <label class="field">${TEXT.scanMode}
-                  <select id="cfgScanMode">
-                    <option value="auto">${TEXT.scanModeAuto}</option>
-                    <option value="manual">${TEXT.scanModeManual}</option>
-                  </select>
-                </label>
-                <label class="field">${TEXT.scanAllowPkgRows}<input id="cfgAllowPkgInventoryRows" type="checkbox" /></label>
-                <label class="field">날짜/요일 기준 행(날짜행)<input id="cfgDateAnchorRow" type="number" min="1" /></label>
-                <label class="field full">수동 범위(한 박스 입력)
-                  <textarea id="cfgManualRanges" placeholder="ROOM U=67-86,D=87-106,G=107-107&#10;STATION U=115-115,D=117-117,G=119-119&#10;NAVER U=120-120,D=121-121,G=122-122"></textarea>
-                  <div class="range-tools">
-                    <button id="cfgManualRangeSampleBtn" type="button" class="btn secondary">현재 스캔값 채우기</button>
+            <div class="workspace-shell-inner">
+              <main id="inventorySection" class="workspace-main-col">
+                <section id="flowGateCard" class="flow-gate hidden">
+                  <div class="task-guide-head">
+                    <div id="flowGateKicker" class="task-guide-kicker">Start Gate</div>
+                    <div id="flowGateTitle" class="task-guide-title">세션 확인 중</div>
                   </div>
-                  <div id="cfgManualRangesPreview" class="range-hint">입력 미리보기: -</div>
-                </label>
-                <label class="field">${TEXT.syncClientId}<input id="cfgClientId" type="text" /></label>
-                <label class="field">${TEXT.syncClientSecret}<input id="cfgClientSecret" type="password" /></label>
-                <label class="field">${TEXT.syncProviderApply}
-                  <input id="cfgProviderApply" type="checkbox" />
-                  <div id="cfgProviderApplyHint" class="range-hint">-</div>
-                </label>
-                <label class="field full">${TEXT.syncAccessToken}<textarea id="cfgAccessToken"></textarea></label>
-                <label class="field full">${TEXT.syncRefreshToken}<textarea id="cfgRefreshToken"></textarea></label>
-                <label class="field">${TEXT.syncPmsPreset}
-                  <select id="cfgPmsPresetKey">
-                    <option value="">${TEXT.syncPmsPresetCustom}</option>
-                    <option value="wings-global-guest-list">${TEXT.syncPmsPresetGlobalGuestList}</option>
-                    <option value="wings-reservation-list">${TEXT.syncPmsPresetReservationList}</option>
-                  </select>
-                </label>
-                <label class="field">${TEXT.syncPmsPropertyNo}<input id="cfgPmsPropertyNo" type="text" placeholder="지점 코드" /></label>
-                <label class="field">${TEXT.syncPmsBsnsCode}<input id="cfgPmsBsnsCode" type="text" placeholder="사업장 코드" /></label>
-                <label class="field">${TEXT.syncPmsPageId}<input id="cfgPmsPageId" type="text" placeholder="IR04_0100X_V03" /></label>
-                <label class="field">${TEXT.syncPmsPageSize}<input id="cfgPmsPageSize" type="number" min="1" step="1" placeholder="300" /></label>
-                <label class="field full">Wings 프리셋 미리보기
-                  <div id="cfgPmsPresetPreview" class="range-hint">직접 입력 모드</div>
-                  <div class="range-tools">
-                    <button id="cfgPmsPresetApplyBtn" type="button" class="btn secondary">${TEXT.syncPmsPresetApply}</button>
+                  <div id="flowGateSummary" class="task-guide-summary">현재 호스트와 연동 준비 상태를 확인합니다.</div>
+                  <div id="flowGateSupportList" class="policy-grid"></div>
+                  <div class="task-guide-actions">
+                    <button id="flowGateUtilityBtn" class="btn secondary" type="button">Utility 열기</button>
+                    <button id="flowGateRefreshBtn" class="btn gray" type="button">상태 다시 확인</button>
                   </div>
-                </label>
-                <label class="field full">${TEXT.syncPmsReservationUrl}<input id="cfgPmsReservationUrl" type="text" placeholder="https://.../reservation/list?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD" /></label>
-                <label class="field full">${TEXT.syncPmsHarInput}
-                  <textarea id="cfgPmsHarInput" placeholder='{"log":{"entries":[{"request":{"method":"POST","url":"https://pms.sanhait.com/...","headers":[{"name":"Cookie","value":"..."}],"postData":{"mimeType":"application/x-www-form-urlencoded","text":"..."}}}]}}'></textarea>
-                  <div class="range-tools">
-                    <button id="cfgPmsHarConvertBtn" type="button" class="btn secondary">${TEXT.syncPmsHarConvert}</button>
-                  </div>
-                </label>
-                <label class="field full">${TEXT.syncPmsAuthBundle}
-                  <textarea id="cfgPmsAuthBundle" placeholder='{"method":"POST","contentType":"form","requestBody":"BSNS_CODE=<code>&PROPERTY_NO=<code>&ARRV_DATE_F=<start>&ARRV_DATE_T=<end>","authorization":"Bearer ...","headers":{"x-requested-with":"XMLHttpRequest"},"cookieHeader":"a=1; b=2"}'></textarea>
-                </label>
-                <label class="field full">${TEXT.syncAuthBundle}
-                  <textarea id="cfgAuthBundle" placeholder='{"providerType":"naver-partner","cookies":[...],"csrfToken":"...","role":"OWNER"}'></textarea>
-                  <div class="range-tools">
-                    <button id="captureAuthBundleBtn" type="button" class="btn secondary">${TEXT.syncAuthBundleCapture}</button>
-                    <button id="copyAuthBundleBtn" type="button" class="btn gray">${TEXT.syncAuthBundleCopy}</button>
-                  </div>
-                </label>
-              </div>
-              <div class="actions">
-                <button id="saveSyncCfg" class="btn secondary">${TEXT.syncSaveCfg}</button>
-                <button id="toggleSecretsBtn" class="btn gray">${TEXT.secretMaskOn}</button>
-              </div>
-              <div class="ops-shell">
-                <div class="section-head ops-head">
-                  <div class="section-title">${TEXT.opsSectionTitle}</div>
-                  <div class="actions">
-                    <button id="toggleOpsSectionBtn" class="btn gray">${TEXT.opsSectionShow}</button>
+                </section>
+
+                <div id="workspaceFlow" class="flow" aria-label="${TEXT.flowTitle}">
+                  <div class="flow-title">${TEXT.flowTitle}</div>
+                  <div class="flow-steps" id="flowSteps">
+                    <div id="flowStepPeriod" class="flow-step">${TEXT.flowStepPeriod}</div>
+                    <div id="flowStepLoad" class="flow-step">${TEXT.flowStepLoad}</div>
+                    <div id="flowStepReview" class="flow-step">${TEXT.flowStepReview}</div>
+                    <div id="flowStepApply" class="flow-step">${TEXT.flowStepApply}</div>
                   </div>
                 </div>
-                <div id="opsSection" class="ops-section hidden">
-                  <div id="opsPolicySummary" class="range-hint">${TEXT.opsPolicyDefault}</div>
-                  <div id="opsRetentionSummary" class="range-hint">${TEXT.opsRetentionDefault}</div>
-                  <div id="opsEvidenceSummary" class="range-hint">${TEXT.opsEvidenceDefault}</div>
 
-                  <div class="section-head">
-                    <div class="section-title with-icon section-site-title">${TEXT.siteInventory}</div>
-                    <div class="actions">
-                      <button id="applyCorrectionSiteBtn" class="btn secondary">보정 미리보기</button>
-                      <button id="copySite" class="btn secondary">${TEXT.copySite}</button>
+                <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true"><span class="status-k">INFO</span><span class="status-msg">${TEXT.statusIdle}</span></div>
+                <div id="readOnlyNotice" class="range-hint read-only-note">읽기 전용 모드: 시트/OTA 쓰기 없이 조회와 비교만 수행합니다.</div>
+
+                <div id="primarySummary" class="summary summary-primary">
+                  <div class="card kpi-rows">${TEXT.sumRows}<b id="sumRows">0</b></div>
+                  <div class="card kpi-open">${TEXT.sumOpen}<b id="sumOpen">0</b></div>
+                  <div class="card kpi-closed">${TEXT.sumClosed}<b id="sumClosed">0</b></div>
+                  <div class="card kpi-period">${TEXT.sumPeriod}<b id="sumPeriod">${TEXT.noPeriod}</b></div>
+                </div>
+                <div id="userOpsSummary" class="summary user-summary">
+                  <div class="card kpi-sync">${TEXT.userSyncState}<b id="userSyncState">대기</b></div>
+                  <div class="card kpi-mismatch">${TEXT.userMismatchSummary}<b id="userMismatchCount">0</b></div>
+                  <div class="card kpi-pms">${TEXT.userPmsSummary}<b id="userPmsStatus">미조회</b></div>
+                  <div class="card kpi-load">${TEXT.userLoadSummary}<b id="userLoadState">대기</b></div>
+                </div>
+                <div id="userOpsHint" class="range-hint user-hint">${TEXT.userHintIdle}</div>
+
+                <section id="taskGuideCard" class="task-guide-card">
+                  <div class="task-guide-head">
+                    <div class="task-guide-kicker">Task Focus</div>
+                    <div id="taskGuideTitle" class="task-guide-title">Inventory</div>
+                  </div>
+                  <div id="taskGuideSummary" class="task-guide-summary">현재 task의 목적과 다음 행동을 정리합니다.</div>
+                  <div class="task-guide-grid">
+                    <div class="task-guide-item">
+                      <div class="k">Now</div>
+                      <div id="taskGuideAction" class="v">범위 선택</div>
+                    </div>
+                    <div class="task-guide-item">
+                      <div class="k">Primary View</div>
+                      <div id="taskGuidePrimaryView" class="v">Task View</div>
+                    </div>
+                    <div class="task-guide-item">
+                      <div class="k">Evidence</div>
+                      <div id="taskGuideEvidence" class="v">Evidence</div>
+                    </div>
+                    <div class="task-guide-item">
+                      <div class="k">Utility</div>
+                      <div id="taskGuideUtility" class="v">Utility</div>
                     </div>
                   </div>
-                  <div class="copy-wrap inventory">
-                    <table>
-                      <thead id="siteHead"></thead>
-                      <tbody id="siteBody"></tbody>
-                    </table>
+                  <div class="task-guide-actions">
+                    <button id="taskGuideEvidenceBtn" class="btn secondary" type="button">Evidence 열기</button>
+                    <button id="taskGuideUtilityBtn" class="btn gray" type="button">Utility 열기</button>
                   </div>
+                </section>
 
-                  <div class="section-head">
-                    <div class="section-title with-icon section-sheet-title">${TEXT.sheetInventory}</div>
-                    <div class="actions">
-                      <button id="applyCorrectionBtn" class="btn secondary">보정 미리보기</button>
-                      <button id="copySheet" class="btn secondary">${TEXT.copySheet}</button>
+                <div id="severityBanner" class="severity-banner hidden" role="alert" aria-live="assertive" aria-atomic="true">
+                  <span id="severityPill" class="severity-pill">${TEXT.severityApi}</span>
+                  <span id="severityText" class="severity-text">-</span>
+                </div>
+
+                <div id="workspaceActionPrimary" class="actions wide">
+                  <button id="loadAll" class="btn has-inline-spinner">${TEXT.loadAll}</button>
+                </div>
+                <div id="workspaceActionSecondary" class="actions">
+                  <button id="load" class="btn has-inline-spinner">${TEXT.loadSite}</button>
+                  <button id="loadSheet" class="btn has-inline-spinner">${TEXT.loadSheet}</button>
+                  <button id="syncFeatureToggle" class="btn gray hidden"></button>
+                </div>
+
+                <section id="reviewSection" class="review-shell">
+                  <div class="section-head review-head">
+                    <div class="section-title">${TEXT.reviewTitle}</div>
+                    <div id="reviewMismatchCount" class="review-count">0건</div>
+                  </div>
+                  <div class="review-direction">${TEXT.reviewDirectionGuide}</div>
+                  <div id="mismatchReviewList" class="review-list">
+                    <div class="review-empty">${TEXT.reviewEmpty}</div>
+                  </div>
+                </section>
+
+                <section id="comparisonSection" class="comparison-grid">
+                  <div id="siteTableSection" class="table-surface">
+                    <div class="section-head">
+                      <div class="section-title with-icon section-site-title">${TEXT.siteInventory}</div>
+                      <div class="actions">
+                        <button id="applyCorrectionSiteBtn" class="btn secondary">보정 미리보기</button>
+                        <button id="copySite" class="btn secondary">${TEXT.copySite}</button>
+                      </div>
                     </div>
-                  </div>
-                  <div class="copy-wrap inventory">
-                    <table>
-                      <thead id="sheetHead"></thead>
-                      <tbody id="sheetBody"></tbody>
-                    </table>
-                  </div>
-                  <div id="correctionBadge" class="range-hint hidden">보정 이력
-- 적용 이력 없음</div>
-                  <div id="sheetInsightWrap" class="insight-wrap hidden">
-                    <div id="insightTitle" class="insight-title">시트 객실별 예약 카운트</div>
-                    <div class="copy-wrap inventory insight">
+                    <div class="copy-wrap inventory">
                       <table>
-                        <thead id="insightHead"></thead>
-                        <tbody id="insightBody"></tbody>
+                        <thead id="siteHead"></thead>
+                        <tbody id="siteBody"></tbody>
                       </table>
                     </div>
-                    <div id="correctionIssueHint" class="range-hint insight-note">자동보정 이슈 요약
+                  </div>
+
+                  <div id="sheetTableSection" class="table-surface">
+                    <div class="section-head">
+                      <div class="section-title with-icon section-sheet-title">${TEXT.sheetInventory}</div>
+                      <div class="actions">
+                        <button id="applyCorrectionBtn" class="btn secondary">보정 미리보기</button>
+                        <button id="copySheet" class="btn secondary">${TEXT.copySheet}</button>
+                      </div>
+                    </div>
+                    <div class="copy-wrap inventory">
+                      <table>
+                        <thead id="sheetHead"></thead>
+                        <tbody id="sheetBody"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </section>
+
+                <div id="correctionBadge" class="range-hint hidden">보정 이력
+- 적용 이력 없음</div>
+
+                <div id="sheetInsightWrap" class="insight-wrap hidden">
+                  <div id="insightTitle" class="insight-title">시트 객실별 예약 카운트</div>
+                  <div class="copy-wrap inventory insight">
+                    <table>
+                      <thead id="insightHead"></thead>
+                      <tbody id="insightBody"></tbody>
+                    </table>
+                  </div>
+                  <div id="correctionIssueHint" class="range-hint insight-note">자동보정 이슈 요약
 - 상태: 대기</div>
+                </div>
+
+                <div id="syncFeatureSection" class="sync-feature-section">
+                  <div id="syncApprovalWrap" class="sync-approval hidden">
+                    <div class="sync-approval-title">${TEXT.syncApproveTitle}</div>
+                    <div class="sync-approval-summary">
+                      <div class="approval-kpi">
+                        <div class="k">${TEXT.syncApproveMismatch}</div>
+                        <div class="v" id="syncApprovalMismatch">0</div>
+                      </div>
+                      <div class="approval-kpi">
+                        <div class="k">${TEXT.syncApproveClosed}</div>
+                        <div class="v" id="syncApprovalClosed">0</div>
+                      </div>
+                      <div class="approval-kpi span-2">
+                        <div class="k">${TEXT.syncApprovePeriod}</div>
+                        <div class="v" id="syncApprovalPeriod">${TEXT.noPeriod}</div>
+                      </div>
+                    </div>
+                    <label class="sync-approval-check"><input id="syncApprovalCheck" type="checkbox" /> ${TEXT.syncApproveConfirmLabel}</label>
                   </div>
 
-                  <div id="verifyNote" class="verify-note hidden"></div>
-                  <div id="verifyIssueWrap" class="copy-wrap error-wrap hidden">
-                    <table class="result-table">
-                      <thead id="verifyIssueHead"></thead>
-                      <tbody id="verifyIssueBody"></tbody>
-                    </table>
+                  <div class="actions sync-cta">
+                    <button id="syncBtn" class="btn gray">
+                      <span id="syncBtnSpinner" class="btn-spinner hidden" aria-hidden="true"></span>
+                      <span id="syncBtnLabel" class="btn-label"></span>
+                    </button>
                   </div>
+                </div>
+              </main>
 
-                  <div id="syncBlockWrap" class="copy-wrap error-wrap hidden">
-                    <div class="debug-head">${TEXT.syncBlockedTitle}</div>
-                    <table class="result-table">
-                      <thead id="syncBlockHead"></thead>
-                      <tbody id="syncBlockBody"></tbody>
-                    </table>
+              <aside id="secondarySurface" class="secondary-surface">
+                <div class="secondary-tabs">
+                  <div class="secondary-tab-group">
+                    <div class="secondary-tab-label">Evidence</div>
+                    <div class="secondary-tab-row">
+                      <button id="evidenceResultTabBtn" class="secondary-tab is-active" type="button">Result</button>
+                      <button id="evidenceBlockingTabBtn" class="secondary-tab" type="button">Blocking</button>
+                      <button id="evidenceValidationTabBtn" class="secondary-tab" type="button">Validation Basis</button>
+                      <button id="evidenceTraceTabBtn" class="secondary-tab" type="button">Trace / Log</button>
+                      <button id="evidenceExportTabBtn" class="secondary-tab" type="button">Export</button>
+                    </div>
                   </div>
-                  <div class="actions">
-                    <button id="toggleErrorBtn" class="btn gray">${TEXT.errorToggle} (0)</button>
-                  </div>
-                  <div id="errorWrap" class="copy-wrap error-wrap hidden">
-                    <table class="result-table">
-                      <thead id="errorHead"></thead>
-                      <tbody id="errorBody"></tbody>
-                    </table>
-                  </div>
-
-                  <div class="actions">
-                    <button id="exportGoldenSetBtn" class="btn secondary">${TEXT.goldenSetExport}</button>
-                    <button id="exportTraceJson" class="btn secondary">${TEXT.traceExportJson}</button>
-                    <button id="exportTraceCsv" class="btn secondary">${TEXT.traceExportCsv}</button>
-                    <button id="downloadCorrectionDiffBtn" class="btn secondary">보정 diff CSV</button>
-                    <button id="exportUnknownColorBtn" class="btn secondary">미인식 색상 CSV</button>
-                    <button id="toggleDebugBtn" class="btn gray">${TEXT.debugToggle} (0)</button>
-                    <button id="clearRuntimeBtn" class="btn gray">${TEXT.clearRuntime}</button>
-                  </div>
-
-                  <div id="debugWrap" class="sheet hidden">
-                    <div class="sheet-title">${TEXT.debugTitle}</div>
-                    <div class="debug-head">${TEXT.debugScan}</div>
-                    <pre id="debugDiag" class="debug-pre">-</pre>
-                    <div class="debug-head">${TEXT.debugLog}</div>
-                    <div id="debugLog" class="debug-log">
-                      <div class="debug-log-empty">-</div>
+                  <div class="secondary-tab-group">
+                    <div class="secondary-tab-label">Utility</div>
+                    <div class="secondary-tab-row">
+                      <button id="utilityScopeTabBtn" class="secondary-tab" type="button">Scope</button>
+                      <button id="utilitySettingsTabBtn" class="secondary-tab" type="button">Settings</button>
+                      <button id="utilityOpsTabBtn" class="secondary-tab" type="button">Ops</button>
+                      <button id="utilityDebugTabBtn" class="secondary-tab" type="button">Debug</button>
                     </div>
                   </div>
                 </div>
-              </div>
+
+                <div class="secondary-panel-wrap">
+                  <div id="evidenceSurface" class="secondary-pane is-active">
+                    <section id="evidenceResultPanel" class="surface-panel result-section">
+                      <div id="syncResultWrap" class="result-wrap hidden">
+                        <div class="sheet-title">${TEXT.syncResult}</div>
+                        <div class="summary">
+                          <div class="card">${TEXT.resultTotal}<b id="resTotal">0</b></div>
+                          <div class="card">${TEXT.resultSuccess}<b id="resSuccess">0</b></div>
+                          <div class="card">${TEXT.resultFail}<b id="resFail">0</b></div>
+                          <div class="card">${TEXT.resultClosed}<b id="resClosed">0</b></div>
+                        </div>
+                      </div>
+                      <div class="secondary-footnote">작업 결과는 Evidence에서 확인하고 Task 흐름은 그대로 유지합니다.</div>
+                    </section>
+
+                    <section id="evidenceBlockingPanel" class="surface-panel result-section hidden">
+                      <div id="syncBlockWrap" class="copy-wrap error-wrap hidden">
+                        <div class="debug-head">${TEXT.syncBlockedTitle}</div>
+                        <table class="result-table">
+                          <thead id="syncBlockHead"></thead>
+                          <tbody id="syncBlockBody"></tbody>
+                        </table>
+                      </div>
+                      <div class="actions">
+                        <button id="toggleErrorBtn" class="btn gray">${TEXT.errorToggle} (0)</button>
+                      </div>
+                      <div id="errorWrap" class="copy-wrap error-wrap hidden">
+                        <table class="result-table">
+                          <thead id="errorHead"></thead>
+                          <tbody id="errorBody"></tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    <section id="evidenceValidationPanel" class="surface-panel verification-section hidden">
+                      <div id="verifyNote" class="verify-note hidden"></div>
+                      <div id="verifyIssueWrap" class="copy-wrap error-wrap hidden">
+                        <table class="result-table">
+                          <thead id="verifyIssueHead"></thead>
+                          <tbody id="verifyIssueBody"></tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    <section id="evidenceTracePanel" class="surface-panel result-section hidden">
+                      <div id="debugWrap" class="sheet">
+                        <div class="sheet-title">${TEXT.debugTitle}</div>
+                        <div class="debug-head">${TEXT.debugScan}</div>
+                        <pre id="debugDiag" class="debug-pre">-</pre>
+                        <div class="debug-head">${TEXT.debugLog}</div>
+                        <div id="debugLog" class="debug-log">
+                          <div class="debug-log-empty">-</div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section id="evidenceExportPanel" class="surface-panel result-section hidden">
+                      <div class="sheet-title">Export</div>
+                      <div class="actions">
+                        <button id="exportGoldenSetBtn" class="btn secondary">${TEXT.goldenSetExport}</button>
+                        <button id="exportTraceJson" class="btn secondary">${TEXT.traceExportJson}</button>
+                        <button id="exportTraceCsv" class="btn secondary">${TEXT.traceExportCsv}</button>
+                        <button id="downloadCorrectionDiffBtn" class="btn secondary">보정 diff CSV</button>
+                        <button id="exportUnknownColorBtn" class="btn secondary">미인식 색상 CSV</button>
+                      </div>
+                    </section>
+                  </div>
+
+                  <div id="utilitySurface" class="secondary-pane">
+                    <section id="utilityScopePanel" class="surface-panel hidden">
+                      <aside id="scopeDrawer" class="scope-drawer">
+                        <div id="supportPolicyBox" class="policy-box">
+                          <div class="policy-box-title">지원 정책</div>
+                          <div id="supportPolicySummary" class="range-hint">직접 시작 호스트와 보조 연동 상태를 확인합니다.</div>
+                          <div id="supportPolicyList" class="policy-grid"></div>
+                        </div>
+
+                        <div class="calendar">
+                          <div class="cal-head">
+                            <div id="monthLabel" class="cal-title"></div>
+                            <div class="cal-nav">
+                              <button id="prevMonth" class="cal-btn">&#8249;</button>
+                              <button id="nextMonth" class="cal-btn">&#8250;</button>
+                            </div>
+                          </div>
+                          <div class="week">
+                            <span>${TEXT.daySun}</span><span>${TEXT.dayMon}</span><span>${TEXT.dayTue}</span><span>${TEXT.dayWed}</span><span>${TEXT.dayThu}</span><span>${TEXT.dayFri}</span><span>${TEXT.daySat}</span>
+                          </div>
+                          <div id="dateGrid" class="dates"></div>
+                          <div class="picked">
+                            <div id="pickedText">${TEXT.selectedNone}</div>
+                            <button id="resetDate" class="reset">${TEXT.resetDate}</button>
+                          </div>
+                          <div class="quick-presets">
+                            <button id="presetRange2d" class="preset-btn">${TEXT.quickRange2d}</button>
+                            <button id="presetRange7d" class="preset-btn">${TEXT.quickRange7d}</button>
+                            <button id="presetRangeMonth" class="preset-btn">${TEXT.quickRangeMonth}</button>
+                          </div>
+                        </div>
+                      </aside>
+                    </section>
+
+                    <section id="utilitySettingsPanel" class="surface-panel hidden">
+                      <div id="sheetBox" class="sheet workspace-utility">
+                        <div class="sheet-title">${TEXT.settingsOpen}</div>
+                        <div class="sheet-grid">
+                          <label class="field full">${TEXT.syncSheet}<input id="cfgSpreadsheet" type="text" /></label>
+                          <label class="field">${TEXT.syncSheetName}<input id="cfgSheetName" type="text" /></label>
+                          <label class="field">${TEXT.syncStartRow}<input id="cfgStartRow" type="number" min="1" /></label>
+                          <label class="field">${TEXT.syncYear}<input id="cfgYear" type="number" min="2000" max="2100" /></label>
+                          <label class="field">${TEXT.syncStockMode}
+                            <select id="cfgStockMode">
+                              <option value="available">${TEXT.syncModeAvailable}</option>
+                              <option value="current">${TEXT.syncModeCurrent}</option>
+                            </select>
+                          </label>
+                          <label class="field">${TEXT.scanMode}
+                            <select id="cfgScanMode">
+                              <option value="auto">${TEXT.scanModeAuto}</option>
+                              <option value="manual">${TEXT.scanModeManual}</option>
+                            </select>
+                          </label>
+                          <label class="field">${TEXT.scanAllowPkgRows}<input id="cfgAllowPkgInventoryRows" type="checkbox" /></label>
+                          <label class="field">날짜/요일 기준 행(날짜행)<input id="cfgDateAnchorRow" type="number" min="1" /></label>
+                          <label class="field full">수동 범위(한 박스 입력)
+                            <textarea id="cfgManualRanges" placeholder="ROOM U=67-86,D=87-106,G=107-107&#10;STATION U=115-115,D=117-117,G=119-119&#10;NAVER U=120-120,D=121-121,G=122-122"></textarea>
+                            <div class="range-tools">
+                              <button id="cfgManualRangeSampleBtn" type="button" class="btn secondary">현재 스캔값 채우기</button>
+                            </div>
+                            <div id="cfgManualRangesPreview" class="range-hint">입력 미리보기: -</div>
+                          </label>
+                          <label class="field">${TEXT.syncClientId}<input id="cfgClientId" type="text" /></label>
+                          <label class="field">${TEXT.syncClientSecret}<input id="cfgClientSecret" type="password" /></label>
+                          <label class="field">${TEXT.syncProviderApply}
+                            <input id="cfgProviderApply" type="checkbox" />
+                            <div id="cfgProviderApplyHint" class="range-hint">-</div>
+                          </label>
+                          <label class="field full">${TEXT.syncAccessToken}<textarea id="cfgAccessToken"></textarea></label>
+                          <label class="field full">${TEXT.syncRefreshToken}<textarea id="cfgRefreshToken"></textarea></label>
+                          <label class="field">${TEXT.syncPmsPreset}
+                            <select id="cfgPmsPresetKey">
+                              <option value="">${TEXT.syncPmsPresetCustom}</option>
+                              <option value="wings-global-guest-list">${TEXT.syncPmsPresetGlobalGuestList}</option>
+                              <option value="wings-reservation-list">${TEXT.syncPmsPresetReservationList}</option>
+                            </select>
+                          </label>
+                          <label class="field">${TEXT.syncPmsPropertyNo}<input id="cfgPmsPropertyNo" type="text" placeholder="지점 코드" /></label>
+                          <label class="field">${TEXT.syncPmsBsnsCode}<input id="cfgPmsBsnsCode" type="text" placeholder="사업장 코드" /></label>
+                          <label class="field">${TEXT.syncPmsPageId}<input id="cfgPmsPageId" type="text" placeholder="IR04_0100X_V03" /></label>
+                          <label class="field">${TEXT.syncPmsPageSize}<input id="cfgPmsPageSize" type="number" min="1" step="1" placeholder="300" /></label>
+                          <label class="field full">Wings 프리셋 미리보기
+                            <div id="cfgPmsPresetPreview" class="range-hint">직접 입력 모드</div>
+                            <div class="range-tools">
+                              <button id="cfgPmsPresetApplyBtn" type="button" class="btn secondary">${TEXT.syncPmsPresetApply}</button>
+                            </div>
+                          </label>
+                          <label class="field full">${TEXT.syncPmsReservationUrl}<input id="cfgPmsReservationUrl" type="text" placeholder="https://.../reservation/list?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD" /></label>
+                          <label class="field full">${TEXT.syncPmsHarInput}
+                            <textarea id="cfgPmsHarInput" placeholder='{"log":{"entries":[{"request":{"method":"POST","url":"https://pms.sanhait.com/...","headers":[{"name":"Cookie","value":"..."}],"postData":{"mimeType":"application/x-www-form-urlencoded","text":"..."}}}]}}'></textarea>
+                            <div class="range-tools">
+                              <button id="cfgPmsHarConvertBtn" type="button" class="btn secondary">${TEXT.syncPmsHarConvert}</button>
+                            </div>
+                          </label>
+                          <label class="field full">${TEXT.syncPmsAuthBundle}
+                            <textarea id="cfgPmsAuthBundle" placeholder='{"method":"POST","contentType":"form","requestBody":"BSNS_CODE=<code>&PROPERTY_NO=<code>&ARRV_DATE_F=<start>&ARRV_DATE_T=<end>","authorization":"Bearer ...","headers":{"x-requested-with":"XMLHttpRequest"},"cookieHeader":"a=1; b=2"}'></textarea>
+                          </label>
+                          <label class="field full">${TEXT.syncAuthBundle}
+                            <textarea id="cfgAuthBundle" placeholder='{"providerType":"naver-partner","cookies":[...],"csrfToken":"...","role":"OWNER"}'></textarea>
+                            <div class="range-tools">
+                              <button id="captureAuthBundleBtn" type="button" class="btn secondary">${TEXT.syncAuthBundleCapture}</button>
+                              <button id="copyAuthBundleBtn" type="button" class="btn gray">${TEXT.syncAuthBundleCopy}</button>
+                            </div>
+                          </label>
+                        </div>
+                        <div class="actions">
+                          <button id="saveSyncCfg" class="btn secondary">${TEXT.syncSaveCfg}</button>
+                          <button id="toggleSecretsBtn" class="btn gray">${TEXT.secretMaskOn}</button>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section id="utilityOpsPanel" class="surface-panel hidden">
+                      <div id="opsSection" class="ops-section">
+                        <div class="sheet-title">${TEXT.opsSectionTitle}</div>
+                        <div id="opsPolicySummary" class="range-hint">${TEXT.opsPolicyDefault}</div>
+                        <div id="opsRetentionSummary" class="range-hint">${TEXT.opsRetentionDefault}</div>
+                        <div id="opsEvidenceSummary" class="range-hint">${TEXT.opsEvidenceDefault}</div>
+                      </div>
+                    </section>
+
+                    <section id="utilityDebugPanel" class="surface-panel hidden">
+                      <div class="utility-debug-panel">
+                        <div class="sheet-title">Debug Utility</div>
+                        <div class="secondary-footnote">작업 흐름을 끊지 않고 진단 도구만 제공합니다.</div>
+                        <div class="utility-debug-actions">
+                          <button id="toggleDebugBtn" class="btn gray">${TEXT.debugToggle} (0)</button>
+                          <button id="clearRuntimeBtn" class="btn gray">${TEXT.clearRuntime}</button>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </aside>
             </div>
           </div>
         </div>
@@ -2008,5 +2753,5 @@
     </div>
   `;
 
-  App.ui.panelTemplate = { STYLE, HTML };
+  App.ui.panelTemplate = { STYLE: SHELL_STYLE, HTML: SHELL_HTML };
 })();

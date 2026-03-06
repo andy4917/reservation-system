@@ -6,34 +6,39 @@ const SECURE_ENCRYPT_MESSAGE = "inventory.secure.encrypt";
 const SECURE_DECRYPT_MESSAGE = "inventory.secure.decrypt";
 const TOGGLE_PANEL_MESSAGE = "inventory.ui.togglePanel";
 const ACTION_DEFAULT_TITLE = "UHS 예약 통합관리";
-const ACTION_UNSUPPORTED_TITLE = "UHS 예약 통합관리: 네이버/스테이션 관리자 페이지에서만 열 수 있습니다.";
+const ACTION_UNSUPPORTED_TITLE = "UHS 예약 통합관리: 지원 시작 호스트에서만 시작할 수 있습니다.";
 const ACTION_FAILURE_TITLE = "UHS 예약 통합관리: 패널 열기에 실패했습니다. 페이지 새로고침 후 다시 시도하세요.";
-const SUPPORTED_HOST_RE = /^https:\/\/(?:partner\.booking\.naver\.com|admin\.admin-stationbyuhc\.com)\//i;
-const CONTENT_SCRIPT_FILES = [
-  "src/constants.js",
-  "src/domain.types.js",
-  "src/scan/normalize.js",
-  "src/pms/wings.adapter.js",
-  "src/engine/noteKey.js",
-  "src/domain/reservationPolicy.js",
-  "src/report/report.format.js",
-  "src/engine/rules.js",
-  "src/scan/blockBuilder.js",
-  "src/scan/aggregator.js",
-  "src/io/sheets.fetch.js",
-  "src/io/pms.fetch.js",
-  "src/report/validator.js",
-  "src/report/reservationVerification.js",
-  "src/ui/panelTemplate.js",
-  "src/ui/panelDom.js",
-  "src/ui/panelEvents.js",
-  "src/engine/scanEngine.js",
-  "src/sheetScanner.entry.js"
-];
+const MANIFEST = chrome.runtime?.getManifest?.() || {};
+const CONTENT_SCRIPT_CONFIGS = Array.isArray(MANIFEST.content_scripts) ? MANIFEST.content_scripts : [];
+const CONTENT_SCRIPT_FILES = [...new Set(CONTENT_SCRIPT_CONFIGS.flatMap((item) => item?.js || []))];
+const SUPPORTED_URL_MATCHERS = CONTENT_SCRIPT_CONFIGS.flatMap((item) => item?.matches || [])
+  .map((pattern) => matchPatternToRegExp(pattern))
+  .filter(Boolean);
 const SECURE_DB_NAME = "inventory-secure-store";
 const SECURE_DB_VERSION = 1;
 const SECURE_KEY_STORE = "keys";
 const SECURE_KEY_ID = "sync-config-aes-gcm-v1";
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[|\\{}()[\]^$+?.*]/g, "\\$&");
+}
+
+function matchPatternToRegExp(pattern) {
+  const text = String(pattern || "").trim();
+  if (!text) return null;
+  if (text === "<all_urls>") return /^https?:\/\/.+/i;
+  const match = text.match(/^(\*|https?|file|ftp):\/\/([^/]+)(\/.*)$/i);
+  if (!match) return null;
+  const [, schemeRaw, hostRaw, pathRaw] = match;
+  const scheme = schemeRaw === "*" ? "https?" : escapeRegExp(schemeRaw);
+  const host = hostRaw === "*"
+    ? "[^/]+"
+    : escapeRegExp(hostRaw)
+        .replace(/^\\\*\\\./, "(?:[^/]+\\.)?")
+        .replace(/\\\*/g, "[^/]*");
+  const path = escapeRegExp(pathRaw).replace(/\\\*/g, ".*");
+  return new RegExp(`^${scheme}:\/\/${host}${path}$`, "i");
+}
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -300,7 +305,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 function isSupportedActionUrl(url) {
-  return SUPPORTED_HOST_RE.test(String(url || ""));
+  const text = String(url || "");
+  return SUPPORTED_URL_MATCHERS.some((matcher) => matcher.test(text));
 }
 
 function hasNoReceiverError(message) {

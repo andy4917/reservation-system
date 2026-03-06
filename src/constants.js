@@ -18,7 +18,6 @@
     `${PMS_ORIGINS.NAVER_API}/`
   ];
   const PREF_KEY = "inventory_date_range_pref_v4";
-  const ONBOARDING_HIDE_KEY = "inventory_onboarding_hidden_v1";
   const SYNC_CFG_KEY = "inventory_sheet_sync_cfg_v1";
   const SYNC_APPLY_KEY = "inventory_sheet_apply_enabled_v1";
   const SYNC_FEATURE_KEY_LEGACY = "inventory_sheet_sync_enabled_v1";
@@ -67,7 +66,6 @@
   };
 
   const TEXT = {
-    toggleStart: "재고 관리 시작",
     toggle: "재고 관리",
     titleNaver: "네이버 재고 관리",
     titleStation: "스테이션 재고 관리",
@@ -130,7 +128,7 @@
     userMismatchSummary: "검토 건수",
     userPmsSummary: "PMS 예약",
     userLoadSummary: "조회 상태",
-    userHintIdle: "사용자 화면에서는 조작과 상태만 표시합니다. 상세 사유와 근거는 설정 > 운영 섹션에서 확인하세요.",
+    userHintIdle: "Task에는 조작과 상태만 표시합니다. 상세 사유와 근거는 Evidence / Utility에서 확인하세요.",
     noPeriod: "-",
     roomLabel: "객실",
     flowTitle: "작업 단계",
@@ -138,17 +136,6 @@
     flowStepLoad: "재고 조회",
     flowStepReview: "검토",
     flowStepApply: "리포트",
-    quickSwitchTitle: "빠른 전환",
-    quickSwitchMain: "메인",
-    quickSwitchSync: "동기화",
-    quickSwitchSettings: "설정",
-    quickSwitchOps: "운영",
-    onboardingTitle: "빠른 시작 체크리스트",
-    onboardingSheet: "시트 설정",
-    onboardingAuth: "인증 상태",
-    onboardingRange: "기간 선택",
-    onboardingTest: "테스트 조회",
-    onboardingHide: "숨기기",
     settingsOpen: "설정",
     settingsClose: "설정 닫기",
     opsSectionTitle: "운영 전용",
@@ -156,7 +143,7 @@
     opsSectionHide: "운영 정보 닫기",
     opsPolicyDefault: "정책 요약\n- 예약 상태는 ACTIVE / CANCELED만 사용합니다.\n- NOSHOW는 별도 상태로 쓰지 않고 ACTIVE + anomaly로만 집계합니다.\n- 수기 OTA(STATION/NAVER)는 PMS 누락 오류로 간주하지 않습니다.",
     opsRetentionDefault: "보존 데이터\n- 예약번호, OTA, 날짜, 박수, 객실, 전화 끝자리, 이름 정규화, 토큰 해시만 런타임에서 유지합니다.\n- 원문 note/remark/payload는 저장하지 않습니다.",
-    opsEvidenceDefault: "판정 근거\n- exact ID > 날짜/OTA/객실 blocking > 이름/전화/remark-note token soft-match 순서로 비교합니다.\n- 상세 행과 trace는 아래 운영 섹션에서만 확인할 수 있습니다.",
+    opsEvidenceDefault: "판정 근거\n- exact ID > 날짜/OTA/객실 blocking > 이름/전화/remark-note token soft-match 순서로 비교합니다.\n- 차단 상세는 Evidence > Blocking, 검증 근거는 Evidence > Validation Basis, trace는 Evidence > Trace / Log에서 확인할 수 있습니다.",
     scanSettings: "스캔 좌표 설정",
     scanOpen: "좌표 설정",
     scanClose: "좌표 설정 닫기",
@@ -433,7 +420,6 @@
     PMS_ORIGINS,
     NAVER_COOKIE_EXPORT_URLS,
     PREF_KEY,
-    ONBOARDING_HIDE_KEY,
     SYNC_CFG_KEY,
     SYNC_APPLY_KEY,
     SYNC_FEATURE_KEY_LEGACY,

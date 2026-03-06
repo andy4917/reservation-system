@@ -1,120 +1,289 @@
 # UI UX Handoff Input
 
 ## 1) Product Context
-- Product name: Reservation Inventory Board Extension
+- Product name: UHS Multi-Host Ops Shell
 - Platform: web
 - Primary locale: ko-KR
-- One-line value proposition: 운영자가 네이버/스테이션 재고와 구글 시트를 빠르게 비교하고, 안전하게 OTA 캘린더에 반영하도록 돕는 운영용 Chrome 확장.
+- One-line value proposition: 운영자가 네이버, 스테이션, 시트, PMS 어디에서 작업하든 동일한 작업 셸 안에서 조회, 비교, 검토, 승인, 반영, 결과 확인 흐름을 안정적으로 수행하도록 돕는 운영용 Chrome 확장.
+- Current product reality:
+  - Existing UI is not a real cross-host shell.
+  - It behaves like a temporary helper panel layered on top of OTA pages.
+  - Current implementation is injected only on Naver and Station pages; Sheet and PMS are currently treated as data inputs rather than first-class host workspaces.
+- Design mandate:
+  - This is a redesign task, not a polish task.
+  - Do not preserve the current right-fixed large panel as the main interaction model.
+  - Reframe the product as a host-independent operations shell with host-specific workspaces.
 
 ## 2) Target Users
-- Primary persona: 호텔/레지던스 운영 매니저(데스크톱 중심, 다량의 날짜/객실 데이터를 반복 처리).
-- Secondary persona: 야간 당직/신입 운영자(실수 방지 가이드 필요, 교육 시간 짧음).
+- Primary persona: 호텔/레지던스 운영 매니저
+  - Desktop-heavy usage
+  - Repeated date-room inventory and reservation review tasks
+  - Needs fast risk scanning before action
+- Secondary persona: 야간 당직 / 신입 운영자
+  - Needs clear next action
+  - Needs strong guardrails before approval or apply
+  - Should understand current host, status, and step within 3 seconds
 - Accessibility considerations:
-  - 키보드만으로 날짜 선택/데이터 로드/동기화 실행 가능해야 함.
-  - 저시력 사용자를 위한 고대비 상태 표현(성공/경고/오류) 필요.
-  - 표 스크롤 중에도 헤더/첫 열 고정과 스크린리더 레이블이 유지되어야 함.
+  - Keyboard-only operation for launcher, task selection, scope selection, compare review, approval, and result review
+  - Status cannot be conveyed by color only; text labels are mandatory for read-only, compare-enabled, apply-enabled, blocked, success, failure
+  - Screen reader users must hear host context, current task, current step, blockers, and next action in predictable order
 
 ## 3) Goals And Success Metrics
-- Business goal: 재고 불일치 수정 리드타임 단축 및 OTA 반영 오류 감소.
-- User goal: 선택 기간 기준으로 사이트/시트 재고를 한 번에 검증하고, 위험 없는 단계별 승인 후 적용.
+- Business goal:
+  - Reduce mismatch review time
+  - Reduce wrong-period and wrong-target apply errors
+  - Make the extension usable across Naver, Station, Sheet, and PMS with one shell model
+- User goal:
+  - Understand current host, current task, current step, and next action immediately
+  - Review results before tools
+  - Move through `조회 -> 비교 -> 검토 -> 승인 -> 반영 -> 결과 확인` without losing context
 - Success metrics (quantified):
-  - 데이터 로드 후 실제 적용까지 평균 완료 시간 40% 단축.
-  - 동기화 실패율 5% 미만 유지.
-  - 사용자 실수(잘못된 기간/잘못된 적용)로 인한 롤백 건수 50% 감소.
-  - 신규 운영자 온보딩 시간 2시간 이내.
+  - Users can identify current host / current task / current step / next action within 3 seconds
+  - Time from open shell to first valid compare result reduced by 30%+
+  - Wrong range / wrong target apply incidents reduced by 50%+
+  - Main task completion occurs without page obstruction complaints on all supported hosts
+  - Users report no persistent scroll conflict between host page and shell in usability testing
 
 ## 4) Information Architecture
 List core screens/routes and purpose.
 
 | Screen/Route | Purpose | Entry points | Exit points |
 |---|---|---|---|
-| Launcher (Floating CTA) | 현재 사이트 컨텍스트 확인 후 메인 작업 진입 | 네이버/스테이션 관리자 페이지 | Main Workspace |
-| Main Workspace | 기간 선택, 데이터 로드, 요약 상태 확인 | Launcher | Compare Review / Sync Center / Settings |
-| Compare Review | 사이트 vs 시트 비교, 보정 후보 확인/승인 | Main Workspace | Sync Center / Main Workspace |
-| Sync Center | 실제 적용 ON/OFF, 실행, 결과/오류 확인 | Main Workspace / Compare Review | Result Detail / Main Workspace |
-| Result Detail | 실패 원인, 날짜/객실 단위 재시도 판단 | Sync Center | Sync Center |
-| Settings | 시트 연결, 스캔 좌표, 인증 정보 관리 | Main Workspace | Main Workspace |
-| Debug Console (Advanced) | 로그/진단/내보내기 | Main Workspace | Main Workspace |
+| Minimal Entry Shell | Persistent but low-obstruction shell showing host context, status, and task launcher | Any supported host page | Workspace, Secondary Utility |
+| Host Context Layer | Show host, branch/document/hotel, account connection, permission state, last query/compare/apply status | Entry Shell | Task Launcher |
+| Task Launcher | Present task choices in work language | Entry Shell, Workspace | Host Workspace |
+| Workspace | Main task area for current host and current step | Task Launcher | Approval Preview, Result/Report |
+| Approval Preview | Show impact, blockers, preview before apply | Workspace | Apply, back to Review |
+| Result / Report | Show success/failure/partial success, logs, export, retry path | Workspace, Approval Preview | Workspace, Secondary Utility |
+| Secondary Utility | Settings, logs, debug, ops info separated from main workflow | Entry Shell, Result / Report | Previous screen |
+
+Additional IA rules:
+- Common shell structure must be shared across all hosts.
+- Main workspace must branch by host.
+- Internal labels like `메인`, `동기화`, `설정`, `운영` must not be used as primary navigation.
+- Primary navigation must use task language:
+  - 재고 조회/비교
+  - 예약 읽기/검증
+  - 시트 매핑/검토
+  - PMS 대조
+  - 동기화 실행
+  - 결과/리포트 확인
 
 ## 5) Key User Flows
 Write each flow as numbered steps.
 
-### Flow A: First-time onboarding
-1. 운영자가 확장을 열면 현재 사이트(Naver/Station)와 작업 가능 상태를 확인한다.
-2. 빠른 시작 체크리스트(시트 연결, 연도/시작행, 토큰 상태)를 완료한다.
-3. 테스트 기간(예: 2일)으로 데이터 조회를 실행해 정상 응답을 확인한다.
-4. 체크리스트 완료 시 본 작업 모드로 전환한다.
+### Flow A: Shell entry and task orientation
+1. User opens the shell from a supported host.
+2. Shell shows current host, current object context, account/connection state, permission state, and last run state.
+3. User selects a task from the task launcher.
+4. Workspace opens at the correct step with blockers and next action visible.
 
-### Flow B: Core conversion action
-1. 기간 선택 후 `사이트 재고 불러오기`와 `시트 재고 불러오기`를 순차 또는 일괄 실행한다.
-2. 비교 리뷰 화면에서 불일치 요약/객실별 상세/자동보정 제안을 검토한다.
-3. 적용 전 영향 범위(총 건수, 닫음 처리, 실패 예상)를 확인하고 승인한다.
-4. 동기화를 실행하고 결과 상세에서 실패 건을 검토한 뒤 필요 시 재시도한다.
-5. 완료 로그를 CSV/JSON으로 저장한다.
+### Flow B: OTA inventory compare and apply (Naver / Station)
+1. User enters from Naver or Station host.
+2. Shell reads host context first and mirrors host-selected range if the host already defines a date range.
+3. User confirms scope only if needed; date tools must not dominate first view.
+4. User runs inventory fetch and compare against Sheet snapshot.
+5. Workspace shows KPI summary before any input tools:
+   - target period
+   - target rooms
+   - compare count
+   - mismatch count
+   - risk count
+   - apply-ready count
+6. User reviews mismatch queue and opens detail comparison for selected items.
+7. User opens approval preview and confirms impact range.
+8. User executes apply.
+9. User lands on result/report view with success, failure, partial success, retry target, and export path.
+
+### Flow C: Sheet review and snapshot preparation
+1. User enters from Sheet context or launches Sheet-focused task.
+2. User selects sheet source, tab, and range.
+3. User reviews room / room-type mappings.
+4. User reviews reservation block rules.
+5. User creates a snapshot for downstream comparison.
+6. Result state shows snapshot readiness and unresolved mapping or rule issues.
+
+### Flow D: PMS reservation audit
+1. User enters from PMS context or launches PMS-focused task.
+2. User runs reservation read.
+3. User reviews room mapping and stay-date validation.
+4. User compares PMS reservations against OTA and Sheet snapshots.
+5. User reviews differences, anomaly types, and unresolved pairs.
+6. User exits with report-ready state; this host does not expose OTA apply as its primary action.
+
+### Flow E: Results and evidence review
+1. User opens results/report after compare or apply.
+2. User sees summary first:
+   - success
+   - partial success
+   - failure
+   - blocked
+   - retry available
+3. User optionally opens logs, debug, exports, and ops evidence in Secondary Utility, not inside main workspace.
 
 ## 6) Wireframe Skeleton
 Per screen, list section blocks and major components only.
 
-### Screen: Home
-- Section: 상단 상태바
-- Section: 기간 선택 캘린더 + 빠른 기간 프리셋
-- Section: 데이터 로드 컨트롤(사이트/시트)
-- Section: KPI 요약 카드(조회/오픈/마감/선택기간)
-- Section: 비교 테이블(사이트, 시트, 불일치 강조)
-- Section: 보정 리뷰 박스(적용 내역, 이슈 요약)
-- Section: 동기화 실행 패널(실행 토글, 실행 버튼, 결과 요약)
-- Section: 설정/디버그 보조 패널
+### Screen: Minimal Entry Shell
+- Section: Host context summary
+- Section: Current task / current step / next action
+- Section: Task launcher
+- Section: Utility entry points
 - Components:
-  - Floating launcher button
-  - Step progress indicator (1. 기간 2. 조회 3. 검토 4. 적용)
-  - Status banner with severity pill
-  - Sticky-column data tables
-  - Split action buttons (primary vs secondary)
-  - Collapsible error/debug drawers
-  - Form fields with inline validation
-  - Export actions (trace JSON/CSV, diff CSV)
+  - Host badge
+  - Object context line (branch / doc / hotel)
+  - Permission state indicator
+  - Last action status
+  - Task launcher list
+  - Open workspace action
+
+### Screen: Workspace
+- Section: Step header
+- Section: Preconditions and blockers
+- Section: KPI summary strip
+- Section: Review queue / worklist
+- Section: Detail comparison pane
+- Section: Approval preview trigger
+- Section: Single primary action rail
+- Optional Section: Scope tools drawer
+- Components:
+  - Current step marker
+  - Blocker summary
+  - KPI metrics
+  - Compare list
+  - Detail diff viewer
+  - Approval preview panel
+  - Primary action button
+
+### Screen: Result / Report
+- Section: Result summary
+- Section: Error / partial success queue
+- Section: Retry targets
+- Section: Export actions
+- Section: Evidence links to logs / debug / ops info
+
+### Screen: Secondary Utility
+- Section: Settings
+- Section: Logs
+- Section: Debug
+- Section: Ops information
+
+Required wireframe behavior:
+- Main workflow and secondary utility must be separated.
+- Calendar / date picking must be hidden until scope editing is invoked.
+- Onboarding checklist must be collapsed or moved to first-run only context.
+- Avoid nested box-inside-box-inside-box composition. Use hierarchy by order, grouping, spacing, and typography.
 
 ## 7) States And Edge Cases
-- Loading states:
-  - 사이트/시트 로드를 개별 진행률로 표시.
-  - 동기화 실행 중 전체 액션 잠금 + 취소 불가 안내.
+- Global states:
+  - host unresolved
+  - context ready
+  - read-only
+  - compare enabled
+  - apply enabled
+  - blocked
+  - loading
+  - compare ready
+  - approval required
+  - applying
+  - partial success
+  - success
+  - failure
+- Scope states:
+  - scope inherited from host
+  - scope defined in shell
+  - scope mismatch between host and shell
+  - stale snapshot
 - Empty states:
-  - 기간 미선택, 데이터 없음, 불일치 없음을 각각 다른 문구/아이콘으로 구분.
+  - no host context
+  - no snapshot
+  - no mismatch
+  - no apply-ready items
+  - no PMS match candidates
 - Error states:
-  - 토큰 만료, API 타임아웃, 권한 오류, 부분 성공(일부 객실 실패)을 분리 표기.
-- Offline/timeout behavior:
-  - 재시도 버튼과 마지막 성공 시각 표시.
-  - 장시간 응답 지연 시 백그라운드 처리 안내 및 로그 저장 가능.
-- Permission denied behavior:
-  - 시트 권한 없음/사이트 권한 없음 시 원인 + 해결 가이드(권한 범위, 재로그인) 제공.
+  - auth expired
+  - connection lost
+  - mapping missing
+  - compare blocked by missing prerequisite
+  - apply blocked by permission or unresolved risk
+  - partial fetch
+  - partial apply
+- Special edge cases:
+  - Host already has its own date range UI; shell must not introduce a competing source of truth
+  - Sheet and PMS may not support apply; shell must show this as capability limitation, not as hidden functionality
+  - When the host changes during an open session, workspace must invalidate stale work and require re-confirmation
+  - When mappings are incomplete, comparison may be allowed but apply must remain blocked with explicit reason
 
 ## 8) Visual Direction
-- Brand traits (3-5 adjectives): operational, trustworthy, high-signal, compact, decisive.
-- Preferred references:
-  - 데이터 운영 도구 스타일(Linear issue triage의 밀도, Notion database의 가독성, Google Sheets의 표 친화성).
-  - 네이버/스테이션 브랜드 힌트는 색상만 약하게 반영하고 레이아웃은 일관 유지.
+- Brand traits:
+  - operational
+  - restrained
+  - high-signal
+  - review-first
+  - decisive
+- Fixed visual reference:
+  - Use the user-provided reference image as the spatial and proportion reference.
+  - Borrow only the structural composition:
+    - slim side launcher rail
+    - single dominant floating workboard
+    - thin context strip
+    - soft surrounding field
+    - spacious central canvas with clear focal hierarchy
+  - Do not borrow consumer-chat content patterns from the reference:
+    - no hero welcome copy
+    - no mascot
+    - no promotional cards
+    - no chatbot-style input dock as the main task surface
+- Direction:
+  - Emphasize workflow clarity over visual uniformity
+  - Results and blockers must appear before tools
+  - Prefer text hierarchy, spacing, and order over decorative cards and borders
+  - Visual emphasis should follow severity, step, and next action
 - Avoid list:
-  - 과도한 라운드/장식성, 저대비 회색 텍스트, 의미 없는 애니메이션.
-  - 한 화면에 우선순위 없는 버튼 과밀 배치.
-  - 성공/오류 색상을 텍스트 없이 색으로만 구분.
+  - preserving the current large right-side floating panel as primary shell
+  - persistent large calendar in the first viewport
+  - internal category tabs such as `메인 / 동기화 / 설정 / 운영`
+  - checklist-centered main screen
+  - stuffing settings, debug, and logs into the main work area
+  - host-specific skinning without actual host-specific workspace behavior
 
 ## 9) Constraints
 - Technical constraints:
-  - Chrome MV3 content script + Shadow DOM 내부 UI.
-  - 기존 기능 로직(스캔/비교/동기화)은 유지하고 UI 레이어 중심으로 개선.
-  - 네이버/스테이션 2개 provider 테마를 지원하되 컴포넌트 구조는 단일화.
+  - Chrome MV3 content script + Shadow DOM internal UI
+  - Existing logic for scan, compare, report, and apply remains; this phase redesigns structure, workflow, and UI architecture
+  - Current codebase injects on Naver and Station only, but the shell must be designed as if Sheet and PMS are first-class hosts
+  - Need a viewport-fit behavior for the workspace surface so the shell preserves intended proportions across laptop widths and varying host layouts
+- Product constraints:
+  - Do not solve this with color, rounded corners, spacing cleanup, or other surface-only changes
+  - Do not keep the right-fixed panel and only restyle it
+  - Do not merge all host needs into one identical panel body
+  - Do not keep calendar, checklist, settings, and ops info permanently visible in one screen
+  - Do not use internal labels as primary navigation
+- Scope constraints:
+  - This is still design stage, not implementation
+  - Do not prescribe framework, CSS strategy, or code structure
+  - Focus on IA, workflow, layout hierarchy, states, and handoff-level instructions
 - Timeline constraints:
-  - 2주 내 1차 UI 전면 개편 배포.
-  - 1주 내 운영자 피드백 반영 패치.
-- Regulatory/compliance constraints:
-  - Google 토큰/클라이언트 비밀값 노출 최소화(마스킹, 표시 제어).
-  - 운영 로그 내 민감정보(토큰, 전체 URL 쿼리) 자동 마스킹.
+  - Need handoff-ready redesign package that design and engineering can act on immediately
 
 ## 10) Delivery Expectations
-- Required level of detail: implementation-ready design package
+- Required level of detail: implementation-ready design handoff without code
 - Must include:
-  - component specs
-  - interaction details
-  - design tokens
-  - responsive behavior
-  - accessibility checklist
+  - structural diagnosis of why current UI fails
+  - explicit rationale for discarding the current structure
+  - full IA for common shell and host-specific branches
+  - explicit adoption/rejection judgment for the proposed `UniversalWorkShellApp` container structure
+  - step-by-step task flow from entry to result
+  - screen hierarchy rules:
+    - always visible
+    - on-demand only
+    - secondary utility only
+  - viewport ratio / fit behavior for the floating workspace surface
+  - keep / modify / remove / hold classification where relevant
+  - P0 / P1 / P2 redesign priorities
+  - success criteria
+  - assumptions and unresolved dependencies
+- Preferred emphasis:
+  - designer/developer handoff language
+  - concrete directives instead of abstract adjectives
+  - operational safety and review clarity over visual polish

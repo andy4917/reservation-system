@@ -339,6 +339,7 @@
     }
     if (providerType === "naver-partner" && raw.naver && typeof raw.naver === "object") return raw.naver;
     if (providerType === "admin-station" && raw.station && typeof raw.station === "object") return raw.station;
+    if (providerType === "wings-pms" && raw.wings && typeof raw.wings === "object") return raw.wings;
 
     if (!provider && (raw.cookies || raw.cookieHeader || raw.authorization || raw.accessToken || raw.csrfToken || raw.role)) {
       return raw;
@@ -366,6 +367,25 @@
         accessToken,
         authorization: `Bearer ${accessToken}`
       };
+    }
+
+    if (providerType === "wings-pms") {
+      const cookies = dedupeCookieRecords(source.cookies || source.cookieJar || []);
+      const cookieHeader = normalizeText(source.cookieHeader || source.cookie || buildCookieHeaderFromCookies(cookies));
+      const authorization = normalizeText(source.authorization || "");
+      const headers = toPlainHeaders(source.headers || {});
+      if (!cookies.length && !cookieHeader && !authorization && Object.keys(headers).length <= 0) return null;
+      const out = {
+        version: AUTH_BUNDLE_VERSION,
+        providerType,
+        capturedAt,
+        sourceOrigin,
+        cookies,
+        cookieHeader,
+        authorization,
+        headers
+      };
+      return out;
     }
 
     const cookies = dedupeCookieRecords(source.cookies || source.cookieJar || []);
@@ -816,7 +836,7 @@
   function sanitizeStoredAuthBundles(raw) {
     const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
     const out = {};
-    ["admin-station", "naver-partner"].forEach((providerType) => {
+    ["admin-station", "naver-partner", "wings-pms"].forEach((providerType) => {
       const bundle = sanitizeProviderAuthBundle(providerType, source);
       if (bundle) out[providerType] = bundle;
     });
@@ -877,18 +897,30 @@
         role: resolveNaverRoleHint()
       });
     }
+    if (providerType === "wings-pms") {
+      const cookies = await exportCookiesForUrls([`${location.origin}/`]);
+      return sanitizeProviderAuthBundle(providerType, {
+        version: AUTH_BUNDLE_VERSION,
+        providerType,
+        capturedAt: new Date().toISOString(),
+        sourceOrigin: location.origin,
+        cookies,
+        cookieHeader: buildCookieHeaderFromCookies(cookies)
+      });
+    }
     return null;
   }
 
 
   async function restoreProviderAuthBundle(providerType, bundle) {
     const normalized = sanitizeProviderAuthBundle(providerType, bundle);
-    if (!normalized || providerType !== "naver-partner" || !normalized.cookies?.length) return false;
+    if (!normalized || !["naver-partner", "wings-pms"].includes(providerType) || !normalized.cookies?.length) return false;
     const fingerprint = JSON.stringify({
       providerType,
       cookieHeader: normalized.cookieHeader,
       csrfToken: normalized.csrfToken,
-      role: normalized.role
+      role: normalized.role,
+      authorization: normalized.authorization
     });
     if (restoredAuthBundleCache.get(providerType) === fingerprint) return true;
     await importCookiesForBundle(normalized.cookies);

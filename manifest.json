@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "UHS 예약 통합관리",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "예약 재고를 한곳에서 조회하고 반영하는 확장 프로그램입니다.",
   "icons": {
     "16": "icons/icon16.png",
@@ -38,7 +38,8 @@
     {
       "matches": [
         "https://partner.booking.naver.com/*",
-        "https://admin.admin-stationbyuhc.com/*"
+        "https://admin.admin-stationbyuhc.com/*",
+        "https://pms.sanhait.com/*"
       ],
       "js": [
         "src/constants.js",
@@ -55,6 +56,7 @@
         "src/io/pms.fetch.js",
         "src/report/validator.js",
         "src/report/reservationVerification.js",
+        "src/ui/productFlow.js",
         "src/ui/panelTemplate.js",
         "src/ui/panelDom.js",
         "src/ui/panelEvents.js",
