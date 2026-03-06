@@ -86,15 +86,23 @@ python3.10 setup.py build_ext --inplace
 
 ## 설치
 
+먼저 로드 전용 폴더를 생성합니다.
+
+```bash
+./tasks/build_extension_unpacked.sh
+```
+
+- 스크립트는 `python3`가 없으면 가능한 패키지 매니저(`apt`, `dnf`, `yum`, `pacman`, `brew`, `winget`, `choco`)로 자동 설치를 시도합니다.
+
 1. `chrome://extensions` 접속
 2. `개발자 모드` 활성화
 3. `압축해제된 확장 프로그램 로드` 클릭
-4. 이 폴더(`manifest.json` 위치) 선택
+4. `dist/uhs-extension` 폴더 선택
 
 ## SSO 세션 재사용 / 인증 번들
 
 - 설정 패널의 `현재 사이트 인증 번들(JSON)` 영역에서 `현재 세션 캡처`를 누르면 현재 브라우저 컨텍스트의 인증 상태를 JSON으로 저장하거나 복사할 수 있습니다.
-- 네이버는 쿠키/CSRF/role, 스테이션은 bearer 토큰을 번들에 담습니다.
+- 네이버는 쿠키/CSRF/(선택)role, 스테이션은 bearer 토큰을 번들에 담습니다.
 - 번들을 저장한 뒤 같은 브라우저 컨텍스트에서 다시 실행하면, 확장이 저장된 번들을 기준으로 세션을 다시 주입한 뒤 요청을 재시도합니다.
 - 외부 Python 재검증도 같은 번들을 사용할 수 있습니다.
 
@@ -114,7 +122,7 @@ python3 reservation_sheet_sync.py \
 - Naver 일별 스케줄 조회: `GET https://api-partner.booking.naver.com/v3.0/businesses/{businessId}/biz-items/{bizItemId}/daily-schedules`
 - Naver 재고 적용: `POST https://api-partner.booking.naver.com/v3.0/businesses/{businessId}/biz-items/{bizItemId}/stock-schedules`
 - Naver 판매일 적용: `POST https://api-partner.booking.naver.com/v3.1/businesses/{businessId}/biz-items/{bizItemId}/sale-schedules`
-- Naver 인증 헤더: `Cookie`, `x-csrf-token`, `x-booking-naver-role`
+- Naver 인증 헤더: `Cookie`, `x-csrf-token`, `x-booking-naver-role(선택)`
 - Station 인증 헤더: `Authorization: Bearer ...`
 
 ## Wings PMS 예약 검증 연동
@@ -200,6 +208,12 @@ INVENTORY_CPP_MODE=required python3.10 tests/run_regressions.py
 ```bash
 node tests/regression_pms_fetch_wings_post.mjs
 python3 tests/regression_sync_guardrails_py.py
+```
+
+COEX HAR 기반 읽기 전용 통합 점검:
+
+```bash
+./tasks/dryrun_coex_readonly.sh
 ```
 
 ## 폴더 정리

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Reservation Inventory Board",
+  "name": "UHS 예약 통합관리",
   "version": "0.4.0",
-  "description": "Naver/Station inventory read, sheet mapping, and sync apply tool.",
+  "description": "예약 재고를 한곳에서 조회하고 반영하는 확장 프로그램입니다.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -11,10 +11,19 @@
   "permissions": [
     "cookies",
     "storage",
-    "clipboardWrite"
+    "clipboardWrite",
+    "scripting"
   ],
   "background": {
     "service_worker": "src/background.js"
+  },
+  "action": {
+    "default_title": "UHS 예약 통합관리",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "host_permissions": [
     "https://*/*",
@@ -46,6 +55,7 @@
         "src/io/pms.fetch.js",
         "src/report/validator.js",
         "src/report/reservationVerification.js",
+        "src/ui/panelTemplate.js",
         "src/ui/panelDom.js",
         "src/ui/panelEvents.js",
         "src/engine/scanEngine.js",

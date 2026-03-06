@@ -198,6 +198,74 @@ def split_room_tokens(value: str) -> List[str]:
     return out
 
 
+def reservation_id_alias_tokens(value: str) -> List[str]:
+    text = normalize_text(value)
+    if not text:
+        return []
+    out: List[str] = []
+    seen: set[str] = set()
+
+    def push(token: str) -> None:
+        normalized = normalize_text(token)
+        if not normalized:
+            return
+        variants = {normalized, normalized.upper()}
+        compact = normalized.replace(" ", "")
+        if compact:
+            variants.add(compact)
+            variants.add(compact.upper())
+        for variant in variants:
+            min_len = 4 if variant.isdigit() else 6
+            if len(variant) < min_len:
+                continue
+            if variant not in seen:
+                seen.add(variant)
+                out.append(variant)
+            for digits in re.findall(r"\d{4,}", variant):
+                if digits in seen:
+                    continue
+                seen.add(digits)
+                out.append(digits)
+
+    push(text)
+    for token in re.split(r"[-_/|]+", text):
+        push(token)
+    return out
+
+
+def build_source_reservation_alias_index(
+    records: List[SourceReservation],
+) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
+    alias_to_primary: Dict[str, str] = {}
+    primary_to_aliases: Dict[str, set[str]] = defaultdict(set)
+    collisions: set[str] = set()
+
+    for record in records:
+        primary = normalize_text(record.reservation_no)
+        if not primary:
+            continue
+        aliases = set(reservation_id_alias_tokens(primary))
+        aliases.update(reservation_id_alias_tokens(record.reservation_ref))
+        aliases.add(primary)
+        primary_to_aliases[primary].update(aliases)
+        for alias in aliases:
+            prev = alias_to_primary.get(alias)
+            if prev and prev != primary:
+                collisions.add(alias)
+                continue
+            alias_to_primary[alias] = primary
+
+    for alias in collisions:
+        alias_to_primary.pop(alias, None)
+        for aliases in primary_to_aliases.values():
+            aliases.discard(alias)
+
+    return alias_to_primary, {
+        primary: sorted(values)
+        for primary, values in primary_to_aliases.items()
+    }
+
+
 def room_alias_keys(room_no: str) -> set[str]:
     token = normalize_text(room_no).upper().replace(" ", "").replace("-", "")
     if not token:
@@ -271,6 +339,25 @@ def unmatched_known_tokens(left_values: set[str], right_values: set[str]) -> Lis
 
 def is_inactive_source_status(status: str) -> bool:
     return classify_reservation_status_bucket(status) == "CANCELED"
+
+
+def is_commission_adjusted_price_match(
+    sheet_price: int,
+    source_price: int,
+    source_channels: set[str],
+) -> bool:
+    if source_price <= 0 or sheet_price <= 0:
+        return False
+    ratio = float(sheet_price) / float(source_price)
+    normalized_channels = {normalize_text(ch).upper() for ch in source_channels if normalize_text(ch)}
+    if normalized_channels == {"BOOKING"}:
+        # BOOKING prices are often stored net of commission in the sheet.
+        return abs(ratio - 0.825) <= 0.005
+    if normalized_channels == {"EXPEDIA"}:
+        # EXPEDIA final settlement can vary by reservation-level commission/tax policy.
+        # Treat price gap as non-actionable for cross-validation.
+        return True
+    return False
 
 
 def build_sheet_reservation_events(
@@ -415,9 +502,64 @@ def cross_validate_sheet_vs_sources(
     if not source_records:
         return []
     issues: List[Dict[str, Any]] = []
-    sheet_events = build_sheet_reservation_events(blocks)
-    source_events = build_source_reservation_events(source_records)
-    sheet_room_date_counts = build_sheet_room_date_counts(blocks)
+    source_primary_ids = {
+        normalize_text(record.reservation_no)
+        for record in source_records
+        if normalize_text(record.reservation_no)
+    }
+    alias_to_primary, _primary_to_aliases = build_source_reservation_alias_index(source_records)
+
+    def canonical_reservation_no(value: str) -> str:
+        reservation_no = normalize_text(value)
+        if not reservation_no:
+            return ""
+        if reservation_no in source_primary_ids:
+            return reservation_no
+        for alias in reservation_id_alias_tokens(reservation_no):
+            primary = alias_to_primary.get(alias)
+            if primary:
+                return primary
+        return reservation_no
+
+    sheet_events_raw = build_sheet_reservation_events(blocks)
+    source_events_raw = build_source_reservation_events(source_records)
+    sheet_room_date_counts_raw = build_sheet_room_date_counts(blocks)
+
+    sheet_events: List[Dict[str, Any]] = []
+    for ev in sheet_events_raw:
+        canonical_no = canonical_reservation_no(ev.get("reservation_no", ""))
+        if not canonical_no:
+            continue
+        normalized_room_no = normalize_text(ev.get("room_no"))
+        sheet_events.append(
+            {
+                **ev,
+                "reservation_no": canonical_no,
+                "room_no": normalized_room_no,
+            }
+        )
+
+    source_events: List[Dict[str, Any]] = []
+    for ev in source_events_raw:
+        canonical_no = canonical_reservation_no(ev.get("reservation_no", ""))
+        if not canonical_no:
+            continue
+        normalized_room_no = normalize_text(ev.get("room_no"))
+        source_events.append(
+            {
+                **ev,
+                "reservation_no": canonical_no,
+                "room_no": normalized_room_no,
+            }
+        )
+
+    sheet_room_date_counts: Dict[Tuple[str, dt.date, str], int] = defaultdict(int)
+    for (reservation_no, date_val, room_no), count in sheet_room_date_counts_raw.items():
+        canonical_no = canonical_reservation_no(reservation_no)
+        normalized_room_no = normalize_text(room_no)
+        if not canonical_no or not normalized_room_no:
+            continue
+        sheet_room_date_counts[(canonical_no, date_val, normalized_room_no)] += count
 
     sheet_by_res_date: Dict[Tuple[str, dt.date], Dict[str, Any]] = defaultdict(
         lambda: {"channels": set(), "room_nos": set()}
@@ -427,6 +569,9 @@ def cross_validate_sheet_vs_sources(
     )
     sheet_dates_by_res: Dict[str, set[dt.date]] = defaultdict(set)
     source_dates_by_res: Dict[str, set[dt.date]] = defaultdict(set)
+    date_missing_in_source_res: set[str] = set()
+    date_missing_in_sheet_res: set[str] = set()
+    date_mismatch_res_emitted: set[str] = set()
 
     for ev in sheet_events:
         key = (ev["reservation_no"], ev["date"])
@@ -484,6 +629,7 @@ def cross_validate_sheet_vs_sources(
             if not in_range(date_val, source_min_date, source_max_date):
                 continue
             sheet_info = sheet_by_res_date[(reservation_no, date_val)]
+            date_missing_in_source_res.add(reservation_no)
             issues.append(
                 {
                     "type": "EXPECTED_MANUAL_OTA_ON_SHEET"
@@ -504,6 +650,7 @@ def cross_validate_sheet_vs_sources(
             if not in_range(date_val, sheet_min_date, sheet_max_date):
                 continue
             source_info = source_by_res_date[(reservation_no, date_val)]
+            date_missing_in_sheet_res.add(reservation_no)
             issues.append(
                 {
                     "type": "MISSING_ACTIVE_IN_SHEET",
@@ -557,9 +704,12 @@ def cross_validate_sheet_vs_sources(
 
     all_res_nos = set(sheet_dates_by_res.keys()) | set(source_dates_by_res.keys())
     for reservation_no in sorted(all_res_nos):
+        if reservation_no in date_missing_in_source_res or reservation_no in date_missing_in_sheet_res:
+            continue
         sheet_dates = sheet_dates_by_res.get(reservation_no, set())
         source_dates = source_dates_by_res.get(reservation_no, set())
         if sheet_dates and source_dates and sheet_dates != source_dates:
+            date_mismatch_res_emitted.add(reservation_no)
             issues.append(
                 {
                     "type": "DATE_MISMATCH",
@@ -576,13 +726,129 @@ def cross_validate_sheet_vs_sources(
                 }
             )
 
-    sheet_summary = aggregate_sheet_reservations(blocks)
-    source_summary = aggregate_source_reservations(source_records)
+    sheet_summary_raw = aggregate_sheet_reservations(blocks)
+    source_summary_raw = aggregate_source_reservations(source_records)
+
+    sheet_summary_merged: Dict[str, Dict[str, Any]] = {}
+    for raw_reservation_no, sheet in sheet_summary_raw.items():
+        canonical_no = canonical_reservation_no(raw_reservation_no)
+        if not canonical_no:
+            continue
+        merged = sheet_summary_merged.setdefault(
+            canonical_no,
+            {
+                "reservation_no": canonical_no,
+                "room_nos": set(),
+                "room_types": set(),
+                "checkin": None,
+                "checkout": None,
+                "nights": None,
+                "platforms": set(),
+                "prices": [],
+                "blocks": 0,
+            },
+        )
+        merged["room_nos"].update(sheet.get("room_nos") or [])
+        merged["room_types"].update(sheet.get("room_types") or [])
+        merged["platforms"].update(sheet.get("platforms") or [])
+        merged["blocks"] += int(sheet.get("blocks") or 0)
+        if sheet.get("price") is not None:
+            merged["prices"].append(int(sheet["price"]))
+        checkin = sheet.get("checkin")
+        checkout = sheet.get("checkout")
+        if checkin and (merged["checkin"] is None or checkin < merged["checkin"]):
+            merged["checkin"] = checkin
+        if checkout and (merged["checkout"] is None or checkout > merged["checkout"]):
+            merged["checkout"] = checkout
+
+    sheet_summary: Dict[str, Dict[str, Any]] = {}
+    for reservation_no, merged in sheet_summary_merged.items():
+        if merged["checkin"] and merged["checkout"]:
+            merged["nights"] = (merged["checkout"] - merged["checkin"]).days
+        room_nos_sorted = sorted(merged["room_nos"])
+        room_types_sorted = sorted(merged["room_types"])
+        platforms_sorted = sorted(merged["platforms"])
+        sheet_summary[reservation_no] = {
+            "reservation_no": reservation_no,
+            "room_nos": room_nos_sorted,
+            "room_types": room_types_sorted,
+            "room_no": ",".join(room_nos_sorted),
+            "room_type": ",".join(room_types_sorted),
+            "checkin": merged["checkin"],
+            "checkout": merged["checkout"],
+            "nights": merged["nights"],
+            "platforms": platforms_sorted,
+            "price": merged["prices"][0] if merged["prices"] else None,
+            "blocks": merged["blocks"],
+        }
+
+    source_summary_merged: Dict[str, Dict[str, Any]] = {}
+    for raw_reservation_no, source in source_summary_raw.items():
+        canonical_no = canonical_reservation_no(raw_reservation_no)
+        if not canonical_no:
+            continue
+        merged = source_summary_merged.setdefault(
+            canonical_no,
+            {
+                "reservation_no": canonical_no,
+                "checkin": None,
+                "checkout": None,
+                "nights": None,
+                "channels": set(),
+                "room_nos": set(),
+                "prices": set(),
+                "systems": set(),
+                "statuses": set(),
+                "status_buckets": set(),
+                "audit_anomaly": False,
+            },
+        )
+        checkin = source.get("checkin")
+        checkout = source.get("checkout")
+        if checkin and (merged["checkin"] is None or checkin < merged["checkin"]):
+            merged["checkin"] = checkin
+        if checkout and (merged["checkout"] is None or checkout > merged["checkout"]):
+            merged["checkout"] = checkout
+        merged["channels"].update(source.get("channels") or [])
+        merged["room_nos"].update(source.get("room_nos") or [])
+        merged["systems"].update(source.get("systems") or [])
+        merged["statuses"].update(source.get("statuses") or [])
+        merged["status_buckets"].update(source.get("status_buckets") or [])
+        if source.get("audit_anomaly"):
+            merged["audit_anomaly"] = True
+        for price in source.get("prices") or []:
+            if price is not None:
+                merged["prices"].add(int(price))
+        if source.get("price") is not None:
+            merged["prices"].add(int(source["price"]))
+
+    source_summary: Dict[str, Dict[str, Any]] = {}
+    for reservation_no, merged in source_summary_merged.items():
+        if merged["checkin"] and merged["checkout"]:
+            merged["nights"] = (merged["checkout"] - merged["checkin"]).days
+        prices_sorted = sorted(merged["prices"])
+        source_summary[reservation_no] = {
+            "reservation_no": reservation_no,
+            "checkin": merged["checkin"],
+            "checkout": merged["checkout"],
+            "nights": merged["nights"],
+            "channels": sorted(merged["channels"]),
+            "room_nos": sorted(merged["room_nos"]),
+            "prices": prices_sorted,
+            "price": prices_sorted[0] if len(prices_sorted) == 1 else None,
+            "systems": sorted(merged["systems"]),
+            "statuses": sorted(merged["statuses"]),
+            "status_buckets": sorted(merged["status_buckets"]),
+            "audit_anomaly": merged["audit_anomaly"],
+        }
+
     all_reservations = set(sheet_summary.keys()) | set(source_summary.keys())
     for reservation_no in sorted(all_reservations):
         in_sheet = reservation_no in sheet_summary
         in_source = reservation_no in source_summary
         if not in_source:
+            if reservation_no in date_missing_in_source_res:
+                continue
             sheet_dates = sheet_dates_by_res.get(reservation_no, set())
             if not dates_overlap_target_window(
                 sheet_dates, source_min_date, source_max_date
@@ -597,6 +863,8 @@ def cross_validate_sheet_vs_sources(
             )
             continue
         if not in_sheet:
+            if reservation_no in date_missing_in_sheet_res:
+                continue
             source_dates = source_dates_by_res.get(reservation_no, set())
             if not dates_overlap_target_window(
                 source_dates, sheet_min_date, sheet_max_date
@@ -639,24 +907,20 @@ def cross_validate_sheet_vs_sources(
                     "sheet_channels": sheet.get("platforms", []),
                 }
             )
+        date_mismatch_payload: Dict[str, Any] = {}
         if sheet.get("checkin") and source.get("checkin") and sheet["checkin"] != source["checkin"]:
-            issues.append(
-                {
-                    "type": "DATE_MISMATCH",
-                    "reservation_no": reservation_no,
-                    "date": "",
-                    "sheet_checkin": sheet["checkin"].isoformat(),
-                    "source_checkin": source["checkin"].isoformat(),
-                }
-            )
+            date_mismatch_payload["sheet_checkin"] = sheet["checkin"].isoformat()
+            date_mismatch_payload["source_checkin"] = source["checkin"].isoformat()
         if sheet.get("checkout") and source.get("checkout") and sheet["checkout"] != source["checkout"]:
+            date_mismatch_payload["sheet_checkout"] = sheet["checkout"].isoformat()
+            date_mismatch_payload["source_checkout"] = source["checkout"].isoformat()
+        if date_mismatch_payload and reservation_no not in date_mismatch_res_emitted:
             issues.append(
                 {
                     "type": "DATE_MISMATCH",
                     "reservation_no": reservation_no,
                     "date": "",
-                    "sheet_checkout": sheet["checkout"].isoformat(),
-                    "source_checkout": source["checkout"].isoformat(),
+                    **date_mismatch_payload,
                 }
             )
         if sheet.get("nights") is not None and source.get("nights") is not None:
@@ -674,15 +938,20 @@ def cross_validate_sheet_vs_sources(
         sheet_price = sheet.get("price")
         source_price = source.get("price")
         if sheet_price is not None and source_price is not None and int(sheet_price) != int(source_price):
-            issues.append(
-                {
-                    "type": "PRICE_MISMATCH_SOURCE",
-                    "reservation_no": reservation_no,
-                    "date": "",
-                    "sheet_price": int(sheet_price),
-                    "source_price": int(source_price),
-                }
-            )
+            if not is_commission_adjusted_price_match(
+                int(sheet_price),
+                int(source_price),
+                set(source.get("channels") or []),
+            ):
+                issues.append(
+                    {
+                        "type": "PRICE_MISMATCH_SOURCE",
+                        "reservation_no": reservation_no,
+                        "date": "",
+                        "sheet_price": int(sheet_price),
+                        "source_price": int(source_price),
+                    }
+                )
 
         sheet_room_nos = set(split_room_tokens(sheet.get("room_no") or ""))
         source_room_nos = set(source.get("room_nos") or [])

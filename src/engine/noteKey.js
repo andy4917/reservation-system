@@ -9,7 +9,7 @@
   const N = App.scan?.normalize || {};
   const { normalizeText, sanitizeScanConfig } = N;
   const RESERVATION_NO_RE =
-    /(?:예약번호|reservation(?:_|\s*)number|reservation(?:_|\s*)no|rsvn(?:_|\s*)no|global(?:_|\s*)rsvn(?:_|\s*)no|guest(?:_|\s*)rsvn(?:_|\s*)no)\s*[:#：]?\s*([0-9A-Za-z_-]{6,})/gi;
+    /(?:예약번호|reservation(?:_|\s*)number|reservation(?:_|\s*)no|rsvn(?:_|\s*)no|global(?:_|\s*)rsvn(?:_|\s*)no|guest(?:_|\s*)rsvn(?:_|\s*)no)\s*[:#：]?\s*([0-9A-Za-z_-]+)/gi;
   const NAME_LABEL_PATTERNS = [
     /(?:예약자|guest|booker|customer|cust(?:omer)?|투숙객|성함|이름|guest[_\s-]*name|booker[_\s-]*name)\s*[:：]?\s*([^\n\r,|/()]+?)(?=(?:\s{2,}|[,|/]|$))/i
   ];
@@ -111,22 +111,54 @@
 
   function normalizeReservationNoCandidate(value) {
     const text = normalizeText(value || "");
-    if (!text) return "";
-    const digits = text.replace(/\D+/g, "");
-    if (digits.length >= 6) return digits;
-    return text.length >= 6 ? text : "";
+    return normalizeReservationNoCandidateWithOptions(text, {});
   }
 
-  function extractReservationNoFromText(value) {
+  function normalizeReservationNoCandidateWithOptions(value, options = {}) {
     const text = normalizeText(value || "");
     if (!text) return "";
+    const tagged = options.tagged === true;
+    const phoneDigits = normalizePhoneDigits(options.phone || options.phoneDigits || "");
+    const digits = text.replace(/\D+/g, "");
+    if (tagged) {
+      if (/[A-Za-z]/.test(text)) {
+        const compact = text.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+        return compact.length >= 4 ? compact : "";
+      }
+      return digits.length >= 4 ? digits : "";
+    }
+    if (!digits) return "";
+    if (phoneDigits && digits === phoneDigits) return "";
+    return digits.length >= 6 ? digits : "";
+  }
+
+  function extractPhoneDigitsFromText(value) {
+    const text = normalizeText(value || "");
+    if (!text) return "";
+    for (const pattern of PHONE_LABEL_PATTERNS) {
+      const match = text.match(pattern);
+      const digits = normalizePhoneDigits(match?.[1] || "");
+      if (digits.length >= 8) return digits;
+    }
+    const anyDigits = normalizePhoneDigits(text);
+    return anyDigits.length >= 8 ? anyDigits : "";
+  }
+
+  function extractReservationNoFromText(value, options = {}) {
+    const text = normalizeText(value || "");
+    if (!text) return "";
+    const phoneDigits = normalizePhoneDigits(options.phone || options.phoneDigits || "") || extractPhoneDigitsFromText(text);
     const tagged = [];
     for (const match of text.matchAll(RESERVATION_NO_RE)) {
       if (match?.[1]) tagged.push(match[1]);
     }
+    for (const candidate of tagged) {
+      const normalized = normalizeReservationNoCandidateWithOptions(candidate, { tagged: true, phoneDigits });
+      if (normalized) return normalized;
+    }
     const loose = text.match(/\b\d{6,}\b/g) || [];
-    for (const candidate of [...tagged, ...loose]) {
-      const normalized = normalizeReservationNoCandidate(candidate);
+    for (const candidate of loose) {
+      const normalized = normalizeReservationNoCandidateWithOptions(candidate, { tagged: false, phoneDigits });
       if (normalized) return normalized;
     }
     return "";
@@ -228,10 +260,11 @@
 
   function buildReservationIdentity(text, options = {}) {
     const rawText = normalizeText(text || "");
-    const reservationNo =
-      normalizeReservationNoCandidate(options.reservationNo || "") || extractReservationNoFromText(rawText);
-    const guestName = normalizeText(options.guestName || "") || extractGuestNameFromText(rawText);
     const optionPhoneDigits = normalizePhoneDigits(options.phone || options.phoneTail || "");
+    const reservationNo =
+      normalizeReservationNoCandidateWithOptions(options.reservationNo || "", { tagged: true, phoneDigits: optionPhoneDigits }) ||
+      extractReservationNoFromText(rawText, { phoneDigits: optionPhoneDigits });
+    const guestName = normalizeText(options.guestName || "") || extractGuestNameFromText(rawText);
     const phoneTail = optionPhoneDigits.length >= 4 ? optionPhoneDigits.slice(-4) : extractPhoneTailFromText(rawText);
     const checkin = normalizeText(options.checkin || "");
     const checkout = normalizeText(options.checkout || "");
@@ -271,6 +304,7 @@
     normalizePhoneDigits,
     normalizeGuestNameKey,
     normalizeReservationNoCandidate,
+    normalizeReservationNoCandidateWithOptions,
     extractReservationNoFromText,
     extractGuestNameFromText,
     extractPhoneTailFromText,

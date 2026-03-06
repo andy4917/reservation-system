@@ -8,7 +8,6 @@ from collections import Counter, defaultdict
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from src.domain.sheet_domain import (
-    ACCOUNT_FIELD_ALIASES,
     BRANCH_COEX,
     BRANCH_GANGNAM,
     BRANCH_SPLIT_ROW,
@@ -21,7 +20,6 @@ from src.domain.sheet_domain import (
     DATE_HEADER_HINT_COL,
     DATE_HEADER_HINT_ROW,
     DATE_WEEKDAY_HINT_ROW,
-    DATE_LABEL_RE,
     IGNORED_COLOR_HEX,
     DailyStat,
     DateColumn,
@@ -716,19 +714,37 @@ def classify_color_cell(
 
 def extract_numeric_reservation_no(note: str, note_info: NoteInfo) -> Optional[str]:
     text = note or ""
-    candidates: List[str] = []
+    tagged_candidates: List[str] = []
     if note_info.reservation_no:
-        candidates.append(note_info.reservation_no)
+        tagged_candidates.append(note_info.reservation_no)
     tagged_matches = re.findall(
         r"(?:예약번호|reservation(?:_|\s*)number|rsvn(?:_|\s*)no)\s*[:#：]?\s*([0-9A-Za-z_-]+)",
         text,
         flags=re.I,
     )
-    candidates.extend(tagged_matches)
+    tagged_candidates.extend(tagged_matches)
+
+    # Prefer explicit tagged reservation ids from note over loose numeric matches.
+    for cand in tagged_candidates:
+        normalized = normalize_text(cand).replace(" ", "")
+        if not normalized:
+            continue
+        if re.search(r"[A-Za-z]", normalized):
+            compact = re.sub(r"[^0-9A-Za-z]", "", normalized).upper()
+            if len(compact) >= 4:
+                return compact
+        digits = "".join(re.findall(r"\d+", normalized))
+        if len(digits) >= 4:
+            return digits
+
+    phone_digits = "".join(re.findall(r"\d+", normalize_text(note_info.phone)))
     loose_matches = re.findall(r"\b\d{6,}\b", text)
-    candidates.extend(loose_matches)
-    for cand in candidates:
+    for cand in loose_matches:
         digits = "".join(re.findall(r"\d+", normalize_text(cand)))
+        if not digits:
+            continue
+        if phone_digits and digits == phone_digits:
+            continue
         if len(digits) >= 6:
             return digits
     return None
@@ -780,6 +796,31 @@ def parse_stock_value(raw: str) -> InventoryValue:
     if re.fullmatch(r"\d+", text):
         return InventoryValue(raw=text, current=int(text), maximum=None)
     return InventoryValue(raw=text, current=None, maximum=None)
+
+
+def apply_note_stay_override(
+    checkin: dt.date,
+    checkout: dt.date,
+    nights: int,
+    note_info: NoteInfo,
+) -> Tuple[dt.date, dt.date, int]:
+    note_checkin = note_info.stay_checkin
+    note_checkout = note_info.stay_checkout
+    if not note_checkin or not note_checkout or note_checkout <= note_checkin:
+        return checkin, checkout, nights
+    note_nights = (note_checkout - note_checkin).days
+    if note_nights <= 0 or note_nights > 120:
+        return checkin, checkout, nights
+    # Only trust note stay when current run date sits inside note stay window.
+    if not (note_checkin <= checkin < note_checkout):
+        return checkin, checkout, nights
+    # Keep detected check-in anchor and only extend forward range.
+    final_checkin = checkin
+    final_checkout = note_checkout if note_checkout > checkout else checkout
+    final_nights = (final_checkout - final_checkin).days
+    if final_nights < nights or final_nights <= 0:
+        return checkin, checkout, nights
+    return final_checkin, final_checkout, final_nights
 
 
 def _find_date_columns_py(
@@ -1545,6 +1586,12 @@ def extract_reservation_blocks(
 
         note_text = str(run.get("note", "") or "")
         note_info = parse_note_info(note_text)
+        checkin, checkout, nights = apply_note_stay_override(
+            checkin=checkin,
+            checkout=checkout,
+            nights=nights,
+            note_info=note_info,
+        )
 
         price_value = run.get("price")
         price: Optional[int] = None
@@ -1732,50 +1779,6 @@ def annotate_group_parts(blocks: List[ReservationBlock]) -> None:
             block.part_index = idx
             block.parts_total = total
             block.month_split = month_split
-
-
-def calculate_daily_stats(
-    matrix: SheetMatrix, date_cols: List[DateColumn], room_rows: Dict[int, RoomRow]
-) -> List[DailyStat]:
-    results: List[DailyStat] = []
-    total_rooms = len(room_rows)
-    for date_col in date_cols:
-        occupied = 0
-        blocked = 0
-        unknown = 0
-        for row in room_rows:
-            cell = matrix.get(row, date_col.col)
-            status, _channel, error_code = classify_color_cell(
-                cell.background_hex,
-                note=cell.note,
-                formatted_value=cell.formatted_value,
-            )
-            if status == CELL_STATUS_OCCUPIED:
-                occupied += 1
-            elif status == CELL_STATUS_BLOCKED:
-                blocked += 1
-            elif error_code:
-                unknown += 1
-        vacant = max(total_rooms - occupied - blocked, 0)
-        sold = max(occupied + blocked, 0)
-        results.append(
-            DailyStat(
-                date=date_col.date,
-                weekday=date_col.weekday_label,
-                branch="ALL",
-                occupied=occupied,
-                blocked=blocked,
-                vacant=vacant,
-                total_rooms=total_rooms,
-                vac=vacant,
-                vip=0,
-                marketing=0,
-                ooo=blocked,
-                sold=sold,
-                unknown_or_other=unknown,
-            )
-        )
-    return results
 
 
 def calculate_vac_by_room_type(

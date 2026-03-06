@@ -11,6 +11,7 @@ import datetime as dt
 import hashlib
 import json
 import re
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -433,10 +434,47 @@ def upsert_header(headers: Dict[str, str], name: str, value: Any) -> None:
     headers[key] = text
 
 
+def drop_header(headers: Dict[str, str], name: str) -> None:
+    key = str(name or "").strip().lower()
+    if not key:
+        return
+    for existing in list(headers.keys()):
+        if existing.lower() == key:
+            headers.pop(existing, None)
+
+
 def merge_headers(base: Dict[str, str], extra: Optional[Dict[str, str]]) -> Dict[str, str]:
     out = dict(base or {})
     for name, value in (extra or {}).items():
         upsert_header(out, name, value)
+    return out
+
+
+def get_header_value_ci(headers: Optional[Dict[str, Any]], name: str) -> str:
+    if not isinstance(headers, dict):
+        return ""
+    key = str(name or "").strip().lower()
+    if not key:
+        return ""
+    for header_name, header_value in headers.items():
+        if str(header_name or "").strip().lower() != key:
+            continue
+        text = str(header_value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def sanitize_naver_schedule_headers(
+    headers: Dict[str, str],
+    role_override: str = "",
+) -> Dict[str, str]:
+    out = merge_headers({}, headers or {})
+    # Naver daily-schedules can reject role=OWNER. Only send role when explicitly overridden.
+    drop_header(out, "x-booking-naver-role")
+    explicit_role = str(role_override or "").strip()
+    if explicit_role:
+        upsert_header(out, "x-booking-naver-role", explicit_role)
     return out
 
 
@@ -517,6 +555,7 @@ def extract_auth_headers_from_bundle(payload: Optional[Dict[str, Any]], provider
         return {}
 
     headers: Dict[str, str] = {}
+    header_map = bundle.get("headers") if isinstance(bundle.get("headers"), dict) else {}
     if provider_type == "admin-station":
         token = ensure_bearer(
             str(
@@ -524,18 +563,49 @@ def extract_auth_headers_from_bundle(payload: Optional[Dict[str, Any]], provider
                 or bundle.get("accessToken")
                 or bundle.get("token")
                 or bundle.get("bearer")
+                or get_header_value_ci(header_map, "authorization")
                 or ""
             ).strip()
         )
         if token:
             upsert_header(headers, "Authorization", token)
+        cookie_header = str(bundle.get("cookieHeader") or bundle.get("cookie") or "").strip()
+        if not cookie_header:
+            cookie_header = get_header_value_ci(header_map, "cookie")
+        if not cookie_header:
+            cookie_header = build_cookie_header_from_records(bundle.get("cookies"))
+        csrf_token = str(
+            bundle.get("csrfToken")
+            or bundle.get("x-csrf-token")
+            or bundle.get("csrf")
+            or get_header_value_ci(header_map, "x-csrf-token")
+            or ""
+        ).strip()
+        if cookie_header:
+            upsert_header(headers, "Cookie", cookie_header)
+        if csrf_token:
+            upsert_header(headers, "x-csrf-token", csrf_token)
         return headers
 
     cookie_header = str(bundle.get("cookieHeader") or bundle.get("cookie") or "").strip()
     if not cookie_header:
+        cookie_header = get_header_value_ci(header_map, "cookie")
+    if not cookie_header:
         cookie_header = build_cookie_header_from_records(bundle.get("cookies"))
-    csrf_token = str(bundle.get("csrfToken") or bundle.get("x-csrf-token") or bundle.get("csrf") or "").strip()
-    role = str(bundle.get("role") or bundle.get("x-booking-naver-role") or bundle.get("naverRole") or "").strip()
+    csrf_token = str(
+        bundle.get("csrfToken")
+        or bundle.get("x-csrf-token")
+        or bundle.get("csrf")
+        or get_header_value_ci(header_map, "x-csrf-token")
+        or ""
+    ).strip()
+    role = str(
+        bundle.get("role")
+        or bundle.get("x-booking-naver-role")
+        or bundle.get("naverRole")
+        or get_header_value_ci(header_map, "x-booking-naver-role")
+        or ""
+    ).strip()
     if cookie_header:
         upsert_header(headers, "Cookie", cookie_header)
     if csrf_token:
@@ -1050,15 +1120,19 @@ def prepare_naver_sync(
         naver_headers,
         extract_auth_headers_from_bundle(auth_bundle_payload, "naver-partner"),
     )
+    naver_headers = sanitize_naver_schedule_headers(
+        naver_headers,
+        role_override=args.naver_role,
+    )
     if args.naver_cookie.strip():
         upsert_header(naver_headers, "Cookie", args.naver_cookie.strip())
     if args.naver_csrf_token.strip():
         upsert_header(naver_headers, "x-csrf-token", args.naver_csrf_token.strip())
-    if args.naver_role.strip():
-        upsert_header(naver_headers, "x-booking-naver-role", args.naver_role.strip())
 
     current_by_room: Dict[str, Dict[str, Dict[str, Any]]] = {}
-    for rid in room_ids:
+    naver_read_sleep_sec = max(0, int(args.naver_read_sleep_ms)) / 1000.0
+    total_rooms = len(room_ids)
+    for idx, rid in enumerate(room_ids):
         current_by_room[rid] = fetch_naver_daily_schedule_map(
             session,
             args,
@@ -1067,6 +1141,8 @@ def prepare_naver_sync(
             start_date=range_start,
             end_date=range_end,
         )
+        if naver_read_sleep_sec > 0 and idx + 1 < total_rooms:
+            time.sleep(naver_read_sleep_sec)
 
     naver_actions = plan_naver_actions(
         naver_targets,
@@ -1090,6 +1166,65 @@ def prepare_naver_sync(
         "reconciliation": reconciliation,
     }
     return summary_section, (naver_headers, naver_actions)
+
+
+def build_provider_fetch_error_summary(
+    provider_key: str,
+    room_ids: List[str],
+    targets: Dict[str, int],
+    exc: Exception,
+) -> Dict[str, Any]:
+    provider_label = normalize_text(provider_key).upper() or "UNKNOWN"
+    message = str(exc).strip() or exc.__class__.__name__
+    desired_units = _sorted_int_date_map(targets or {})
+    rows: List[Dict[str, Any]] = [
+        {
+            "date": day,
+            "desired_units": int(units),
+            "actual_units": None,
+            "drift": None,
+            "status": "unavailable",
+            "actions": {"total": 0, "stock": 0, "sale_day": 0},
+        }
+        for day, units in desired_units.items()
+    ]
+    reconciliation = {
+        "provider": provider_label,
+        "mode": "full_recalc_diff",
+        "desired_units_by_date": desired_units,
+        "actual_units_by_date": {},
+        "rows": rows,
+        "counts": {
+            "dates": len(rows),
+            "drift_dates": 0,
+            "action_dates": 0,
+            "actions": 0,
+        },
+        "available": False,
+        "error": {
+            "type": exc.__class__.__name__,
+            "message": message,
+        },
+    }
+    return {
+        "room_ids": list(room_ids),
+        "target_dates": len(desired_units),
+        "actions": [],
+        "warnings": [
+            {
+                "provider": provider_label,
+                "code": f"{provider_label}_FETCH_FAILED",
+                "date": "-",
+                "message": message,
+            }
+        ],
+        "results": [],
+        "reconciliation": reconciliation,
+        "error": {
+            "type": exc.__class__.__name__,
+            "message": message,
+        },
+    }
 
 
 def apply_sync_actions(
@@ -1643,6 +1778,14 @@ def normalize_planner_warning(warning: Any) -> Optional[Dict[str, Any]]:
 
 def build_apply_guardrails(summary: Dict[str, Any]) -> Dict[str, Any]:
     blocking_issues: List[Dict[str, Any]] = []
+    provider_mode = normalize_text(summary.get("provider", "")).lower()
+    active_provider_keys: Tuple[str, ...]
+    if provider_mode == "station":
+        active_provider_keys = ("station",)
+    elif provider_mode == "naver":
+        active_provider_keys = ("naver",)
+    else:
+        active_provider_keys = ("station", "naver")
 
     def push_issue(date: str, issue_type: str, detail: str) -> None:
         blocking_issues.append(
@@ -1654,7 +1797,7 @@ def build_apply_guardrails(summary: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     validation = summary.get("validation", {})
-    for provider_key in ("station", "naver"):
+    for provider_key in active_provider_keys:
         provider_validation = validation.get(provider_key, {})
         for issue in provider_validation.get("issues", []):
             if not isinstance(issue, dict):
@@ -1669,18 +1812,19 @@ def build_apply_guardrails(summary: Dict[str, Any]) -> Dict[str, Any]:
             if level == "warn" and code in APPLY_BLOCKING_VALIDATION_WARN_CODES:
                 push_issue(date, f"APPLY_BLOCK_{provider_key.upper()}_WARN", detail)
 
-    station_summary = summary.get("station", {})
-    for raw_warning in station_summary.get("warnings", []):
-        warning = normalize_planner_warning(raw_warning)
-        if not warning:
-            continue
-        if warning["code"] not in APPLY_BLOCKING_STATION_WARNING_CODES:
-            continue
-        push_issue(
-            warning.get("date") or "-",
-            "APPLY_BLOCK_STATION_PLAN_WARN",
-            warning.get("message") or warning["code"],
-        )
+    if "station" in active_provider_keys:
+        station_summary = summary.get("station", {})
+        for raw_warning in station_summary.get("warnings", []):
+            warning = normalize_planner_warning(raw_warning)
+            if not warning:
+                continue
+            if warning["code"] not in APPLY_BLOCKING_STATION_WARNING_CODES:
+                continue
+            push_issue(
+                warning.get("date") or "-",
+                "APPLY_BLOCK_STATION_PLAN_WARN",
+                warning.get("message") or warning["code"],
+            )
 
     return {
         "blocked": bool(blocking_issues),
@@ -1754,6 +1898,7 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
     summary_path = out_dir / "sync_inventory_summary.json"
 
     summary: Dict[str, Any] = initialize_sync_summary(args, snapshot, provider, mode, target_plan)
+    summary["provider_errors"] = []
 
     station_apply_context: Optional[Tuple[Dict[str, str], List[Dict[str, Any]]]] = None
     naver_apply_context: Optional[Tuple[Dict[str, str], List[Dict[str, Any]]]] = None
@@ -1778,28 +1923,66 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
             )
 
         if provider in ("station", "both"):
-            station_summary, station_apply_context = prepare_station_sync(
-                session=session,
-                args=args,
-                auth_bundle_payload=auth_bundle_payload,
-                room_ids=station_room_ids,
-                range_start=range_start,
-                range_end=range_end,
-                station_targets=station_targets,
-            )
+            try:
+                station_summary, station_apply_context = prepare_station_sync(
+                    session=session,
+                    args=args,
+                    auth_bundle_payload=auth_bundle_payload,
+                    room_ids=station_room_ids,
+                    range_start=range_start,
+                    range_end=range_end,
+                    station_targets=station_targets,
+                )
+            except (AuditError, requests.RequestException) as exc:
+                if provider != "both":
+                    raise
+                station_summary = build_provider_fetch_error_summary(
+                    "station",
+                    station_room_ids,
+                    station_targets,
+                    exc,
+                )
+                station_apply_context = None
+                summary["provider_errors"].append(
+                    {
+                        "provider": "station",
+                        "stage": "prepare",
+                        "type": exc.__class__.__name__,
+                        "message": str(exc).strip() or exc.__class__.__name__,
+                    }
+                )
             summary["station"] = station_summary
             summary["reconciliation"]["providers"]["station"] = station_summary.get("reconciliation", {})
 
         if provider in ("naver", "both"):
-            naver_summary, naver_apply_context = prepare_naver_sync(
-                session=session,
-                args=args,
-                auth_bundle_payload=auth_bundle_payload,
-                room_ids=naver_room_ids,
-                range_start=range_start,
-                range_end=range_end,
-                naver_targets=naver_targets,
-            )
+            try:
+                naver_summary, naver_apply_context = prepare_naver_sync(
+                    session=session,
+                    args=args,
+                    auth_bundle_payload=auth_bundle_payload,
+                    room_ids=naver_room_ids,
+                    range_start=range_start,
+                    range_end=range_end,
+                    naver_targets=naver_targets,
+                )
+            except (AuditError, requests.RequestException) as exc:
+                if provider != "both":
+                    raise
+                naver_summary = build_provider_fetch_error_summary(
+                    "naver",
+                    naver_room_ids,
+                    naver_targets,
+                    exc,
+                )
+                naver_apply_context = None
+                summary["provider_errors"].append(
+                    {
+                        "provider": "naver",
+                        "stage": "prepare",
+                        "type": exc.__class__.__name__,
+                        "message": str(exc).strip() or exc.__class__.__name__,
+                    }
+                )
             summary["naver"] = naver_summary
             summary["reconciliation"]["providers"]["naver"] = naver_summary.get("reconciliation", {})
 
@@ -1852,11 +2035,22 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
         print(f"- station actions: {len(summary.get('station', {}).get('actions', []))}")
     if provider in ("naver", "both"):
         print(f"- naver actions: {len(summary.get('naver', {}).get('actions', []))}")
-    print(
-        "- validation errors/warnings:"
-        f" station={station_validation['errorCount']}/{station_validation['warnCount']},"
-        f" naver={naver_validation['errorCount']}/{naver_validation['warnCount']}"
-    )
+    if provider == "station":
+        print(
+            "- validation errors/warnings:"
+            f" station={station_validation['errorCount']}/{station_validation['warnCount']}"
+        )
+    elif provider == "naver":
+        print(
+            "- validation errors/warnings:"
+            f" naver={naver_validation['errorCount']}/{naver_validation['warnCount']}"
+        )
+    else:
+        print(
+            "- validation errors/warnings:"
+            f" station={station_validation['errorCount']}/{station_validation['warnCount']},"
+            f" naver={naver_validation['errorCount']}/{naver_validation['warnCount']}"
+        )
     reconciliation_counts = summary.get("reconciliation", {}).get("counts", {})
     print(
         "- reconciliation:"
@@ -1920,22 +2114,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--provider", choices=["station", "naver", "both"], default="both")
     parser.add_argument("--apply", action="store_true", help="Apply mutations. Default is dry-run.")
     parser.add_argument(
-        "--allow-validation-warnings",
-        dest="allow_unsafe_apply",
-        action="store_true",
-        help="Deprecated alias for --allow-unsafe-apply.",
-    )
-    parser.add_argument(
         "--allow-unsafe-apply",
         dest="allow_unsafe_apply",
         action="store_true",
         help="Override apply guardrails after reviewing the summary JSON. Use with caution.",
-    )
-    parser.add_argument(
-        "--validation-jump-threshold",
-        type=int,
-        default=2,
-        help="Deprecated compatibility flag (no-op).",
     )
     parser.add_argument(
         "--approve-plan-token",
@@ -1973,8 +2155,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--naver-har", default="")
     parser.add_argument("--naver-cookie", default="")
     parser.add_argument("--naver-csrf-token", default="")
-    parser.add_argument("--naver-role", default="OWNER")
+    parser.add_argument(
+        "--naver-role",
+        default="",
+        help="Optional x-booking-naver-role override. Leave empty to avoid forcing role header.",
+    )
     parser.add_argument("--naver-desc", default="sheet-sync")
+    parser.add_argument(
+        "--naver-read-sleep-ms",
+        type=int,
+        default=120,
+        help="Delay between Naver daily-schedules read calls per room.",
+    )
 
     parser.add_argument("--request-timeout-sec", type=int, default=20)
     parser.add_argument("--request-sleep-ms", type=int, default=120)

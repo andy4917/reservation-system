@@ -4,7 +4,7 @@ import csv
 import datetime as dt
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from src.domain.ops_sheet_policy import normalize_ops_sheet_spreadsheet
 from src.domain.sheet_domain import AuditError, ReservationBlock, try_parse_iso_date
@@ -272,13 +272,6 @@ def load_blocks_csv(path: Path) -> List[ReservationBlock]:
 def _to_optional_text(value: Any) -> Optional[str]:
     text = str(value or "").strip()
     return text or None
-
-
-def _to_optional_int(value: Any) -> Optional[int]:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    return int(text)
 
 
 def _require_text(row: Dict[str, Any], key: str, line_no: int) -> str:

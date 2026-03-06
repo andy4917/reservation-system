@@ -64,6 +64,28 @@ def main() -> None:
     assert allowed["blocked"] is False
     assert allowed["issues"] == []
 
+    station_only = build_apply_guardrails(
+        {
+            "provider": "station",
+            "validation": {
+                "station": {"issues": []},
+                "naver": {
+                    "issues": [
+                        {
+                            "level": "warn",
+                            "code": "TARGET_EXCEEDS_PROVIDER_MAX",
+                            "date": "2026-03-09",
+                            "message": "Naver warning should be ignored in station-only mode.",
+                        }
+                    ]
+                },
+            },
+            "station": {"warnings": []},
+        }
+    )
+    assert station_only["blocked"] is False
+    assert station_only["issues"] == []
+
     print("regression_sync_guardrails_py: OK")
 
 

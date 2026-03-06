@@ -27,6 +27,7 @@
     DATE_RANGE_CACHE_LIMIT,
     APPLY_JITTER_MS,
     APPLY_RETRY_LIMIT,
+    READ_ONLY_TOOL_MODE,
     EMBEDDED_AUTH_MODE,
     EMBEDDED_AUTH,
     TEXT,
@@ -372,18 +373,19 @@
     const csrfToken = normalizeText(
       source.csrfToken || source["x-csrf-token"] || source.csrf || inferCsrfTokenFromCookies(cookies)
     );
-    const role = normalizeText(source.role || source["x-booking-naver-role"] || source.naverRole || "OWNER") || "OWNER";
+    const role = normalizeText(source.role || source["x-booking-naver-role"] || source.naverRole || "");
     if (!cookies.length && !cookieHeader) return null;
-    return {
+    const out = {
       version: AUTH_BUNDLE_VERSION,
       providerType,
       capturedAt,
       sourceOrigin,
       cookies,
       cookieHeader: cookieHeader || buildCookieHeaderFromCookies(cookies),
-      csrfToken,
-      role
+      csrfToken
     };
+    if (role) out.role = role;
+    return out;
   }
 
   function sanitizeHeaderMap(raw) {
@@ -533,6 +535,36 @@
     return { presetKey, propertyNo, bsnsCode, pageId, pageSize };
   }
 
+  function parseWingsPresetDate(value) {
+    const text = normalizeText(value || "");
+    if (!text) return "";
+    if (isDate(text)) return text;
+    const compact = text.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`;
+    const slashed = text.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/);
+    if (slashed) return `${slashed[1]}-${String(slashed[2]).padStart(2, "0")}-${String(slashed[3]).padStart(2, "0")}`;
+    return "";
+  }
+
+  function resolveWingsPresetDateRange(rawPreset) {
+    const source = rawPreset && typeof rawPreset === "object" && !Array.isArray(rawPreset) ? rawPreset : {};
+    const startDate = parseWingsPresetDate(
+      source.startDate || source.start_date || source.fromDate || source.from_date || ""
+    );
+    const endDate = parseWingsPresetDate(
+      source.endDate || source.end_date || source.toDate || source.to_date || ""
+    );
+    if (startDate && endDate && startDate <= endDate) {
+      return { startDate, endDate };
+    }
+    const today = toDateKey(new Date());
+    const end = toDateKey(addDays(fromDateKey(today) || new Date(), 7));
+    return {
+      startDate: today,
+      endDate: end
+    };
+  }
+
   function buildWingsPmsPresetRequest(rawPreset, currentUrl = "") {
     const preset = sanitizeWingsPmsPreset(rawPreset);
     const presetDef = WINGS_PMS_PRESET_DEFS[preset.presetKey] || null;
@@ -547,14 +579,15 @@
     } catch (_) {
       // Keep default origin.
     }
+    const dateRange = resolveWingsPresetDateRange(rawPreset);
     const url = new URL(presetDef.urlPath, origin);
     const requestBody = presetDef.buildBody({
       propertyNo,
       bsnsCode,
       pageId,
       pageSize: preset.pageSize || presetDef.defaultPageSize,
-      startDate: "2026-02-28",
-      endDate: "2026-03-07"
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate
     });
     return {
       url: url.toString(),
@@ -1099,6 +1132,12 @@
 
   function sanitizeProviderApplyConfig(raw) {
     const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    if (READ_ONLY_TOOL_MODE === true) {
+      return {
+        "admin-station": false,
+        "naver-partner": false
+      };
+    }
     return {
       "admin-station": source["admin-station"] !== false,
       "naver-partner": source["naver-partner"] === true
@@ -1307,6 +1346,14 @@
     const i = Math.trunc(n);
     if (i <= 0) return null;
     return i;
+  }
+
+  function sanitizePositiveNumericId(value) {
+    const text = normalizeText(value);
+    if (!text) return "";
+    if (!/^\d+$/.test(text)) return "";
+    if (Number(text) <= 0) return "";
+    return text;
   }
 
 
@@ -1663,6 +1710,12 @@
     const config = applyEmbeddedSyncConfig(raw && typeof raw === "object" ? raw : {});
     const spreadsheetRaw = normalizeSpreadsheetInput(config.spreadsheet || DEFAULT_SPREADSHEET_ID);
     const spreadsheetId = extractSpreadsheetId(spreadsheetRaw);
+    const stationBranchId = sanitizePositiveNumericId(
+      config.stationBranchId || config.station_branch_id || config.branchId || config.branch_id || ""
+    );
+    const naverBusinessId = sanitizePositiveNumericId(
+      config.naverBusinessId || config.naver_business_id || config.businessId || config.business_id || ""
+    );
     return {
       spreadsheet: spreadsheetId || spreadsheetRaw,
       sheetName: normalizeText(config.sheetName || DEFAULT_SHEET_NAME),
@@ -1692,7 +1745,9 @@
           pageId: config.pmsPageId || config.PAGE_ID || "",
           pageSize: config.pmsPageSize || config.take || ""
         }
-      )
+      ),
+      stationBranchId,
+      naverBusinessId
     };
   }
 

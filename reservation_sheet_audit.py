@@ -64,7 +64,6 @@ from src.domain.sheet_domain import (
     normalize_reservation_status,
     normalize_text,
     parse_money_to_int,
-    calculate_checkout_from_dates,
 )
 from src.io.sheets_api import GoogleSheetsReadonlyClient
 from src.io.sheet_loader import load_sheet_matrix_and_dates
@@ -72,7 +71,6 @@ from src.scan.sheet_scan import (
     SheetMatrix,
     calculate_channel_recommendations,
     classify_color_cell,
-    calculate_daily_stats,
     calculate_vac_by_room_type,
     extract_inventory_values_by_date,
     extract_reservation_blocks,
@@ -104,6 +102,9 @@ from src.report.sheet_report import (
     write_room_type_vac_csv,
     write_source_reservations_csv,
 )
+
+# Compatibility re-exports consumed by reservation_sheet_sync.
+_SYNC_COMPAT_EXPORTS = (DEFAULT_START_ROW,)
 
 PROXY_ENV_KEYS = (
     "HTTP_PROXY",
@@ -395,6 +396,136 @@ def parse_any_date(value: Any) -> Optional[dt.date]:
         return None
 
 
+def parse_report_window(report_start: str, report_end: str) -> Tuple[Optional[dt.date], Optional[dt.date]]:
+    start_raw = normalize_text(report_start)
+    end_raw = normalize_text(report_end)
+    start_date = parse_any_date(start_raw) if start_raw else None
+    end_date = parse_any_date(end_raw) if end_raw else None
+    if start_raw and start_date is None:
+        raise AuditError(f"Invalid --report-start-date: {report_start}")
+    if end_raw and end_date is None:
+        raise AuditError(f"Invalid --report-end-date: {report_end}")
+    if start_date and end_date and start_date > end_date:
+        raise AuditError("--report-start-date must be <= --report-end-date")
+    return start_date, end_date
+
+
+def _interval_overlaps_window(
+    start: Optional[dt.date],
+    end_exclusive: Optional[dt.date],
+    window_start: Optional[dt.date],
+    window_end: Optional[dt.date],
+) -> bool:
+    if window_start is None and window_end is None:
+        return True
+    if start is None and end_exclusive is None:
+        return False
+    if start is None and end_exclusive is not None:
+        start = end_exclusive - dt.timedelta(days=1)
+    if end_exclusive is None and start is not None:
+        end_exclusive = start + dt.timedelta(days=1)
+    if start is None or end_exclusive is None:
+        return False
+    if end_exclusive <= start:
+        end_exclusive = start + dt.timedelta(days=1)
+    end_inclusive = end_exclusive - dt.timedelta(days=1)
+    if window_start and end_inclusive < window_start:
+        return False
+    if window_end and start > window_end:
+        return False
+    return True
+
+
+def filter_cross_validation_inputs_by_report_window(
+    blocks: List[ReservationBlock],
+    source_records: List[SourceReservation],
+    report_start: str,
+    report_end: str,
+) -> Tuple[List[ReservationBlock], List[SourceReservation], Dict[str, Any]]:
+    window_start, window_end = parse_report_window(report_start, report_end)
+    if window_start is None and window_end is None:
+        return (
+            list(blocks),
+            list(source_records),
+            {
+                "enabled": False,
+                "start": "",
+                "end": "",
+                "blocks_before": len(blocks),
+                "blocks_after": len(blocks),
+                "sources_before": len(source_records),
+                "sources_after": len(source_records),
+            },
+        )
+
+    filtered_blocks = [
+        block
+        for block in blocks
+        if _interval_overlaps_window(
+            parse_any_date(getattr(block, "checkin", None)),
+            parse_any_date(getattr(block, "checkout", None)),
+            window_start,
+            window_end,
+        )
+    ]
+    filtered_sources = [
+        record
+        for record in source_records
+        if _interval_overlaps_window(
+            parse_any_date(getattr(record, "checkin", None)),
+            parse_any_date(getattr(record, "checkout", None)),
+            window_start,
+            window_end,
+        )
+    ]
+
+    source_scope_mode = "stay_overlap"
+    pre_arrival_blocks_removed = 0
+    source_systems = {
+        normalize_text(getattr(record, "source_system", "")).upper()
+        for record in filtered_sources
+        if normalize_text(getattr(record, "source_system", ""))
+    }
+    pms_arrival_scoped = bool(window_start) and bool(filtered_sources) and source_systems == {"PMS"}
+    if pms_arrival_scoped:
+        has_prestart_source = any(
+            (parse_any_date(getattr(record, "checkin", None)) or window_start) < window_start
+            for record in filtered_sources
+        )
+        if not has_prestart_source:
+            narrowed_blocks = [
+                block
+                for block in filtered_blocks
+                if (
+                    (parse_any_date(getattr(block, "checkin", None)) is not None)
+                    and parse_any_date(getattr(block, "checkin", None)) >= window_start
+                    and (
+                        window_end is None
+                        or parse_any_date(getattr(block, "checkin", None)) <= window_end
+                    )
+                )
+            ]
+            pre_arrival_blocks_removed = len(filtered_blocks) - len(narrowed_blocks)
+            filtered_blocks = narrowed_blocks
+            source_scope_mode = "pms_arrival_checkin"
+
+    return (
+        filtered_blocks,
+        filtered_sources,
+        {
+            "enabled": True,
+            "start": window_start.isoformat() if window_start else "",
+            "end": window_end.isoformat() if window_end else "",
+            "blocks_before": len(blocks),
+            "blocks_after": len(filtered_blocks),
+            "sources_before": len(source_records),
+            "sources_after": len(filtered_sources),
+            "source_scope_mode": source_scope_mode,
+            "pre_arrival_blocks_removed": pre_arrival_blocks_removed,
+        },
+    )
+
+
 def infer_channel_from_text(value: str) -> str:
     low = normalize_text(value).lower()
     if not low:
@@ -499,6 +630,22 @@ def parse_pms_branch_map(raw_value: str) -> Dict[str, str]:
     return entries
 
 
+def parse_branch_scope(raw_value: str) -> List[str]:
+    text = normalize_text(raw_value)
+    if not text:
+        return []
+    chunks = [item for item in re.split(r"[\n,]+", text) if normalize_text(item)]
+    out: List[str] = []
+    seen: set[str] = set()
+    for chunk in chunks:
+        normalized = normalize_branch_label(chunk)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        out.append(normalized)
+    return out
+
+
 def _extract_source_property_keys(row: Dict[str, Any]) -> List[str]:
     property_no = normalize_text(
         str(
@@ -584,19 +731,6 @@ def normalize_nationality_nights(value: Any, nights: int) -> str:
     if nights > 0:
         return f"{text} {nights}\ubc15"
     return text
-
-
-def is_inactive_reservation_status(status: str) -> bool:
-    text = normalize_text(status).upper()
-    if not text:
-        return False
-    if text == "CANCELED":
-        return True
-    if text.startswith(("CXL", "CNCL", "CANC")):
-        return True
-    if text in {"CX", "CN"}:
-        return True
-    return False
 
 
 def parse_source_row(
@@ -1979,6 +2113,14 @@ def build_analysis_artifacts(args: argparse.Namespace, context: Dict[str, Any]) 
     har_index = context["har_index"]
 
     blocks, scan_meta = extract_reservation_blocks(matrix, date_cols, room_rows)
+    sheet_branch_scope_filter = parse_branch_scope(getattr(args, "sheet_branch_scope", ""))
+    if sheet_branch_scope_filter:
+        scope_set = set(sheet_branch_scope_filter)
+        blocks = [
+            block
+            for block in blocks
+            if normalize_branch_label(getattr(block, "branch", "")) in scope_set
+        ]
     daily_stats = list(scan_meta.get("daily_all", []))
     daily_branch_stats = list(scan_meta.get("daily_by_branch", []))
     vac_by_room_type = calculate_vac_by_room_type(matrix, date_cols, room_rows)
@@ -2029,10 +2171,16 @@ def build_analysis_artifacts(args: argparse.Namespace, context: Dict[str, Any]) 
         client=context.get("client"),
         ops_sheet_spreadsheet=args.ops_sheet_spreadsheet,
     )
-    cross_issues = cross_validate_sheet_vs_sources(blocks, filtered_source_records)
+    cross_blocks, cross_sources, cross_scope = filter_cross_validation_inputs_by_report_window(
+        blocks,
+        filtered_source_records,
+        args.report_start_date,
+        args.report_end_date,
+    )
+    cross_issues = cross_validate_sheet_vs_sources(cross_blocks, cross_sources)
     suspect_trace = build_suspect_trace_artifact(
         cross_issues=cross_issues,
-        blocks=blocks,
+        blocks=cross_blocks,
         summary_meta={
             "summary_json": "",
             "spreadsheet_id": context["spreadsheet_id"],
@@ -2054,6 +2202,8 @@ def build_analysis_artifacts(args: argparse.Namespace, context: Dict[str, Any]) 
         "source_system_counts": Counter(r.source_system for r in source_records),
         "source_system_counts_filtered": Counter(r.source_system for r in filtered_source_records),
         "pms_branch_scope": pms_branch_scope,
+        "sheet_branch_scope_filter": sheet_branch_scope_filter,
+        "cross_validation_scope": cross_scope,
         "pms_branch_map": pms_branch_map,
         "inventory_rows": inventory_rows,
         "channel_reco": channel_reco,
@@ -2152,6 +2302,8 @@ def build_analysis_summary(
             "source_system_counts_filtered": dict(artifacts["source_system_counts_filtered"]),
             "pms_branch_map": artifacts["pms_branch_map"],
             "pms_branch_scope": artifacts["pms_branch_scope"],
+            "sheet_branch_scope_filter": artifacts.get("sheet_branch_scope_filter", []),
+            "cross_validation_scope": artifacts.get("cross_validation_scope", {}),
         },
         "counts": {
             "reservation_blocks": len(artifacts["blocks"]),
@@ -2689,6 +2841,11 @@ def add_analyze_arguments(parser: argparse.ArgumentParser) -> None:
         "--pms-branch-map",
         default="",
         help="PMS 지점 맵핑 (예: 91=COEX,92=GANGNAM,93=BRANCH_THE_SEOLLEUNG)",
+    )
+    parser.add_argument(
+        "--sheet-branch-scope",
+        default="",
+        help="시트 블록 지점 범위 필터 (예: GANGNAM 또는 COEX,GANGNAM)",
     )
     parser.add_argument("--out-dir", default="output")
     parser.add_argument("--vac-share-limit", type=int, default=2)

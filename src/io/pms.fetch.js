@@ -1144,9 +1144,58 @@
     return rows;
   }
 
+  function pickFirstPositiveNumericId(candidates, fallback) {
+    for (const value of Array.isArray(candidates) ? candidates : []) {
+      const text = normalizeText(value);
+      if (!/^\d+$/.test(text)) continue;
+      if (Number(text) <= 0) continue;
+      return text;
+    }
+    return fallback;
+  }
+
+  function toPositiveNumericId(value) {
+    const text = normalizeText(value);
+    if (!/^\d+$/.test(text)) return "";
+    if (Number(text) <= 0) return "";
+    return text;
+  }
+
+  function resolveStationBranchId(fallback = "") {
+    const path = normalizeText(location.pathname || "");
+    const href = normalizeText(location.href || "");
+    const hash = normalizeText(location.hash || "");
+    const matches = [
+      path.match(/\/branch\/(\d+)/i)?.[1],
+      href.match(/[?&](?:branchId|branch_id|branchNo|branch_no)=(\d+)/i)?.[1],
+      hash.match(/(?:branchId|branch_id|branchNo|branch_no)=(\d+)/i)?.[1],
+      hash.match(/\/branch\/(\d+)/i)?.[1]
+    ];
+    const syncFallback = toPositiveNumericId(App.runtime?.syncConfigCache?.stationBranchId || "");
+    const explicitFallback = toPositiveNumericId(fallback || "");
+    const defaultFallback = toPositiveNumericId(FIXED_STATION_BRANCH_ID);
+    return pickFirstPositiveNumericId(matches, explicitFallback || syncFallback || defaultFallback);
+  }
+
+  function resolveNaverBusinessId(fallback = "") {
+    const path = normalizeText(location.pathname || "");
+    const href = normalizeText(location.href || "");
+    const hash = normalizeText(location.hash || "");
+    const matches = [
+      path.match(/\/businesses\/(\d+)/i)?.[1],
+      href.match(/[?&](?:businessId|business_id|bizId|biz_id)=(\d+)/i)?.[1],
+      hash.match(/(?:businessId|business_id|bizId|biz_id)=(\d+)/i)?.[1],
+      hash.match(/\/businesses\/(\d+)/i)?.[1]
+    ];
+    const syncFallback = toPositiveNumericId(App.runtime?.syncConfigCache?.naverBusinessId || "");
+    const explicitFallback = toPositiveNumericId(fallback || "");
+    const defaultFallback = toPositiveNumericId(FIXED_NAVER_BUSINESS_ID);
+    return pickFirstPositiveNumericId(matches, explicitFallback || syncFallback || defaultFallback);
+  }
+
 
   async function fetchStationRows(query) {
-    const branchId = FIXED_STATION_BRANCH_ID;
+    const branchId = resolveStationBranchId();
     const url = buildStationCalendarUrl(branchId);
     url.searchParams.set("startDate", query.startDate);
     url.searchParams.set("endDate", query.endDate);
@@ -1218,7 +1267,7 @@
 
 
   async function fetchNaverRows(query) {
-    const businessId = FIXED_NAVER_BUSINESS_ID;
+    const businessId = resolveNaverBusinessId();
     const session = createSessionRequestContext("naver-partner");
     let items = [];
     const now = Date.now();
@@ -1650,6 +1699,8 @@
       typeof W.getEndpointCatalog === "function"
         ? () => W.getEndpointCatalog()
         : () => [],
+    resolveStationBranchId,
+    resolveNaverBusinessId,
     resolvePresetRoomId,
     normalizeRows,
   });

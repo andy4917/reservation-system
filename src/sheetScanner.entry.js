@@ -33,6 +33,7 @@
     APPLY_BLOCKING_SCAN_WARN_CODES,
     APPLY_BLOCKING_PREVIEW_WARN_CODES,
     APPLY_BLOCKING_PLANNER_WARNING_CODES,
+    READ_ONLY_TOOL_MODE,
     EMBEDDED_AUTH_MODE,
     EMBEDDED_AUTH,
     TEXT,
@@ -61,6 +62,7 @@
   const dateRangeCache = runtime.dateRangeCache || (runtime.dateRangeCache = new Map());
   let valueCellIndexCache = runtime.valueCellIndexCache || (runtime.valueCellIndexCache = new WeakMap());
   const tableRenderTokenMap = runtime.tableRenderTokenMap || (runtime.tableRenderTokenMap = new WeakMap());
+  const tableCellFlashCache = runtime.tableCellFlashCache || (runtime.tableCellFlashCache = new WeakMap());
   const sheetReadHintsCache = runtime.sheetReadHintsCache || (runtime.sheetReadHintsCache = new Map());
   const sheetSnapshotCache = runtime.sheetSnapshotCache || (runtime.sheetSnapshotCache = new Map());
   let stationTokenCache = runtime.stationTokenCache || (runtime.stationTokenCache = { token: null, expiresAt: 0 });
@@ -198,6 +200,7 @@
     fetchNaverRows,
     fetchProviderRows,
     fetchProviderReservations,
+    resolveStationBranchId,
     roomNameKey,
     resolvePresetRoomId,
     normalizeRows,
@@ -345,6 +348,11 @@
   const state = {
     started: false,
     loading: false,
+    syncRunning: false,
+    loadingAction: "",
+    panelPosition: null,
+    syncErrorCellKeys: new Set(),
+    syncErrorCellDetailByKey: new Map(),
     monthCursor: monthStart(new Date()),
     selectedStart: null,
     selectedEnd: null,
@@ -366,7 +374,7 @@
     correctionDiffCount: 0,
     syncConfig: sanitizeSyncConfig({}),
     syncPreview: null,
-    syncApplyEnabled: true,
+    syncApplyEnabled: READ_ONLY_TOOL_MODE === true ? false : true,
     syncResultVisible: false,
     settingsOpen: false,
     errorExpanded: false,
@@ -384,30 +392,55 @@
   const PANEL_ANIM_MS = 140;
   let panelAnimTimer = 0;
 
+  function releasePanelSessionMemory() {
+    state.started = false;
+    state.loading = false;
+    state.loadingAction = "";
+    state.rows = [];
+    state.dates = [];
+    state.valueRows = [];
+    state.providerReservations = [];
+    state.providerReservationMeta = null;
+    state.sheetSnapshot = null;
+    state.sheetDates = [];
+    state.sheetValueRows = [];
+    state.syncPreview = { mismatchCount: 0 };
+    state.syncApprovalChecked = false;
+    state.syncApprovalFingerprint = "";
+    state.verificationReport = null;
+    state.statusLogs = [];
+    clearSyncErrorCellMarkers();
+    if (ui.siteBody) tableCellFlashCache.set(ui.siteBody, new Map());
+    if (ui.sheetBody) tableCellFlashCache.set(ui.sheetBody, new Map());
+    if (ui.insightBody) tableCellFlashCache.set(ui.insightBody, new Map());
+  }
+
   function isPanelVisible() {
     return Boolean(ui.panel) && !ui.panel.classList.contains("hidden") && !ui.panel.classList.contains("is-closing");
   }
 
   function setPanelOpen(flag) {
     const shouldOpen = Boolean(flag);
-    if (!ui.panel || !ui.backdrop || !ui.toggle) return;
+    if (!ui.panel || !ui.backdrop || !ui.wrap) return;
     if (panelAnimTimer) {
       window.clearTimeout(panelAnimTimer);
       panelAnimTimer = 0;
     }
-    ui.toggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
     if (shouldOpen) {
+      ui.wrap.classList.add("panel-open");
       ui.panel.classList.remove("hidden", "is-closing");
       ui.backdrop.classList.remove("hidden", "is-closing");
       requestAnimationFrame(() => {
         ui.panel.classList.add("is-open");
         ui.backdrop.classList.add("is-open");
       });
+      emitUiEvent("main_panel_open", { provider: context.providerType || "" });
       return;
     }
     if (ui.panel.classList.contains("hidden")) return;
     ui.panel.classList.remove("is-open");
     ui.backdrop.classList.remove("is-open");
+    ui.wrap.classList.remove("panel-open");
     ui.panel.classList.add("is-closing");
     ui.backdrop.classList.add("is-closing");
     panelAnimTimer = window.setTimeout(() => {
@@ -415,6 +448,9 @@
       ui.backdrop.classList.remove("is-closing");
       ui.panel.classList.add("hidden");
       ui.backdrop.classList.add("hidden");
+      if (!state.loading && state.syncRunning !== true) {
+        releasePanelSessionMemory();
+      }
       panelAnimTimer = 0;
     }, PANEL_ANIM_MS);
   }
@@ -432,6 +468,24 @@
     if (!el) return;
     if (isSectionVisible(el) === Boolean(flag)) return;
     setSectionVisible(el, flag);
+  }
+
+  function emitUiEvent(name, payload = {}) {
+    const eventName = normalizeText(name || "");
+    if (!eventName) return;
+    try {
+      window.dispatchEvent(
+        new CustomEvent("inventory-ui-event", {
+          detail: {
+            name: eventName,
+            timestamp: Date.now(),
+            ...payload
+          }
+        })
+      );
+    } catch (_err) {
+      // ignore telemetry failures
+    }
   }
 
   function redactSensitiveText(input) {
@@ -476,6 +530,7 @@
   }
 
   function isSyncApprovalRequired() {
+    if (READ_ONLY_TOOL_MODE === true) return false;
     if (!isSyncApplyEnabled()) return false;
     if (Number(state.syncPreview?.mismatchCount || 0) <= 0) return false;
     return isSyncPreviewForActiveQuery();
@@ -547,6 +602,7 @@
     const hasLoadedData = siteLoadedForSelectedRange || sheetLoadedForSelectedRange;
     if (!hasRange) return "period";
     if (!hasLoadedData) return "load";
+    if (READ_ONLY_TOOL_MODE === true) return "review";
     if (!isSyncApplyEnabled()) return "review";
     if (!isSyncApprovalReady()) return "review";
     return "apply";
@@ -579,7 +635,9 @@
   function renderUserOpsSummary() {
     if (!ui.userSyncState || !ui.userMismatchCount || !ui.userPmsStatus || !ui.userLoadState || !ui.userOpsHint) return;
     const mismatchCount = isSyncPreviewForActiveQuery() ? Number(state.syncPreview?.mismatchCount || 0) : 0;
-    const blocked = Boolean(state.syncPreview?.policy?.blocked) || !isCurrentProviderApplyAllowed();
+    const mismatchCard = ui.userMismatchCount?.closest?.(".card");
+    const readonlyMode = READ_ONLY_TOOL_MODE === true;
+    const blocked = readonlyMode ? false : (Boolean(state.syncPreview?.policy?.blocked) || !isCurrentProviderApplyAllowed());
     const hasSite = Boolean(state.query && Array.isArray(state.rows) && state.rows.length > 0);
     const hasSheet = Boolean(state.sheetQuery && state.sheetSnapshot);
     const reservationCounts = state.providerReservationMeta?.statusCounts && typeof state.providerReservationMeta.statusCounts === "object"
@@ -597,7 +655,10 @@
     let hint = TEXT.userHintIdle;
     if (state.loading) {
       syncState = "처리 중";
-      hint = "조회 또는 적용이 진행 중입니다.";
+      hint = readonlyMode ? "조회 또는 검토 계산이 진행 중입니다." : "조회 또는 적용이 진행 중입니다.";
+    } else if (readonlyMode) {
+      syncState = mismatchCount > 0 ? "검토 필요" : hasSite && hasSheet ? "검토 가능" : "대기";
+      hint = "읽기 전용 모드입니다. 시트/OTA 쓰기 없이 조회와 비교 결과만 제공합니다.";
     } else if (blocked) {
       syncState = "차단됨";
       hint = "적용은 차단 상태입니다. 상세 사유와 정책 근거는 설정 > 운영 전용에서 확인하세요.";
@@ -611,6 +672,7 @@
 
     ui.userSyncState.textContent = syncState;
     ui.userMismatchCount.textContent = String(mismatchCount);
+    if (mismatchCard) mismatchCard.classList.toggle("is-critical", mismatchCount > 0);
     ui.userPmsStatus.textContent =
       state.providerReservationMeta?.source === "pms-unconfigured"
         ? "설정 필요"
@@ -627,8 +689,10 @@
   function renderOpsMetaSummary() {
     if (ui.opsPolicySummary) {
       const mismatchCount = isSyncPreviewForActiveQuery() ? Number(state.syncPreview?.mismatchCount || 0) : 0;
-      const blocked = Boolean(state.syncPreview?.policy?.blocked) || !isCurrentProviderApplyAllowed();
-      const statusLine = blocked ? "차단" : mismatchCount > 0 ? "검토 필요" : "대기/적용 가능";
+      const blocked = READ_ONLY_TOOL_MODE === true ? false : (Boolean(state.syncPreview?.policy?.blocked) || !isCurrentProviderApplyAllowed());
+      const statusLine = READ_ONLY_TOOL_MODE === true
+        ? (mismatchCount > 0 ? "검토 필요" : "대기/검토 가능")
+        : (blocked ? "차단" : mismatchCount > 0 ? "검토 필요" : "대기/적용 가능");
       ui.opsPolicySummary.textContent =
         `정책 요약\n- 상태모델: ACTIVE / CANCELED (NOSHOW는 ACTIVE + anomaly)\n- 현재 판정: ${statusLine}\n- 현재 불일치: ${mismatchCount}건\n- 수기 OTA(STATION/NAVER)는 PMS 누락 오류에서 제외`;
     }
@@ -721,6 +785,10 @@
     const firstDay = fromDateKey(startKey);
     if (firstDay) state.monthCursor = monthStart(firstDay);
     renderCalendar();
+    emitUiEvent("date_range_change", {
+      startDate: state.selectedStart || "",
+      endDate: state.selectedEnd || ""
+    });
   }
 
   function applyQuickRange(type) {
@@ -797,6 +865,61 @@
     renderDebugPanel();
   }
 
+  function clearSeverityBanner() {
+    if (!ui.severityBanner || !ui.severityPill || !ui.severityText) return;
+    ui.severityBanner.classList.add("hidden");
+    ui.severityBanner.classList.remove("warn");
+    ui.severityPill.textContent = TEXT.severityApi;
+    ui.severityText.textContent = "-";
+  }
+
+  function setSeverityBanner(levelRaw, pillText, message) {
+    if (!ui.severityBanner || !ui.severityPill || !ui.severityText) return;
+    const level = levelRaw === "warn" ? "warn" : "error";
+    const text = redactSensitiveText(message).trim() || "-";
+    ui.severityBanner.classList.remove("hidden");
+    ui.severityBanner.classList.toggle("warn", level === "warn");
+    ui.severityPill.textContent = normalizeText(pillText || "") || (level === "warn" ? TEXT.severityApi : TEXT.severityToken);
+    ui.severityText.textContent = text;
+  }
+
+  function classifySeverityBannerStatus(message, tone) {
+    const text = normalizeText(message || "").toLowerCase();
+    if (!text || tone === "info") return null;
+    const tokenRe = /(token|토큰|만료|expired|refresh|access|401|403|unauthoriz|forbidden|인증)/;
+    if (tokenRe.test(text)) {
+      return { level: "error", pill: TEXT.severityToken };
+    }
+    const apiRe = /(api|호출 실패|요청 실패|request failed|network|timeout|\(\d{3}\))/;
+    if (apiRe.test(text)) {
+      return { level: tone === "warn" ? "warn" : "error", pill: TEXT.severityApi };
+    }
+    return null;
+  }
+
+  function classifyUiSurfaceStatus(tone, textRaw) {
+    const text = normalizeText(textRaw || "").toLowerCase();
+    if (tone === "error") return { label: "오류", className: "error" };
+    if (tone === "warn") return { label: "주의", className: "warn" };
+    if (/(조회 중|처리 중|loading|syncing|실행 중|적용 중)/.test(text)) {
+      return { label: "조회 중", className: "loading" };
+    }
+    return { label: "정상", className: "" };
+  }
+
+  function updateSurfaceStatusIndicators(tone, text) {
+    const statusUi = classifyUiSurfaceStatus(tone, text);
+    if (ui.headerStatusPill) {
+      ui.headerStatusPill.textContent = statusUi.label;
+      ui.headerStatusPill.classList.remove("warn", "error", "loading");
+      if (statusUi.className) ui.headerStatusPill.classList.add(statusUi.className);
+    }
+    if (ui.launcherDot) {
+      ui.launcherDot.classList.remove("warn", "error", "loading");
+      if (statusUi.className) ui.launcherDot.classList.add(statusUi.className);
+    }
+  }
+
   function setStatus(message, kind = "info") {
     const tone = kind === "warn" || kind === "error" ? kind : "info";
     const text = redactSensitiveText(message).trim() || "-";
@@ -804,6 +927,10 @@
     ui.status.className = `status ${tone === "info" ? "" : tone}`.trim();
     ui.status.setAttribute("aria-live", tone === "error" ? "assertive" : "polite");
     ui.status.innerHTML = `<span class="status-k">${toneLabel}</span><span class="status-msg">${escapeHtml(text).replace(/\n/g, "<br>")}</span>`;
+    updateSurfaceStatusIndicators(tone, text);
+    const banner = classifySeverityBannerStatus(text, tone);
+    if (banner) setSeverityBanner(banner.level, banner.pill, text);
+    else clearSeverityBanner();
     appendStatusLog(text, tone);
     renderDebugPanel();
     renderWorkflowProgress();
@@ -812,6 +939,7 @@
   }
 
   async function loadSyncApplyEnabled() {
+    if (READ_ONLY_TOOL_MODE === true) return false;
     const next = await storageGet(SYNC_APPLY_KEY);
     if (typeof next === "boolean") return next;
     const legacy = await storageGet(SYNC_FEATURE_KEY_LEGACY);
@@ -819,10 +947,17 @@
   }
 
   function isSyncApplyEnabled() {
+    if (READ_ONLY_TOOL_MODE === true) return false;
     return state.syncApplyEnabled !== false;
   }
 
   function updateSyncFeatureButtonText() {
+    if (!ui.syncFeatureToggle) return;
+    if (READ_ONLY_TOOL_MODE === true) {
+      ui.syncFeatureToggle.textContent = TEXT.syncFeatureOff;
+      ui.syncFeatureToggle.className = "btn gray hidden";
+      return;
+    }
     ui.syncFeatureToggle.textContent = isSyncApplyEnabled() ? TEXT.syncFeatureOn : TEXT.syncFeatureOff;
     ui.syncFeatureToggle.className = isSyncApplyEnabled() ? "btn" : "btn gray";
   }
@@ -830,28 +965,38 @@
   function applySyncFeatureUiState() {
     const busy = Boolean(state.loading);
     const enabled = isSyncApplyEnabled();
-    const providerApplyAllowed = isCurrentProviderApplyAllowed();
+    const readonlyMode = READ_ONLY_TOOL_MODE === true;
+    const providerApplyAllowed = readonlyMode ? false : isCurrentProviderApplyAllowed();
+    const activeQuery = resolveActiveQuery();
+    const hasLoadedPair = hasLoadedBothInventoryForQuery(activeQuery);
     if (!enabled) state.syncApprovalChecked = false;
     updateSyncApprovalUi();
-    const approvalReady = isSyncApprovalReady();
-    ui.syncFeatureSection.classList.toggle("hidden", !enabled);
-    ui.syncFeatureToggle.disabled = busy;
-    ui.syncBtn.disabled = busy || !enabled || !approvalReady || !providerApplyAllowed;
-    ui.toggleConfig.disabled = busy || !enabled;
-    ui.saveSyncCfg.disabled = busy || !enabled;
-    if (ui.toggleOpsSectionBtn) ui.toggleOpsSectionBtn.disabled = busy || !enabled;
-    if (ui.cfgProviderApply) ui.cfgProviderApply.disabled = busy || !enabled;
-    if (ui.toggleSecretsBtn) ui.toggleSecretsBtn.disabled = busy || !enabled;
+    const approvalReady = readonlyMode ? true : isSyncApprovalReady();
+    ui.syncFeatureSection.classList.toggle("hidden", !enabled && !readonlyMode);
+    if (ui.syncFeatureToggle) {
+      ui.syncFeatureToggle.disabled = readonlyMode ? true : busy;
+      ui.syncFeatureToggle.classList.toggle("hidden", readonlyMode);
+    }
+    ui.syncBtn.disabled = busy || !hasLoadedPair || (!readonlyMode && (!enabled || !approvalReady || !providerApplyAllowed));
+    ui.toggleConfig.disabled = busy;
+    ui.saveSyncCfg.disabled = busy;
+    if (ui.toggleOpsSectionBtn) ui.toggleOpsSectionBtn.disabled = busy;
+    if (ui.cfgProviderApply) {
+      ui.cfgProviderApply.disabled = true;
+      const applyField = ui.cfgProviderApply.closest(".field");
+      if (applyField) applyField.classList.toggle("hidden", readonlyMode);
+    }
+    if (ui.toggleSecretsBtn) ui.toggleSecretsBtn.disabled = busy;
     const errorCount = Number(state.syncPreview?.errorCount || 0);
-    ui.toggleErrorBtn.disabled = busy || !enabled || errorCount <= 0;
-    ui.toggleDebugBtn.disabled = busy || !enabled;
-    if (ui.clearRuntimeBtn) ui.clearRuntimeBtn.disabled = busy || !enabled;
-    ui.exportTraceJson.disabled = busy || !enabled;
-    ui.exportTraceCsv.disabled = busy || !enabled;
-    if (ui.exportGoldenSetBtn) ui.exportGoldenSetBtn.disabled = busy || !enabled;
-    if (!enabled && state.settingsOpen) setSettingsOpen(false);
-    if (!enabled && state.debugExpanded) setDebugExpanded(false);
-    if (!enabled && state.syncResultVisible) setSyncResultVisible(false);
+    ui.toggleErrorBtn.disabled = busy || errorCount <= 0;
+    ui.toggleDebugBtn.disabled = busy;
+    if (ui.clearRuntimeBtn) ui.clearRuntimeBtn.disabled = busy;
+    ui.exportTraceJson.disabled = busy;
+    ui.exportTraceCsv.disabled = busy;
+    if (ui.exportGoldenSetBtn) ui.exportGoldenSetBtn.disabled = busy;
+    if (!enabled && !readonlyMode && state.settingsOpen) setSettingsOpen(false);
+    if (!enabled && !readonlyMode && state.debugExpanded) setDebugExpanded(false);
+    if (!enabled && !readonlyMode && state.syncResultVisible) setSyncResultVisible(false);
     updateSyncFeatureButtonText();
     renderWorkflowProgress();
     renderUserOpsSummary();
@@ -985,7 +1130,7 @@
     const unknownColorRows = hasSheet ? collectUnknownColorRowsFromSnapshot(state.sheetSnapshot, providerKey) : [];
 
     applyButtons.forEach((button) => {
-      button.textContent = applied ? "보정 적용됨" : "보정 적용";
+      button.textContent = applied ? "보정 미리보기 적용됨" : "보정 미리보기";
       button.disabled = Boolean(state.loading) || !canApply || applied;
       button.className = `btn ${applied ? "gray" : "secondary"}`;
     });
@@ -1019,6 +1164,18 @@
   }
 
   async function setSyncFeatureEnabled(flag, showMessage = true) {
+    if (READ_ONLY_TOOL_MODE === true) {
+      state.syncApplyEnabled = false;
+      await storageSet(SYNC_APPLY_KEY, false);
+      applySyncFeatureUiState();
+      updateSyncApprovalUi({ reset: true });
+      updateSyncButtonText();
+      if (showMessage) {
+        setStatus(TEXT.statusSyncFeatureDisabled);
+        ui.status.classList.add("ok");
+      }
+      return;
+    }
     const enabled = Boolean(flag);
     state.syncApplyEnabled = enabled;
     await storageSet(SYNC_APPLY_KEY, enabled);
@@ -1035,6 +1192,26 @@
 
   function setElementDisabled(el, flag) {
     if (el) el.disabled = flag;
+  }
+
+  function setActionLoadingState(button, flag) {
+    if (!button) return;
+    const busy = Boolean(flag);
+    button.classList.toggle("is-loading", busy);
+    button.setAttribute("aria-busy", busy ? "true" : "false");
+  }
+
+  function updateLoadActionButtons() {
+    const action = normalizeText(state.loadingAction || "").toLowerCase();
+    const loading = Boolean(state.loading);
+    setActionLoadingState(ui.load, loading && action === "site");
+    setActionLoadingState(ui.loadSheet, loading && action === "sheet");
+    setActionLoadingState(ui.loadAll, loading && action === "all");
+  }
+
+  function setLoadingAction(action) {
+    state.loadingAction = normalizeText(action || "");
+    updateLoadActionButtons();
   }
 
   function getEmbeddedLockedControls() {
@@ -1096,6 +1273,8 @@
 
   function setLoading(flag) {
     state.loading = flag;
+    if (!flag) state.loadingAction = "";
+    updateLoadActionButtons();
     getLoadingPrimaryControls().forEach((el) => {
       setElementDisabled(el, flag);
     });
@@ -1113,6 +1292,7 @@
     });
     if (!flag) updateScanModeUiState();
     applySyncFeatureUiState();
+    updateSyncButtonText();
     updateCorrectionButtonState();
     renderOnboardingChecklist();
     renderUserOpsSummary();
@@ -1191,12 +1371,22 @@
       state.selectedEnd = dateKey;
     }
     renderCalendar();
+    if (state.selectedStart && state.selectedEnd) {
+      emitUiEvent("date_range_change", {
+        startDate: state.selectedStart,
+        endDate: state.selectedEnd
+      });
+    }
   }
 
   function onDateDoubleClick(dateKey) {
     state.selectedStart = dateKey;
     state.selectedEnd = dateKey;
     renderCalendar();
+    emitUiEvent("date_range_change", {
+      startDate: state.selectedStart,
+      endDate: state.selectedEnd
+    });
   }
 
   function resetDateRange() {
@@ -1405,6 +1595,10 @@
     const colCount = Math.max(1, safeDates.length + 1);
     const renderToken = Number(tableRenderTokenMap.get(bodyEl) || 0) + 1;
     tableRenderTokenMap.set(bodyEl, renderToken);
+    const prevCellValueMap = tableCellFlashCache.get(bodyEl) || new Map();
+    const nextCellValueMap = new Map();
+    const tableWrap = bodyEl.closest?.(".copy-wrap");
+    if (tableWrap) tableWrap.classList.remove("is-loading");
 
     headEl.innerHTML = `<tr>${[`<th class="room-col">${TEXT.roomLabel}</th>`]
       .concat(safeDates.map((d) => `<th>${d.slice(5)}</th>`))
@@ -1412,11 +1606,13 @@
 
     if (!safeDates.length) {
       bodyEl.innerHTML = `<tr class="table-empty"><td colspan="${colCount}">${TEXT.tableHintSelectRange}</td></tr>`;
+      tableCellFlashCache.set(bodyEl, new Map());
       return;
     }
 
     if (!safeRows.length) {
       bodyEl.innerHTML = `<tr class="table-empty"><td colspan="${colCount}">${TEXT.tableHintNoData}</td></tr>`;
+      tableCellFlashCache.set(bodyEl, new Map());
       return;
     }
 
@@ -1424,17 +1620,42 @@
     const buildRowHtml = (row) => {
       const cells = Array.isArray(row?.cells) ? row.cells : [];
       const roomName = String(row?.roomName ?? "");
+      const roomKey = String(row?.roomId || "");
       const rowCells = [`<td class="room-col">${escapeHtml(roomName)}</td>`].concat(
         safeDates.map((_, idx) => {
           const cell = cells[idx];
-          const text = tableCellDisplayText(cell);
+          const dayKey = String(safeDates[idx] || "");
+          const tableKey = `${dayKey}::${roomKey}`;
+          const text = normalizeDisplayInventoryValue(tableCellDisplayText(cell));
+          nextCellValueMap.set(tableKey, text);
+          const shouldFlash = prevCellValueMap.has(tableKey) && prevCellValueMap.get(tableKey) !== text;
           const corrected = tableCellIsCorrected(cell);
-          const tooltip = tableCellTooltip(cell) || normalizeText(cell?.tooltip || "");
-          const className = [corrected ? "corrected-cell" : "", normalizeText(cell?.className || "")]
+          const before = corrected ? normalizeDisplayInventoryValue(cell?.originalRaw || "") : "";
+          const inlineDiff = corrected && before && before !== text ? `${before}→${text}` : "";
+          const errorKey = tableKey;
+          const hasError = state.syncErrorCellKeys instanceof Set && state.syncErrorCellKeys.has(errorKey);
+          const errorDetail = hasError && state.syncErrorCellDetailByKey instanceof Map
+            ? normalizeText(state.syncErrorCellDetailByKey.get(errorKey) || "")
+            : "";
+          const tooltip = [
+            tableCellTooltip(cell) || normalizeText(cell?.tooltip || ""),
+            inlineDiff ? `변경: ${inlineDiff}` : "",
+            errorDetail ? `오류: ${errorDetail}` : ""
+          ].filter(Boolean).join(" | ");
+          const className = [
+            corrected ? "corrected-cell" : "",
+            inlineDiff ? "has-inline-diff" : "",
+            hasError ? "error-cell" : "",
+            shouldFlash ? "flash-cell" : "",
+            normalizeText(cell?.className || "")
+          ]
             .filter(Boolean)
             .join(" ");
           const titleAttr = tooltip ? ` title="${escapeHtml(tooltip)}"` : "";
-          return `<td class="${className}"${titleAttr}>${escapeHtml(text)}</td>`;
+          const html = inlineDiff
+            ? `<span class="cell-main">${escapeHtml(text)}</span><span class="cell-inline-diff">${escapeHtml(inlineDiff)}</span>`
+            : escapeHtml(text);
+          return `<td class="${className}"${titleAttr}>${html}</td>`;
         })
       );
       return `<tr>${rowCells.join("")}</tr>`;
@@ -1443,23 +1664,37 @@
     if (safeRows.length <= TABLE_RENDER_CHUNK_ROWS) {
       if (isStale()) return;
       bodyEl.innerHTML = renderRange(0, safeRows.length);
+      tableCellFlashCache.set(bodyEl, nextCellValueMap);
       return;
     }
     bodyEl.innerHTML = `<tr class="table-empty"><td colspan="${colCount}">테이블 렌더링 중...</td></tr>`;
-    if (isStale()) return;
+    if (tableWrap) tableWrap.classList.add("is-loading");
+    if (isStale()) {
+      if (tableWrap) tableWrap.classList.remove("is-loading");
+      return;
+    }
     const firstEnd = Math.min(TABLE_RENDER_CHUNK_ROWS, safeRows.length);
     bodyEl.innerHTML = renderRange(0, firstEnd);
+    tableCellFlashCache.set(bodyEl, nextCellValueMap);
+    if (tableWrap) tableWrap.classList.remove("is-loading");
     let cursor = firstEnd;
     const schedule = typeof window.requestAnimationFrame === "function"
       ? window.requestAnimationFrame.bind(window)
       : (cb) => window.setTimeout(cb, 0);
     const pump = () => {
-      if (isStale()) return;
-      if (cursor >= safeRows.length) return;
+      if (isStale()) {
+        if (tableWrap) tableWrap.classList.remove("is-loading");
+        return;
+      }
+      if (cursor >= safeRows.length) {
+        if (tableWrap) tableWrap.classList.remove("is-loading");
+        return;
+      }
       const next = Math.min(cursor + TABLE_RENDER_CHUNK_ROWS, safeRows.length);
       bodyEl.insertAdjacentHTML("beforeend", renderRange(cursor, next));
       cursor = next;
       if (cursor < safeRows.length) schedule(pump);
+      else if (tableWrap) tableWrap.classList.remove("is-loading");
     };
     schedule(pump);
   }
@@ -1472,9 +1707,248 @@
     renderTable(ui.sheetHead, ui.sheetBody, dates, buildRoomTypeAggregatedRowsForView(dates, valueRows, activeProviderKey()));
   }
 
+  function normalizeReviewCellValue(cell) {
+    return normalizeDisplayInventoryValue(tableCellDisplayText(cell));
+  }
+
+  function isReviewValueMismatch(leftRaw, rightRaw) {
+    const left = normalizeDisplayInventoryValue(leftRaw || "");
+    const right = normalizeDisplayInventoryValue(rightRaw || "");
+    if (!left && !right) return false;
+    return !areInventoryRawsEquivalent(left, right);
+  }
+
+  function buildReviewRowsFromLoadedTables(query) {
+    if (!query || !hasLoadedBothInventoryForQuery(query)) return [];
+    const siteDates = Array.isArray(state.dates) ? state.dates : [];
+    const sheetDates = Array.isArray(state.sheetDates) ? state.sheetDates : [];
+    if (!siteDates.length || !sheetDates.length) return [];
+
+    const sheetDateSet = new Set(sheetDates.map((day) => String(day || "")));
+    const sharedDates = siteDates.filter((day) => sheetDateSet.has(String(day || "")));
+    if (!sharedDates.length) return [];
+
+    const siteDateIndex = new Map(siteDates.map((day, idx) => [String(day || ""), idx]));
+    const sheetDateIndex = new Map(sheetDates.map((day, idx) => [String(day || ""), idx]));
+    const siteRows = Array.isArray(state.valueRows) ? state.valueRows : [];
+    const sheetRows = Array.isArray(state.sheetValueRows) ? state.sheetValueRows : [];
+    const siteByRoom = new Map();
+    const sheetByRoom = new Map();
+    const roomOrder = [];
+    const seenRooms = new Set();
+
+    const rememberRoom = (row, targetMap) => {
+      const roomKey = normalizeText(row?.roomId || row?.roomName || "");
+      if (!roomKey) return;
+      targetMap.set(roomKey, row);
+      if (seenRooms.has(roomKey)) return;
+      seenRooms.add(roomKey);
+      roomOrder.push(roomKey);
+    };
+
+    siteRows.forEach((row) => rememberRoom(row, siteByRoom));
+    sheetRows.forEach((row) => rememberRoom(row, sheetByRoom));
+
+    const reviewRows = [];
+    roomOrder.forEach((roomKey) => {
+      const siteRow = siteByRoom.get(roomKey);
+      const sheetRow = sheetByRoom.get(roomKey);
+      const roomName = normalizeText(siteRow?.roomName || sheetRow?.roomName || roomKey) || roomKey || "-";
+      const siteCells = Array.isArray(siteRow?.cells) ? siteRow.cells : [];
+      const sheetCells = Array.isArray(sheetRow?.cells) ? sheetRow.cells : [];
+      sharedDates.forEach((day) => {
+        const dateKey = String(day || "");
+        const siteCell = siteCells[Number(siteDateIndex.get(dateKey))];
+        const sheetCell = sheetCells[Number(sheetDateIndex.get(dateKey))];
+        const siteValueRaw = normalizeReviewCellValue(siteCell);
+        const sheetValueRaw = normalizeReviewCellValue(sheetCell);
+        const mismatch = isReviewValueMismatch(siteValueRaw, sheetValueRaw);
+        const siteValue = siteValueRaw || "-";
+        const sheetValue = sheetValueRaw || "-";
+        reviewRows.push({
+          date: dateKey || "-",
+          roomId: roomKey,
+          roomName,
+          siteValue,
+          sheetValue,
+          suggestionToSheet: mismatch ? `${siteValue} → ${sheetValue}` : "",
+          suggestionToSite: mismatch ? `${sheetValue} → ${siteValue}` : "",
+          mismatch
+        });
+      });
+    });
+
+    return reviewRows;
+  }
+
+  function resolvePreviewRoomName(preview, roomIdRaw) {
+    const roomId = normalizeText(roomIdRaw || "");
+    if (!roomId) return "객실";
+    const mappedName = normalizeText(
+      preview?.providerItemMap?.[roomId]?.roomName ||
+      preview?.providerItemMap?.[roomId]?.name ||
+      ""
+    );
+    if (mappedName) return mappedName;
+    const preset = ROOM_PRESETS[context.providerType] || [];
+    const presetRoom = preset.find((row) => normalizeText(row?.id || "") === roomId);
+    if (presetRoom?.name) return normalizeText(presetRoom.name) || roomId;
+    return roomId;
+  }
+
+  function formatPreviewBooleanStock(value) {
+    if (value === true) return "판매";
+    if (value === false) return "미판매";
+    const text = normalizeDisplayInventoryValue(String(value ?? ""));
+    return text || "-";
+  }
+
+  function buildReviewRowsFromSyncPreview(query) {
+    if (!query || !isSyncPreviewForActiveQuery()) return [];
+    const preview = state.syncPreview;
+    if (!preview || !Array.isArray(preview.actions)) return [];
+    const rows = [];
+
+    if (preview.providerKey === "STATION") {
+      preview.actions.forEach((action) => {
+        const date = normalizeText(action?.date || "") || "-";
+        const changes = Array.isArray(action?.roomChanges) ? action.roomChanges : [];
+        changes.forEach((change) => {
+          const siteValue = normalizeDisplayInventoryValue(String(change?.from ?? "")) || "-";
+          const sheetValue = normalizeDisplayInventoryValue(String(change?.to ?? "")) || "-";
+          const mismatch = isReviewValueMismatch(siteValue, sheetValue);
+          if (!mismatch) return;
+          rows.push({
+            date,
+            roomId: normalizeText(change?.roomId || ""),
+            roomName: resolvePreviewRoomName(preview, change?.roomId || ""),
+            siteValue,
+            sheetValue,
+            suggestionToSheet: `${siteValue} → ${sheetValue}`,
+            suggestionToSite: `${sheetValue} → ${siteValue}`,
+            mismatch: true
+          });
+        });
+      });
+      return rows;
+    }
+
+    preview.actions.forEach((action) => {
+      const type = normalizeText(action?.type || "");
+      if (type !== "stock" && type !== "sale-day") return;
+      const siteValue = type === "stock"
+        ? normalizeDisplayInventoryValue(String(action?.currentStock ?? "")) || "-"
+        : formatPreviewBooleanStock(action?.currentSaleDay);
+      const sheetValue = type === "stock"
+        ? normalizeDisplayInventoryValue(String(action?.targetStock ?? "")) || "-"
+        : formatPreviewBooleanStock(action?.targetSaleDay);
+      const mismatch = isReviewValueMismatch(siteValue, sheetValue);
+      if (!mismatch) return;
+      rows.push({
+        date: normalizeText(action?.date || "") || "-",
+        roomId: normalizeText(action?.bizItemId || ""),
+        roomName: resolvePreviewRoomName(preview, action?.bizItemId || ""),
+        siteValue,
+        sheetValue,
+        suggestionToSheet: `${siteValue} → ${sheetValue}`,
+        suggestionToSite: `${sheetValue} → ${siteValue}`,
+        mismatch: true
+      });
+    });
+
+    return rows;
+  }
+
   function renderMismatchRows(rows, query = null) {
-    void rows;
-    void query;
+    if (!ui.mismatchReviewList || !ui.reviewMismatchCount) return;
+    const targetQuery = query || resolveActiveQuery();
+    const hasExplicitRows = Array.isArray(rows);
+    const incomingRows = hasExplicitRows ? rows : [];
+    const normalizedRows = hasExplicitRows
+      ? incomingRows
+      : (() => {
+          const loadedRows = buildReviewRowsFromLoadedTables(targetQuery);
+          if (loadedRows.length > 0) return loadedRows;
+          return buildReviewRowsFromSyncPreview(targetQuery);
+        })();
+
+    const safeRows = normalizedRows
+      .map((row) => ({
+        date: normalizeText(row?.date || "") || "-",
+        roomName: normalizeText(row?.roomName || row?.roomId || "") || "-",
+        siteValue: normalizeDisplayInventoryValue(String(row?.siteValue ?? "")) || "-",
+        sheetValue: normalizeDisplayInventoryValue(String(row?.sheetValue ?? "")) || "-",
+        suggestionToSheet: normalizeText(row?.suggestionToSheet || ""),
+        suggestionToSite: normalizeText(row?.suggestionToSite || row?.suggestion || ""),
+        mismatch: row?.mismatch === true
+      }))
+      .sort((left, right) => {
+        const dateDiff = String(left.date).localeCompare(String(right.date));
+        if (dateDiff !== 0) return dateDiff;
+        return String(left.roomName).localeCompare(String(right.roomName));
+      });
+
+    const mismatchRows = safeRows.filter((row) => row.mismatch === true);
+    const matchRows = safeRows.filter((row) => row.mismatch !== true);
+    ui.reviewMismatchCount.textContent = `${mismatchRows.length}건`;
+    emitUiEvent("diff_check", {
+      mismatchCount: mismatchRows.length,
+      rowCount: safeRows.length,
+      startDate: targetQuery?.startDate || state.selectedStart || "",
+      endDate: targetQuery?.endDate || state.selectedEnd || ""
+    });
+
+    if (!safeRows.length) {
+      ui.mismatchReviewList.innerHTML = `<div class="review-empty">${escapeHtml(TEXT.reviewEmpty)}</div>`;
+      return;
+    }
+
+    const maxMatchedRows = 80;
+    const visibleMatchRows = matchRows.slice(0, maxMatchedRows);
+    const hiddenMatchCount = Math.max(0, matchRows.length - visibleMatchRows.length);
+    const orderedRows = mismatchRows.concat(visibleMatchRows);
+
+    const cardsHtml = orderedRows.map((row) => {
+      if (row.mismatch === true) {
+        const suggestionToSheet = row.suggestionToSheet || `${row.siteValue} → ${row.sheetValue}`;
+        const suggestionToSite = row.suggestionToSite || `${row.sheetValue} → ${row.siteValue}`;
+        return (
+          `<article class="review-card is-mismatch">` +
+            `<div class="review-card-top">` +
+              `<div>` +
+                `<span class="review-date">${escapeHtml(row.date)}</span>` +
+                `<div class="review-room">${escapeHtml(row.roomName)}</div>` +
+              `</div>` +
+              `<div>` +
+                `<div class="review-state">${escapeHtml(TEXT.reviewMismatch)}</div>` +
+                `<div class="review-suggest">${escapeHtml(TEXT.reviewSuggestionPrimary || TEXT.reviewSuggestion)}<b>${escapeHtml(suggestionToSheet)}</b></div>` +
+                `<div class="review-suggest alt">${escapeHtml(TEXT.reviewSuggestionSecondary || TEXT.reviewSuggestion)}<b>${escapeHtml(suggestionToSite)}</b></div>` +
+              `</div>` +
+            `</div>` +
+            `<div class="review-grid">` +
+              `<div><div class="review-k">${escapeHtml(TEXT.reviewSiteValue)}</div><div class="review-v">${escapeHtml(row.siteValue)}</div></div>` +
+              `<div><div class="review-k">${escapeHtml(TEXT.reviewSheetValue)}</div><div class="review-v diff">${escapeHtml(row.sheetValue)}</div></div>` +
+            `</div>` +
+          `</article>`
+        );
+      }
+      return (
+        `<article class="review-card is-match">` +
+          `<div class="review-card-top">` +
+            `<div>` +
+              `<span class="review-date">${escapeHtml(row.date)}</span>` +
+              `<div class="review-room">${escapeHtml(row.roomName)}</div>` +
+            `</div>` +
+            `<div class="review-state">${escapeHtml(TEXT.reviewMatch)}<span class="review-collapsed">${escapeHtml(TEXT.reviewCollapsed)}</span></div>` +
+          `</div>` +
+        `</article>`
+      );
+    }).join("");
+
+    const tailHtml = hiddenMatchCount > 0
+      ? `<div class="review-empty">${escapeHtml(TEXT.reviewTruncated)} (+${hiddenMatchCount})</div>`
+      : "";
+    ui.mismatchReviewList.innerHTML = cardsHtml + tailHtml;
   }
 
   function roomTypeLabelFromSummaryKey(typeKey) {
@@ -1563,11 +2037,24 @@
             let sumMaximum = 0;
             let hasFraction = false;
             let hasClosed = false;
-            let fallbackText = "";
+            let fallbackCell = null;
             const candidates = [];
+            const toInlineDiffCell = (candidate) => {
+              if (!candidate || !candidate.text) return "";
+              if (candidate.corrected !== true) return candidate.text;
+              const before = normalizeDisplayInventoryValue(candidate.originalRaw || "");
+              if (!before || before === candidate.text) return candidate.text;
+              return {
+                text: candidate.text,
+                corrected: true,
+                originalRaw: before
+              };
+            };
             bucket.rows.forEach((row) => {
               const cell = Array.isArray(row?.cells) ? row.cells[idx] : "";
               const text = normalizeDisplayInventoryValue(tableCellDisplayText(cell));
+              const corrected = tableCellIsCorrected(cell);
+              const originalRaw = corrected ? normalizeDisplayInventoryValue(cell?.originalRaw || "") : "";
               const fraction = parseStockFraction(text);
               if (fraction) {
                 hasFraction = true;
@@ -1575,7 +2062,9 @@
                 sumMaximum += Number(fraction.maximum || 0);
                 candidates.push({
                   text,
-                  available: Math.max(0, Number(fraction.maximum || 0) - Number(fraction.current || 0))
+                  available: Math.max(0, Number(fraction.maximum || 0) - Number(fraction.current || 0)),
+                  corrected,
+                  originalRaw
                 });
                 return;
               }
@@ -1583,28 +2072,38 @@
                 hasClosed = true;
                 candidates.push({
                   text: TEXT.closed,
-                  available: 0
+                  available: 0,
+                  corrected,
+                  originalRaw
                 });
                 return;
               }
-              if (!fallbackText && text) fallbackText = text;
+              if (!fallbackCell && text) {
+                fallbackCell = { text, corrected, originalRaw };
+              }
             });
             if (aggregationMode === "min" || aggregationMode === "max") {
               if (candidates.length > 0) {
                 const ordered = [...candidates].sort((a, b) => a.available - b.available);
-                return aggregationMode === "min"
-                  ? ordered[0].text
-                  : ordered[ordered.length - 1].text;
+                return toInlineDiffCell(aggregationMode === "min" ? ordered[0] : ordered[ordered.length - 1]);
               }
               if (hasClosed) return TEXT.closed;
-              return fallbackText;
+              return toInlineDiffCell(fallbackCell);
             }
             if (hasFraction) {
               const mergedText = normalizeDisplayInventoryValue(`${Math.max(0, sumCurrent)}/${Math.max(0, sumMaximum)}`);
-              return autoCorrectInventoryDisplayValue(mergedText).text;
+              const correctedMerged = autoCorrectInventoryDisplayValue(mergedText);
+              if (correctedMerged.corrected === true) {
+                return {
+                  text: correctedMerged.text,
+                  corrected: true,
+                  originalRaw: normalizeDisplayInventoryValue(correctedMerged.originalRaw || mergedText)
+                };
+              }
+              return correctedMerged.text;
             }
             if (hasClosed) return TEXT.closed;
-            return fallbackText;
+            return toInlineDiffCell(fallbackCell);
           })
         };
       });
@@ -2675,7 +3174,9 @@
       .map((row) => {
         const date = escapeHtml(redactSensitiveText(row?.date ?? "-"));
         const type = escapeHtml(redactSensitiveText(row?.type ?? "-"));
-        const detail = escapeHtml(redactSensitiveText(row?.detail ?? "-"));
+        const roomId = normalizeText(row?.roomId || "");
+        const detailText = roomId ? `[${roomId}] ${String(row?.detail ?? "-")}` : String(row?.detail ?? "-");
+        const detail = escapeHtml(redactSensitiveText(detailText));
         return `<tr><td>${date}</td><td>${type}</td><td>${detail}</td></tr>`;
       })
       .join("");
@@ -2691,6 +3192,37 @@
     syncSectionVisible(ui.syncBlockWrap, list.length > 0);
   }
 
+  function clearSyncErrorCellMarkers() {
+    state.syncErrorCellKeys = new Set();
+    state.syncErrorCellDetailByKey = new Map();
+  }
+
+  function setSyncErrorCellMarker(dateRaw, roomIdRaw, detailRaw) {
+    const day = normalizeText(dateRaw || "");
+    const roomId = normalizeText(roomIdRaw || "");
+    if (!day || !roomId) return;
+    const detail = normalizeText(detailRaw || "") || "동기화 실패";
+    const key = `${day}::${roomId}`;
+    state.syncErrorCellKeys.add(key);
+    state.syncErrorCellDetailByKey.set(key, detail);
+  }
+
+  function applySyncErrorCellMarkers(errors) {
+    clearSyncErrorCellMarkers();
+    const providerKey = activeProviderKey();
+    (Array.isArray(errors) ? errors : []).forEach((row) => {
+      const day = normalizeText(row?.date || "");
+      const roomId = normalizeText(row?.roomId || "");
+      if (!day || !roomId) return;
+      const detail = normalizeText(row?.detail || "") || "동기화 실패";
+      setSyncErrorCellMarker(day, roomId, detail);
+      const typeKey = resolveRoomTypeKeyForItem(providerKey, roomId, roomId);
+      if (typeKey && typeKey !== "unknown") {
+        setSyncErrorCellMarker(day, `type:${typeKey}`, detail);
+      }
+    });
+  }
+
   function renderSyncResult(summary) {
     const data = summary && typeof summary === "object" ? summary : {};
     ui.resTotal.textContent = String(data.totalCount ?? 0);
@@ -2701,6 +3233,7 @@
     const blocks = Array.isArray(data.blocks) ? data.blocks : [];
     renderSyncBlockRows(blocks);
     const errors = Array.isArray(data.errors) ? data.errors : [];
+    applySyncErrorCellMarkers(errors);
     state.syncPreview = { ...(state.syncPreview || {}), errorCount: errors.length };
     renderErrorRows(errors);
     if (errors.length <= 0) setErrorExpanded(false);
@@ -3062,7 +3595,15 @@
       accessTokenExpiresAt: tokenBundle?.expiresAt || state.syncConfig.accessTokenExpiresAt || 0,
       sleepMs: state.syncConfig.sleepMs || DEFAULT_SYNC_SLEEP_MS,
       opsUiCollapsed: state.opsSectionExpanded !== true,
-      authBundles: { ...(state.syncConfig.authBundles || {}) }
+      authBundles: { ...(state.syncConfig.authBundles || {}) },
+      stationBranchId:
+        context.providerType === "admin-station"
+          ? resolveActiveStationBranchId(state.syncConfig)
+          : normalizeText(state.syncConfig?.stationBranchId || ""),
+      naverBusinessId:
+        context.providerType === "naver-partner"
+          ? normalizeText(state.syncConfig?.naverBusinessId || "")
+          : normalizeText(state.syncConfig?.naverBusinessId || "")
     };
     if (raw.pmsPreset?.presetKey) {
       const generated = buildWingsPmsPresetRequest(raw.pmsPreset, raw.pmsReservationUrl);
@@ -3097,22 +3638,46 @@
     return state.syncConfig;
   }
 
+  function setSyncButtonState(labelRaw, className, options = {}) {
+    if (!ui.syncBtn) return;
+    const label = normalizeText(labelRaw || "");
+    const loading = options.loading === true;
+    const nextClass = [className || "btn gray", loading ? "is-loading" : ""]
+      .filter(Boolean)
+      .join(" ");
+    ui.syncBtn.className = nextClass;
+    ui.syncBtn.setAttribute("aria-busy", loading ? "true" : "false");
+    if (ui.syncBtnLabel) ui.syncBtnLabel.textContent = label;
+    else ui.syncBtn.textContent = label;
+    if (ui.syncBtnSpinner) ui.syncBtnSpinner.classList.toggle("hidden", !loading);
+  }
+
   function updateSyncButtonText() {
+    if (state.syncRunning === true) {
+      setSyncButtonState(TEXT.syncRunProcessing, "btn ready", { loading: true });
+      renderWorkflowProgress();
+      return;
+    }
     const mismatchCount = isSyncPreviewForActiveQuery() ? Number(state.syncPreview?.mismatchCount || 0) : 0;
+    if (READ_ONLY_TOOL_MODE === true) {
+      const query = resolveActiveQuery();
+      const hasLoadedPair = hasLoadedBothInventoryForQuery(query);
+      const label = mismatchCount > 0 ? `${TEXT.syncRun} (${mismatchCount})` : TEXT.syncRun;
+      setSyncButtonState(label, `btn ${hasLoadedPair ? "ready" : "gray"}`);
+      renderWorkflowProgress();
+      return;
+    }
     if (!isCurrentProviderApplyAllowed()) {
-      ui.syncBtn.textContent = TEXT.syncRunProviderBlocked;
-      ui.syncBtn.className = "btn gray";
+      setSyncButtonState(TEXT.syncRunProviderBlocked, "btn gray");
       renderWorkflowProgress();
       return;
     }
     if (isSyncApprovalRequired() && state.syncApprovalChecked !== true) {
-      ui.syncBtn.textContent = mismatchCount > 0 ? `${TEXT.syncRunNeedApprove} (${mismatchCount})` : TEXT.syncRunNeedApprove;
-      ui.syncBtn.className = "btn gray";
+      setSyncButtonState(mismatchCount > 0 ? `${TEXT.syncRunNeedApprove} (${mismatchCount})` : TEXT.syncRunNeedApprove, "btn gray");
       renderWorkflowProgress();
       return;
     }
-    ui.syncBtn.textContent = mismatchCount > 0 ? `${TEXT.syncRun} (${mismatchCount})` : TEXT.syncRun;
-    ui.syncBtn.className = `btn ${mismatchCount > 0 ? "ready" : "gray"}`;
+    setSyncButtonState(mismatchCount > 0 ? `${TEXT.syncRun} (${mismatchCount})` : TEXT.syncRun, `btn ${mismatchCount > 0 ? "ready" : "gray"}`);
     renderWorkflowProgress();
   }
 
@@ -3146,6 +3711,15 @@
     return /\((429|5\d\d)\)/.test(text);
   }
 
+  function resolveActiveStationBranchId(syncConfig = state.syncConfig) {
+    const cfgBranchId = normalizeText(syncConfig?.stationBranchId || "");
+    if (typeof resolveStationBranchId === "function") {
+      return resolveStationBranchId(cfgBranchId || FIXED_STATION_BRANCH_ID);
+    }
+    const normalized = normalizeText(cfgBranchId || FIXED_STATION_BRANCH_ID);
+    return /^\d+$/.test(normalized) && Number(normalized) > 0 ? normalized : FIXED_STATION_BRANCH_ID;
+  }
+
   async function runWithRetry(task, baseDelayMs) {
     let attempt = 0;
     while (true) {
@@ -3166,7 +3740,8 @@
 
   async function applyStationActions(actions, sleepMs) {
     const session = createSessionRequestContext("admin-station");
-    const url = buildStationApplyUrl(FIXED_STATION_BRANCH_ID);
+    const branchId = resolveActiveStationBranchId();
+    const url = buildStationApplyUrl(branchId);
     const results = [];
 
     for (const action of actions) {
@@ -3186,11 +3761,19 @@
         );
         results.push({ date: action.date, status: "APPLIED" });
       } catch (error) {
+        const changedRoomIds = Array.isArray(action?.roomChanges)
+          ? action.roomChanges
+              .filter((row) => Number(row?.from) !== Number(row?.to))
+              .map((row) => normalizeText(row?.roomId || ""))
+              .filter(Boolean)
+          : [];
         results.push({
           date: action.date,
           status: "FAILED",
           error: error?.message ?? String(error),
-          actionType: "SET_STOCK"
+          actionType: "SET_STOCK",
+          roomIds: changedRoomIds,
+          branchId
         });
       }
       await sleep(nextApplyDelay(sleepMs));
@@ -3448,9 +4031,30 @@
       if (row.status !== "FAILED") return;
       const naverType =
         row.type === "stock" ? "재고" : row.type === "sale-day" ? "판매일" : "요청";
+      if (providerKey === "STATION") {
+        const roomIds = Array.isArray(row.roomIds) ? row.roomIds.filter(Boolean) : [];
+        if (roomIds.length > 0) {
+          roomIds.forEach((roomId) => {
+            rows.push({
+              date: row.date || "-",
+              roomId,
+              type: "적용 실패(스테이션)",
+              detail: String(row.error || "요청 실패")
+            });
+          });
+          return;
+        }
+        rows.push({
+          date: row.date || "-",
+          type: "적용 실패(스테이션)",
+          detail: String(row.error || "요청 실패")
+        });
+        return;
+      }
       rows.push({
         date: row.date || "-",
-        type: providerKey === "STATION" ? "적용 실패(스테이션)" : `적용 실패(${naverType})`,
+        roomId: String(row.bizItemId || ""),
+        type: `적용 실패(${naverType})`,
         detail: String(row.error || "요청 실패")
       });
     });
@@ -4348,11 +4952,12 @@
 
   function planSyncPreviewActions(previewContext, targets) {
     if (previewContext.isStation) {
+      const branchId = resolveActiveStationBranchId(previewContext.syncConfig);
       const planned = planStationActions(
         targets,
         previewContext.normalizedRows,
         previewContext.roomIds,
-        FIXED_STATION_BRANCH_ID
+        branchId
       );
       return {
         actions: planned.actions,
@@ -4506,6 +5111,7 @@
       errors: validationRows
     });
     updateSyncButtonText();
+    renderMismatchRows(null, query);
     return preview;
   }
 
@@ -4589,6 +5195,7 @@
     }
     updateSyncButtonText();
     updateCorrectionButtonState();
+    renderMismatchRows(null, query);
 
     if (options?.renderSyncResult !== false) {
       renderSyncResult({
@@ -4625,6 +5232,7 @@
       renderSheetInsightPanel(state.sheetSnapshot, state.sheetDates, state.sheetValueRows, providerKey);
     }
     refreshInventoryVerification();
+    renderMismatchRows(null, resolveActiveQuery());
   }
 
   function buildTableSnapshotRows(scope, dates, valueRows) {
@@ -4963,7 +5571,7 @@
     state.correctionAppliedCount = correctedCount;
     state.correctionAppliedAt = formatCorrectionAppliedAt(new Date());
     updateCorrectionButtonState();
-    const summary = correctedCount > 0 ? `보정 적용 완료: ${correctedCount}건` : "보정 적용 완료: 변경 없음";
+    const summary = correctedCount > 0 ? `보정 미리보기 적용: ${correctedCount}건` : "보정 미리보기 적용: 변경 없음";
     setStatus(summary);
     ui.status.classList.add("ok");
   }
@@ -4979,12 +5587,16 @@
       errors: previewErrors
     });
     updateSyncButtonText();
+    renderMismatchRows(null, preview?.query || resolveActiveQuery());
   }
 
   function assertSyncRunReady(query) {
     if (!hasLoadedBothInventoryForQuery(query)) {
       setStatus(TEXT.statusSyncNeedLoadBeforeRun, "warn");
       return false;
+    }
+    if (READ_ONLY_TOOL_MODE === true) {
+      return true;
     }
     const missingAuth = getEmbeddedAuthMissingFields(state.syncConfig);
     if (missingAuth.length > 0) {
@@ -5108,6 +5720,8 @@
 
   async function runSheetSync() {
     try {
+      state.syncRunning = true;
+      updateSyncButtonText();
       setSyncResultVisible(true);
       setLoading(true);
       setStatus(TEXT.statusSyncing);
@@ -5115,41 +5729,20 @@
       const query = getSelectedQuery();
       if (!assertSyncRunReady(query)) return;
       const preview = await prepareSyncPreviewForRun(query);
-      if (blockSyncRunForValidation(preview)) return;
-      if (blockSyncRunForPreviewMode(preview)) return;
-
-      const naverExecutionCfg = preview.providerKey === "NAVER" ? resolveNaverExecutionConfig(preview.syncConfig) : null;
-      if (naverExecutionCfg?.mode === "verify") {
-        setStatus(`NAVER VERIFY mode: mismatch 검증만 수행하고 실행은 생략합니다.`);
-        ui.status.classList.add("ok");
-        return;
+      renderSyncPreviewResult(preview, []);
+      state.syncPreview = preview;
+      if (preview.mismatchCount > 0) {
+        setStatus(`${TEXT.statusSyncDone}: 불일치 ${preview.mismatchCount}건`);
+      } else {
+        setStatus(TEXT.statusSyncNoDiff);
       }
-      if (preview.providerKey === "NAVER" && naverExecutionCfg?.mode === "plan") {
-        setStatus(`NAVER PLAN mode: diff/preview만 생성하고 실행은 생략합니다.`);
-        ui.status.classList.add("ok");
-        return;
-      }
-      {
-        const confirmed = confirmSyncRun(preview, query);
-        if (!confirmed) {
-          setStatus("적용이 취소되었습니다.");
-          return;
-        }
-      }
-
-      const execution = await executeSyncPreviewActions(preview);
-      finalizeSyncRun(preview, execution?.results || []);
-      if (preview.providerKey === "NAVER") {
-        const modeText = String(execution?.mode || naverExecutionCfg?.mode || "sync").toUpperCase();
-        setStatus(
-          `${TEXT.statusSyncDone}: NAVER ${modeText}, queue=${Number(execution?.queueSize || 0)}. ${TEXT.statusSyncVerifyByManualLoad}`
-        );
-        ui.status.classList.add("ok");
-      }
+      ui.status.classList.add("ok");
     } catch (error) {
       handleSyncRunError(error);
     } finally {
+      state.syncRunning = false;
       setLoading(false);
+      updateSyncButtonText();
     }
   }
 
@@ -5644,7 +6237,7 @@
     if (context.providerType === "admin-station") ui.wrap.classList.add("provider-station");
   }
 
-  bindPanelEvents({
+  const panelEventsApi = bindPanelEvents({
     ui,
     state,
     context,
@@ -5693,6 +6286,7 @@
       applyQuickRange,
       storageSet,
       renderOnboardingChecklist,
+      setLoadingAction,
       loadInventory,
       loadAllInventory,
       loadSheetInventory,
@@ -5728,5 +6322,26 @@
       goNextMonth,
       resetDateRange
     }
-  });
+  }) || {};
+
+  if (chrome?.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      const type = String(message?.type || "").trim();
+      if (type !== "inventory.ui.togglePanel") return false;
+
+      const mode = String(message?.mode || "toggle").trim().toLowerCase();
+      const current = isPanelVisible();
+      const nextOpen = mode === "open" ? true : mode === "close" ? false : !current;
+
+      setPanelOpen(nextOpen);
+      if (nextOpen && typeof panelEventsApi.ensureStarted === "function") {
+        Promise.resolve(panelEventsApi.ensureStarted()).catch((error) => {
+          console.error("[InventoryBoard] ensureStarted failed", error);
+        });
+      }
+
+      if (typeof sendResponse === "function") sendResponse({ ok: true, open: nextOpen });
+      return false;
+    });
+  }
 })();

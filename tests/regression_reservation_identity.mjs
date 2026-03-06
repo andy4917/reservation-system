@@ -34,12 +34,27 @@ async function main() {
     "예약번호 25170918 / 예약자 홍길동",
     { checkin: "2026-03-01", nights: 2, channel: "TRIP" }
   );
+  const withAlphaTaggedReservationNo = noteKey.buildReservationIdentity(
+    "reservation no: DEB260122143405604-1623669 / guest kim",
+    { checkin: "2026-03-01", nights: 2, channel: "BOOKING" }
+  );
+  const withShortTaggedReservationNo = noteKey.buildReservationIdentity(
+    "예약번호: 6224 / 연락처: 010-6224-5555 / 예약자 김민수",
+    { checkin: "2026-03-01", nights: 2, channel: "STATION" }
+  );
+  const withPhoneOnly = noteKey.buildReservationIdentity(
+    "연락처: 010-6224-5555 / guest kim",
+    { checkin: "2026-03-01", nights: 2, channel: "STATION" }
+  );
 
   assert.equal(left.guestName, "홍길동");
   assert.equal(left.phoneTail, "5678");
   assert.ok(left.softKey);
   assert.ok(left.tokenHashes.length > 0);
   assert.equal(withReservationNo.reservationNo, "25170918");
+  assert.equal(withAlphaTaggedReservationNo.reservationNo, "DEB2601221434056041623669");
+  assert.equal(withShortTaggedReservationNo.reservationNo, "6224");
+  assert.equal(withPhoneOnly.reservationNo, "");
   assert.ok(noteKey.calculateTokenOverlapRatio(left.tokenHashes, right.tokenHashes) >= 0.25);
 
   console.log("regression_reservation_identity: OK");

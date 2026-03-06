@@ -54,6 +54,27 @@ def main() -> None:
     direct_headers = extract_auth_headers_from_bundle(direct_station, "admin-station")
     assert direct_headers["Authorization"] == "Bearer already-prefixed"
 
+    header_map_station = {
+        "providerType": "admin-station",
+        "headers": {"Authorization": "Bearer from-headers", "Cookie": "SESSION=ok"},
+    }
+    header_map_station_headers = extract_auth_headers_from_bundle(header_map_station, "admin-station")
+    assert header_map_station_headers["Authorization"] == "Bearer from-headers"
+    assert header_map_station_headers["Cookie"] == "SESSION=ok"
+
+    header_map_naver = {
+        "providerType": "naver-partner",
+        "headers": {
+            "cookie": "NID_SES=header-cookie",
+            "x-csrf-token": "csrf-from-header",
+            "x-booking-naver-role": "PARTNER",
+        },
+    }
+    header_map_naver_headers = extract_auth_headers_from_bundle(header_map_naver, "naver-partner")
+    assert header_map_naver_headers["Cookie"] == "NID_SES=header-cookie"
+    assert header_map_naver_headers["x-csrf-token"] == "csrf-from-header"
+    assert header_map_naver_headers["x-booking-naver-role"] == "PARTNER"
+
     print("regression_auth_bundle_py: OK")
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import sys
 from pathlib import Path
 
@@ -8,6 +9,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.scan.sheet_scan import (
+    apply_note_stay_override,
     classify_color_cell,
     detect_branch_label,
     extract_numeric_reservation_no,
@@ -23,7 +25,21 @@ from src.domain.sheet_domain import normalize_platform_name
 def main() -> None:
     note = "예약번호: AB1234567\n예약자: 홍길동"
     note_info = parse_note_info(note)
-    assert extract_numeric_reservation_no(note, note_info) == "1234567"
+    assert extract_numeric_reservation_no(note, note_info) == "AB1234567"
+
+    note_phone = "예약번호: 6224\n연락처: +1 2135454508\n투숙 기간: 2026-03-08 - 2026-03-10\n예약자: 홍길동"
+    note_phone_info = parse_note_info(note_phone)
+    assert extract_numeric_reservation_no(note_phone, note_phone_info) == "6224"
+
+    checkin, checkout, nights = apply_note_stay_override(
+        dt.date(2026, 3, 8),
+        dt.date(2026, 3, 9),
+        1,
+        note_phone_info,
+    )
+    assert checkin.isoformat() == "2026-03-08"
+    assert checkout.isoformat() == "2026-03-10"
+    assert nights == 2
 
     assert detect_branch_label("The Gangnam") == "GANGNAM"
     assert detect_branch_label("더 코엑스") == "COEX"

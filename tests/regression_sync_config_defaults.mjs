@@ -17,10 +17,12 @@ function main() {
   ].map((p) => path.join(root, p)).forEach(loadScript);
 
   const normalize = globalThis.App?.scan?.normalize;
+  const constants = globalThis.App?.constants || {};
   assert.ok(normalize, "App.scan.normalize is required");
 
   const cfg = normalize.sanitizeSyncConfig({});
-  assert.equal(cfg.providerApply["admin-station"], true);
+  const readOnly = constants.READ_ONLY_TOOL_MODE === true;
+  assert.equal(cfg.providerApply["admin-station"], readOnly ? false : true);
   assert.equal(cfg.providerApply["naver-partner"], false);
   assert.equal(cfg.opsUiCollapsed, true);
   assert.equal(cfg.goldenExportRedaction, "default");
@@ -33,7 +35,7 @@ function main() {
     }
   });
   assert.equal(override.providerApply["admin-station"], false);
-  assert.equal(override.providerApply["naver-partner"], true);
+  assert.equal(override.providerApply["naver-partner"], readOnly ? false : true);
 
   console.log("regression_sync_config_defaults: OK");
 }

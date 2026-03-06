@@ -34,7 +34,14 @@ function main() {
   assert.equal(cfg.pmsPreset.pageId, "IR04_0100X_V03");
   assert.equal(cfg.pmsPreset.pageSize, 300);
 
-  const generated = normalize.buildWingsPmsPresetRequest(cfg.pmsPreset, "https://pms.sanhait.com/pms/index.do");
+  const generated = normalize.buildWingsPmsPresetRequest(
+    {
+      ...cfg.pmsPreset,
+      startDate: "2026-03-01",
+      endDate: "2026-03-07"
+    },
+    "https://pms.sanhait.com/pms/index.do"
+  );
   assert.ok(generated, "preset must generate a request");
   assert.equal(
     generated.url,
@@ -44,7 +51,7 @@ function main() {
   assert.equal(generated.bundle.contentType, "form");
   assert.match(generated.bundle.requestBody, /filter%5BPAGE_ID%5D=IR04_0100X_V03/);
   assert.match(generated.bundle.requestBody, /filter%5Bfilters%5D%5B0%5D%5Bvalue%5D=91/);
-  assert.match(generated.bundle.requestBody, /ARRV_DATE_F=2026-02-28/);
+  assert.match(generated.bundle.requestBody, /ARRV_DATE_F=2026-03-01/);
   assert.match(generated.bundle.requestBody, /ARRV_DATE_T=2026-03-07/);
 
   const reservationPreset = normalize.sanitizeWingsPmsPreset({
@@ -55,7 +62,11 @@ function main() {
     pageSize: 500
   });
   const reservationGenerated = normalize.buildWingsPmsPresetRequest(
-    reservationPreset,
+    {
+      ...reservationPreset,
+      startDate: "2026-03-04",
+      endDate: "2026-03-10"
+    },
     "https://pms.sanhait.com/pms/index.do"
   );
   assert.ok(reservationGenerated, "reservation list preset must generate a request");
@@ -65,6 +76,8 @@ function main() {
   );
   assert.match(reservationGenerated.bundle.requestBody, /filter%5BPAGE_ID%5D=IR04_0100X/);
   assert.match(reservationGenerated.bundle.requestBody, /pageSize=500/);
+  assert.match(reservationGenerated.bundle.requestBody, /ARRV_DATE_F=2026-03-04/);
+  assert.match(reservationGenerated.bundle.requestBody, /ARRV_DATE_T=2026-03-10/);
 
   console.log("regression_wings_pms_preset: OK");
 }
