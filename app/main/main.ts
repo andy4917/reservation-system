@@ -1,0 +1,24 @@
+import { app, BrowserWindow } from "electron";
+import { createMainWindow } from "./window";
+import { registerAppIpc } from "./ipc";
+
+async function bootstrap() {
+  await app.whenReady();
+  registerAppIpc();
+  createMainWindow();
+
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createMainWindow();
+    }
+  });
+}
+
+bootstrap().catch((error) => {
+  console.error("[desktop-app] bootstrap failed", error);
+  app.exit(1);
+});
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
+});

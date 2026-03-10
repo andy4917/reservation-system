@@ -12,39 +12,13 @@ const EXPORT_COOKIE_MESSAGE = "inventory.auth.exportCookies";
 const IMPORT_COOKIE_MESSAGE = "inventory.auth.importCookies";
 const SECURE_ENCRYPT_MESSAGE = "inventory.secure.encrypt";
 const SECURE_DECRYPT_MESSAGE = "inventory.secure.decrypt";
-const TOGGLE_PANEL_MESSAGE = "inventory.ui.togglePanel";
-const ACTION_DEFAULT_TITLE = "UHS 예약 통합관리";
-const ACTION_UNSUPPORTED_TITLE = "UHS 예약 통합관리: 지원 시작 호스트에서만 시작할 수 있습니다.";
-const ACTION_FAILURE_TITLE = "UHS 예약 통합관리: 패널 열기에 실패했습니다. 페이지 새로고침 후 다시 시도하세요.";
+const BRIDGE_GET_CONTEXT_MESSAGE = "inventory.bridge.getContext";
+const BRIDGE_DOM_SNAPSHOT_MESSAGE = "inventory.bridge.domSnapshot";
 const ENTRY_POLICY = globalThis.InventoryEntryPolicy || {};
-const MANIFEST = chrome.runtime?.getManifest?.() || {};
-const CONTENT_SCRIPT_CONFIGS = Array.isArray(MANIFEST.content_scripts) ? MANIFEST.content_scripts : [];
-const CONTENT_SCRIPT_FILES = [...new Set(CONTENT_SCRIPT_CONFIGS.flatMap((item) => item?.js || []))];
 const SECURE_DB_NAME = "inventory-secure-store";
 const SECURE_DB_VERSION = 1;
 const SECURE_KEY_STORE = "keys";
 const SECURE_KEY_ID = "sync-config-aes-gcm-v1";
-
-function escapeRegExp(value) {
-  return String(value || "").replace(/[|\\{}()[\]^$+?.*]/g, "\\$&");
-}
-
-function matchPatternToRegExp(pattern) {
-  const text = String(pattern || "").trim();
-  if (!text) return null;
-  if (text === "<all_urls>") return /^https?:\/\/.+/i;
-  const match = text.match(/^(\*|https?|file|ftp):\/\/([^/]+)(\/.*)$/i);
-  if (!match) return null;
-  const [, schemeRaw, hostRaw, pathRaw] = match;
-  const scheme = schemeRaw === "*" ? "https?" : escapeRegExp(schemeRaw);
-  const host = hostRaw === "*"
-    ? "[^/]+"
-    : escapeRegExp(hostRaw)
-        .replace(/^\\\*\\\./, "(?:[^/]+\\.)?")
-        .replace(/\\\*/g, "[^/]*");
-  const path = escapeRegExp(pathRaw).replace(/\\\*/g, ".*");
-  return new RegExp(`^${scheme}:\/\/${host}${path}$`, "i");
-}
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -307,93 +281,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (type === BRIDGE_GET_CONTEXT_MESSAGE) {
+    sendResponse({
+      ok: true,
+      context: {
+        tabId: Number(sender?.tab?.id || 0) || null,
+        url: String(sender?.tab?.url || ""),
+        host: (() => {
+          try {
+            return new URL(String(sender?.tab?.url || "")).host || "";
+          } catch (_error) {
+            return "";
+          }
+        })(),
+        entrySupport:
+          typeof ENTRY_POLICY.detectEntrySupportByUrl === "function"
+            ? ENTRY_POLICY.detectEntrySupportByUrl(sender?.tab?.url || "")
+            : null
+      }
+    });
+    return false;
+  }
+
   return false;
 });
-
-function isSupportedActionUrl(url) {
-  if (typeof ENTRY_POLICY.detectEntrySupportByUrl === "function") {
-    return ENTRY_POLICY.detectEntrySupportByUrl(url).supported === true;
-  }
-  const supportedUrlMatchers = CONTENT_SCRIPT_CONFIGS.flatMap((item) => item?.matches || [])
-    .map((pattern) => matchPatternToRegExp(pattern))
-    .filter(Boolean);
-  const text = String(url || "");
-  return supportedUrlMatchers.some((matcher) => matcher.test(text));
-}
-
-function hasNoReceiverError(message) {
-  const text = String(message || "");
-  return (
-    text.includes("Receiving end does not exist") ||
-    text.includes("Could not establish connection")
-  );
-}
-
-function sendPanelToggle(tabId, mode = "toggle") {
-  return new Promise((resolve) => {
-    chrome.tabs.sendMessage(tabId, { type: TOGGLE_PANEL_MESSAGE, mode }, (response) => {
-      const err = chrome.runtime.lastError;
-      if (err) {
-        resolve({ ok: false, error: err.message || "sendMessage failed" });
-        return;
-      }
-      resolve({ ok: response?.ok === true, response: response || null });
-    });
-  });
-}
-
-function injectContentScripts(tabId) {
-  return new Promise((resolve) => {
-    if (!chrome.scripting?.executeScript) {
-      resolve({ ok: false, error: "scripting API unavailable" });
-      return;
-    }
-    chrome.scripting.executeScript({ target: { tabId }, files: CONTENT_SCRIPT_FILES }, () => {
-      const err = chrome.runtime.lastError;
-      if (err) {
-        resolve({ ok: false, error: err.message || "executeScript failed" });
-        return;
-      }
-      resolve({ ok: true });
-    });
-  });
-}
-
-function setActionUi(tabId, { badgeText = "", badgeColor = "#94a3b8", title = ACTION_DEFAULT_TITLE } = {}) {
-  if (!Number.isFinite(tabId)) return;
-  chrome.action.setBadgeText({ tabId, text: String(badgeText || "") });
-  chrome.action.setBadgeBackgroundColor({ tabId, color: badgeColor });
-  chrome.action.setTitle({ tabId, title: String(title || ACTION_DEFAULT_TITLE) });
-}
-
-async function handleActionClick(tab) {
-  const tabId = Number(tab?.id);
-  if (!Number.isFinite(tabId)) return;
-
-  if (!isSupportedActionUrl(tab?.url)) {
-    setActionUi(tabId, { badgeText: "!", badgeColor: "#f59e0b", title: ACTION_UNSUPPORTED_TITLE });
-    return;
-  }
-
-  setActionUi(tabId, { badgeText: "", title: ACTION_DEFAULT_TITLE });
-  let delivered = await sendPanelToggle(tabId, "toggle");
-  if (delivered.ok) return;
-
-  if (hasNoReceiverError(delivered.error)) {
-    const injected = await injectContentScripts(tabId);
-    if (injected.ok) {
-      delivered = await sendPanelToggle(tabId, "open");
-      if (delivered.ok) return;
-    }
-  }
-
-  setActionUi(tabId, { badgeText: "!", badgeColor: "#ef4444", title: ACTION_FAILURE_TITLE });
-}
-
-if (chrome.action?.onClicked) {
-  chrome.action.onClicked.addListener((tab) => {
-    Promise.resolve(handleActionClick(tab)).catch((error) => {
-      console.error("[InventoryBoard] action click failed", error);
-    });
-  });
-}
