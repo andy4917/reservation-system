@@ -1,5 +1,13 @@
 "use strict";
 
+if (typeof importScripts === "function") {
+  try {
+    importScripts("shared/entryPolicy.js");
+  } catch (_error) {
+    // Tests may run without extension worker import support.
+  }
+}
+
 const EXPORT_COOKIE_MESSAGE = "inventory.auth.exportCookies";
 const IMPORT_COOKIE_MESSAGE = "inventory.auth.importCookies";
 const SECURE_ENCRYPT_MESSAGE = "inventory.secure.encrypt";
@@ -8,12 +16,10 @@ const TOGGLE_PANEL_MESSAGE = "inventory.ui.togglePanel";
 const ACTION_DEFAULT_TITLE = "UHS 예약 통합관리";
 const ACTION_UNSUPPORTED_TITLE = "UHS 예약 통합관리: 지원 시작 호스트에서만 시작할 수 있습니다.";
 const ACTION_FAILURE_TITLE = "UHS 예약 통합관리: 패널 열기에 실패했습니다. 페이지 새로고침 후 다시 시도하세요.";
+const ENTRY_POLICY = globalThis.InventoryEntryPolicy || {};
 const MANIFEST = chrome.runtime?.getManifest?.() || {};
 const CONTENT_SCRIPT_CONFIGS = Array.isArray(MANIFEST.content_scripts) ? MANIFEST.content_scripts : [];
 const CONTENT_SCRIPT_FILES = [...new Set(CONTENT_SCRIPT_CONFIGS.flatMap((item) => item?.js || []))];
-const SUPPORTED_URL_MATCHERS = CONTENT_SCRIPT_CONFIGS.flatMap((item) => item?.matches || [])
-  .map((pattern) => matchPatternToRegExp(pattern))
-  .filter(Boolean);
 const SECURE_DB_NAME = "inventory-secure-store";
 const SECURE_DB_VERSION = 1;
 const SECURE_KEY_STORE = "keys";
@@ -305,8 +311,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 function isSupportedActionUrl(url) {
+  if (typeof ENTRY_POLICY.detectEntrySupportByUrl === "function") {
+    return ENTRY_POLICY.detectEntrySupportByUrl(url).supported === true;
+  }
+  const supportedUrlMatchers = CONTENT_SCRIPT_CONFIGS.flatMap((item) => item?.matches || [])
+    .map((pattern) => matchPatternToRegExp(pattern))
+    .filter(Boolean);
   const text = String(url || "");
-  return SUPPORTED_URL_MATCHERS.some((matcher) => matcher.test(text));
+  return supportedUrlMatchers.some((matcher) => matcher.test(text));
 }
 
 function hasNoReceiverError(message) {

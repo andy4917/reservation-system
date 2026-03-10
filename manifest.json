@@ -42,7 +42,9 @@
         "https://pms.sanhait.com/*"
       ],
       "js": [
+        "src/shared/syncPolicy.js",
         "src/constants.js",
+        "src/shared/entryPolicy.js",
         "src/domain.types.js",
         "src/scan/normalize.js",
         "src/pms/wings.adapter.js",
@@ -56,7 +58,12 @@
         "src/io/pms.fetch.js",
         "src/report/validator.js",
         "src/report/reservationVerification.js",
+        "src/ui/taskRegistry.js",
         "src/ui/productFlow.js",
+        "src/ui/appShell.js",
+        "src/ui/workspacePolicy.js",
+        "src/ui/applyPolicy.js",
+        "src/ui/inventoryCompareController.js",
         "src/ui/panelTemplate.js",
         "src/ui/panelDom.js",
         "src/ui/panelEvents.js",

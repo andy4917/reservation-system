@@ -1,0 +1,56 @@
+{
+  "task_id": "task-20260308-ota-dom-fallback-poc",
+  "checks": [
+    {
+      "name": "Targeted functional verification",
+      "required": true,
+      "kind": "command",
+      "result": "passed",
+      "evidence": [
+        "`node tests/regression_ota_dom_fallback_poc.mjs` passed.",
+        "Both `admin-station` and `naver-partner` returned 9 API rows with DOM count 0 in the API-only scenario.",
+        "Both providers recovered from 3-row degraded API input to 9 covered rows only after DOM merge."
+      ]
+    },
+    {
+      "name": "Constraint review",
+      "required": true,
+      "kind": "inspection",
+      "result": "passed",
+      "evidence": [
+        "The change stayed within `src/io/pms.fetch.js`, one new regression test, and the architecture document.",
+        "No destructive file removal, credential change, or unrelated refactor was introduced."
+      ]
+    },
+    {
+      "name": "Legacy branch and fallback scan",
+      "required": true,
+      "kind": "inspection",
+      "result": "passed",
+      "evidence": [
+        "The existing `dom_fallback` branch in `fetchProviderRows` remains unchanged; the PoC documents its boundary instead of widening it.",
+        "The architecture doc now classifies OTA query as `bridge-candidate`, which matches the surviving fallback branch."
+      ]
+    },
+    {
+      "name": "Hardcoding and temporary patch scan",
+      "required": true,
+      "kind": "inspection",
+      "result": "passed",
+      "evidence": [
+        "`git diff --check -- src/io/pms.fetch.js tests/regression_ota_dom_fallback_poc.mjs docs/architecture/APP_CENTRIC_TRANSITION_PLAN.md` returned no diff-format issues.",
+        "The only new constants in the PoC are fixture IDs already defined by room presets."
+      ]
+    },
+    {
+      "name": "Residual-risk review",
+      "required": true,
+      "kind": "analysis",
+      "result": "passed",
+      "evidence": [
+        "The PoC is code-harness based, so real-session low-coverage frequency remains unmeasured.",
+        "That remaining risk affects the next instrumentation step, not the current `bridge-candidate` reclassification."
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@
   App.ui = App.ui || {};
 
   function bindPanelEvents({ ui, state, context, actions = {}, windowRef = globalThis, navigatorRef = globalThis.navigator } = {}) {
+    const taskRegistry = globalThis.App?.ui?.taskRegistry || {};
     const {
       TEXT,
       PREF_KEY,
@@ -235,12 +236,16 @@
     ui.backdrop.addEventListener("click", () => {
       setPanelOpen(false);
     });
-    [
-      [ui.taskNavInventoryBtn, "NAVER_STATION_SYNC", { openScope: true }],
-      [ui.taskNavReservationBtn, "PMS_RESERVATION_VALIDATION", { openScope: false }],
-      [ui.taskNavSheetBtn, "SHEET_MAPPING_REVIEW", { openSettings: true, openScope: false }],
-      [ui.taskNavAuditBtn, "OTA_PMS_COMPARISON", { openScope: false }]
-    ].forEach(([btn, taskId, options]) => {
+    const navEntries =
+      typeof taskRegistry.listTaskMetas === "function"
+        ? taskRegistry.listTaskMetas().map((task) => [ui[task.buttonId], task.id, { ...(task.defaultOpen || {}) }])
+        : [
+            [ui.taskNavInventoryBtn, "NAVER_STATION_SYNC", { openScope: true }],
+            [ui.taskNavReservationBtn, "PMS_RESERVATION_VALIDATION", { openScope: false }],
+            [ui.taskNavSheetBtn, "SHEET_MAPPING_REVIEW", { openSettings: true, openScope: false }],
+            [ui.taskNavAuditBtn, "OTA_PMS_COMPARISON", { openScope: false }]
+          ];
+    navEntries.forEach(([btn, taskId, options]) => {
       if (!btn) return;
       btn.addEventListener("click", async () => {
         if (btn.disabled) return;

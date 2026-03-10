@@ -4,14 +4,15 @@
   const root = globalThis;
   const App = (root.App = root.App || {});
   if (App.constants && App.constants.__ready) return;
+  const syncPolicy = root.InventorySyncPolicy || {};
 
-  const FIXED_NAVER_BUSINESS_ID = "1356779";
-  const FIXED_STATION_BRANCH_ID = "18";
+  const FIXED_NAVER_BUSINESS_ID = String(syncPolicy.defaultNaverBusinessId || "1356779");
+  const FIXED_STATION_BRANCH_ID = String(syncPolicy.defaultStationBranchId || "18");
   const PMS_ORIGINS = {
     NAVER_PARTNER: "https://partner.booking.naver.com",
-    NAVER_API: "https://api-partner.booking.naver.com",
+    NAVER_API: String(syncPolicy.defaultNaverApiBase || "https://api-partner.booking.naver.com"),
     STATION_ADMIN: "https://admin.admin-stationbyuhc.com",
-    STATION_API: "https://api.admin-stationbyuhc.com"
+    STATION_API: String(syncPolicy.defaultStationApiBase || "https://api.admin-stationbyuhc.com")
   };
   const NAVER_COOKIE_EXPORT_URLS = [
     `${PMS_ORIGINS.NAVER_PARTNER}/`,
@@ -43,15 +44,16 @@
     "PROVIDER_VALUE_ROW_MISMATCH",
     "PROVIDER_VALUE_SOURCE_LOW_COVERAGE"
   ]);
-  const APPLY_BLOCKING_PREVIEW_WARN_CODES = new Set([
-    "CURRENT_EXCEEDS_MAXIMUM",
-    "MAX_DIFFERS_FROM_BASELINE",
-    "TARGET_EXCEEDS_PROVIDER_MAX"
-  ]);
-  const APPLY_BLOCKING_PLANNER_WARNING_CODES = new Set([
-    "STATION_NO_CALENDAR_ROWS",
-    "STATION_NO_PRICE_SET_ID"
-  ]);
+  const APPLY_BLOCKING_PREVIEW_WARN_CODES = new Set(
+    Array.isArray(syncPolicy.applyBlockingValidationWarnCodes)
+      ? syncPolicy.applyBlockingValidationWarnCodes
+      : ["CURRENT_EXCEEDS_MAXIMUM", "MAX_DIFFERS_FROM_BASELINE", "TARGET_EXCEEDS_PROVIDER_MAX"]
+  );
+  const APPLY_BLOCKING_PLANNER_WARNING_CODES = new Set(
+    Array.isArray(syncPolicy.applyBlockingStationWarningCodes)
+      ? syncPolicy.applyBlockingStationWarningCodes
+      : ["STATION_NO_CALENDAR_ROWS", "STATION_NO_PRICE_SET_ID"]
+  );
   const READ_ONLY_TOOL_MODE = true;
   const EMBEDDED_AUTH_MODE = false;
   const EMBEDDED_AUTH = {

@@ -6,6 +6,7 @@
 
   const App = (globalThis.App = globalThis.App || {});
   const C = App.constants || {};
+  const sharedEntryPolicy = globalThis.InventoryEntryPolicy || {};
   const runtime = App.runtime || (App.runtime = {});
   const {
     FIXED_NAVER_BUSINESS_ID,
@@ -67,6 +68,11 @@
   let stationTokenCache = runtime.stationTokenCache || (runtime.stationTokenCache = { token: null, expiresAt: 0 });
   let naverBizItemsCache = runtime.naverBizItemsCache || (runtime.naverBizItemsCache = { ts: 0, items: [] });
   const productFlow = App.ui?.productFlow || {};
+  const taskRegistry = App.ui?.taskRegistry || {};
+  const appShell = App.ui?.appShell || {};
+  const workspacePolicy = App.ui?.workspacePolicy || {};
+  const applyPolicy = App.ui?.applyPolicy || {};
+  const inventoryCompareControllerNs = App.ui?.inventoryCompareController || {};
   const {
     detectProviderTypeFromHost,
     evaluateProductFlow
@@ -76,11 +82,13 @@
     const providerType =
       typeof detectProviderTypeFromHost === "function"
         ? detectProviderTypeFromHost(location.host)
-        : location.host.toLowerCase().includes("partner.booking.naver.com")
-          ? "naver-partner"
-          : location.host.toLowerCase().includes("admin.admin-stationbyuhc.com")
-            ? "admin-station"
-            : "";
+        : typeof sharedEntryPolicy.detectProviderTypeFromHost === "function"
+          ? sharedEntryPolicy.detectProviderTypeFromHost(location.host)
+          : location.host.toLowerCase().includes("partner.booking.naver.com")
+            ? "naver-partner"
+            : location.host.toLowerCase().includes("admin.admin-stationbyuhc.com")
+              ? "admin-station"
+              : "";
     if (!providerType) return null;
     const siteName =
       providerType === "admin-station"
@@ -211,7 +219,10 @@
     fetchStationRows,
     fetchNaverRows,
     fetchProviderRows,
+    summarizeProviderRowSources,
     fetchProviderReservations,
+    getLastProviderFetchMeta,
+    getProviderFetchInstrumentation,
     resolveStationBranchId,
     roomNameKey,
     resolvePresetRoomId,
@@ -357,6 +368,9 @@
 
   const { shadow } = createPanelDom({ style: STYLE, html: HTML, documentRef: document });
   const ui = collectPanelUi(shadow);
+  if (typeof taskRegistry.initializeTaskNavigationUi === "function") {
+    taskRegistry.initializeTaskNavigationUi(ui);
+  }
 
   const state = {
     bootstrapped: false,
@@ -383,6 +397,7 @@
     selectedEnd: null,
     query: null,
     rows: [],
+    providerRowMeta: null,
     providerReservations: [],
     providerReservationMeta: null,
     dates: [],
@@ -420,6 +435,54 @@
     naverQueue: runtime.naverQueue || (runtime.naverQueue = new Map()),
     naverQueueMeta: runtime.naverQueueMeta || (runtime.naverQueueMeta = { lastFlushedAt: 0 })
   };
+  const inventoryCompareController =
+    typeof inventoryCompareControllerNs.createInventoryCompareController === "function"
+      ? inventoryCompareControllerNs.createInventoryCompareController({
+        state,
+        context,
+        prefKey: PREF_KEY,
+        storageSet,
+        normalizeText,
+        sanitizeSyncConfig,
+        readSyncConfigFromUI,
+        persistSyncConfig,
+        fetchSheetSnapshot,
+        fetchProviderRows,
+        fetchProviderReservations,
+        normalizeRows,
+        getLastProviderFetchMeta,
+        getProviderFetchInstrumentation,
+        summarizeProviderRowSources,
+        requireInventoryProviderKey,
+        assertProviderInventorySource,
+        buildValueModel,
+        buildSheetValueModel,
+        buildSyncPreviewContext,
+        resolveSyncPreviewTargets,
+        planSyncPreviewActions,
+        countPreviewMismatches,
+        buildPreviewRows,
+        buildSyncApplyPolicy,
+        buildValidationRows,
+        countClosedItems,
+        collectBlockScanEscalationReasons,
+        annotatePreviewBlockScan,
+        buildTracePacketForMismatch,
+        buildTracePacketsForMismatches,
+        renderSummary,
+        renderSiteValueTable,
+        renderSheetValueTable,
+        renderSheetInsightPanel,
+        renderSyncResult,
+        renderMismatchRows,
+        refreshInventoryVerification,
+        updateSyncButtonText,
+        updateCorrectionButtonState,
+        markActionTime,
+        resolveActiveQuery,
+        isSameQuery
+      })
+      : null;
   const PANEL_ANIM_MS = 220;
   let panelAnimTimer = 0;
   let hostOverflowRestore = null;
@@ -427,6 +490,9 @@
   let hostViewportShiftTimer = 0;
 
   function taskLabelById(taskId) {
+    if (typeof taskRegistry.getTaskMeta === "function") {
+      return taskRegistry.getTaskMeta(taskId).shellLabel || "재고 조회 / 비교";
+    }
     const task = normalizeText(taskId || "").toUpperCase();
     if (task === "PMS_RESERVATION_VALIDATION") return "예약 읽기 / 검증";
     if (task === "SHEET_MAPPING_REVIEW") return "시트 매핑 / 검토";
@@ -435,6 +501,9 @@
   }
 
   function taskClassById(taskId) {
+    if (typeof taskRegistry.getTaskMeta === "function") {
+      return taskRegistry.getTaskMeta(taskId).className || "task-inventory";
+    }
     const task = normalizeText(taskId || "").toUpperCase();
     if (task === "PMS_RESERVATION_VALIDATION") return "task-reservation";
     if (task === "SHEET_MAPPING_REVIEW") return "task-sheet";
@@ -557,138 +626,55 @@
   }
 
   function capabilityUiStatus(capabilityKey) {
-    const capability = state.productFlow?.capabilities?.[capabilityKey];
-    if (!capability) {
-      return {
-        label: "GUARD",
-        className: "guard",
-        summary: "지원 정책을 다시 확인하세요."
-      };
-    }
-    if (capability.ready === true) {
-      return {
-        label: "READY",
-        className: "ready",
-        summary:
-          capabilityKey === "provider-session"
-            ? "현재 호스트 세션이 확인되어 작업면에 진입할 수 있습니다."
-            : "현재 워크플로에서 바로 사용할 수 있습니다."
-      };
-    }
-    if (capabilityKey === "provider-session") {
-      return {
-        label: "BLOCKED",
-        className: "blocked",
-        summary: `${context.siteName} 관리자 페이지 로그인 상태를 먼저 확인하세요.`
-      };
-    }
-    if (capability.configured !== true) {
-      return {
-        label: "GUARD",
-        className: "guard",
-        summary: "직접 시작 호스트가 아니며 Utility > Settings에서 설정이 필요합니다."
-      };
+    if (typeof workspacePolicy.capabilityUiStatus === "function") {
+      return workspacePolicy.capabilityUiStatus({
+        capabilityKey,
+        productFlow: state.productFlow,
+        contextSiteName: context.siteName
+      });
     }
     return {
       label: "GUARD",
       className: "guard",
-      summary: "설정은 있으나 인증 정보가 준비되지 않았습니다."
+      summary: "지원 정책을 다시 확인하세요."
     };
   }
 
-  function buildPolicyItemHtml(label, status, body) {
-    return (
-      `<div class="policy-item">` +
-      `<div class="policy-item-head">` +
-      `<span>${escapeHtml(label)}</span>` +
-      `<span class="policy-item-status ${escapeHtml(status.className)}">${escapeHtml(status.label)}</span>` +
-      `</div>` +
-      `<div class="policy-item-body">${escapeHtml(body)}</div>` +
-      `</div>`
-    );
-  }
-
   function renderSupportPolicySurface() {
-    const directHosts = directEntryHostLabelsText();
-    const providerStatus = capabilityUiStatus("provider-session");
-    const sheetsStatus = capabilityUiStatus("sheets");
-    const wingsStatus = capabilityUiStatus("wings");
-    const items = [
-      buildPolicyItemHtml(
-        "Direct Entry Hosts",
-        { label: "READY", className: "ready" },
-        `${directHosts}에서만 직접 시작할 수 있습니다. Google Sheets는 보조 연동 서비스입니다.`
-      ),
-      buildPolicyItemHtml("Provider Session", providerStatus, providerStatus.summary),
-      buildPolicyItemHtml("Google Sheets", sheetsStatus, sheetsStatus.summary),
-      buildPolicyItemHtml("WINGS/PMS", wingsStatus, wingsStatus.summary)
-    ].join("");
-
-    if (ui.supportPolicyList) ui.supportPolicyList.innerHTML = items;
-    if (ui.flowGateSupportList) ui.flowGateSupportList.innerHTML = items;
-    if (ui.supportPolicySummary) {
-      ui.supportPolicySummary.textContent =
-        state.productFlow?.workspaceAccess === true
-          ? `직접 시작은 ${directHosts}에서 허용됩니다. Google Sheets는 Utility 설정을 거쳐 보조 연동으로 사용합니다.`
-          : `${context.siteName} 세션을 확인한 뒤 작업면에 진입합니다.`;
+    if (typeof workspacePolicy.renderSupportPolicySurface === "function") {
+      workspacePolicy.renderSupportPolicySurface({
+        ui,
+        state,
+        context,
+        escapeHtml,
+        directEntryHostLabelsText,
+        capabilityUiStatus
+      });
     }
   }
 
   function activeFlowGate() {
-    if (state.productFlow?.workspaceAccess !== true) {
-      return {
-        kicker: "Start Gate",
-        title: `${context.siteName} 세션 확인 필요`,
-        summary: `확장 아이콘으로만 시작할 수 있습니다. ${context.siteName} 관리자 페이지 로그인 상태를 확인한 뒤 상태를 다시 확인하세요.`,
-        utilityLabel: "지원 정책 보기",
-        utilityTab: "scope"
-      };
-    }
-    const taskAccess = currentTaskFlowAccess();
-    if (!taskAccess.blocked) return null;
-    if (taskAccess.reason === "sheets") {
-      return {
-        kicker: "Task Guard",
-        title: "Google Sheets 설정 필요",
-        summary: "Sheet Mapping과 시트 비교 플로우는 Google Sheets 설정과 인증이 준비된 뒤에만 열립니다.",
-        utilityLabel: "Utility > Settings",
-        utilityTab: "settings"
-      };
-    }
-    if (taskAccess.reason === "wings") {
-      return {
-        kicker: "Task Guard",
-        title: "WINGS/PMS 설정 필요",
-        summary: "Reservation Validation과 OTA/PMS Audit는 WINGS/PMS 조회 URL과 인증 번들이 준비된 뒤에만 진입할 수 있습니다.",
-        utilityLabel: "Utility > Settings",
-        utilityTab: "settings"
-      };
-    }
-    if (taskAccess.reason === "host-scope") {
-      const entryHostLabel = normalizeText(state.productFlow?.entryHost?.directEntryLabel || context.siteName);
-      return {
-        kicker: "Task Guard",
-        title: "현재 시작 호스트에서는 이 Task를 열 수 없음",
-        summary: `${entryHostLabel} 시작 호스트에서는 현재 세션 캡처와 설정 정리까지만 직접 지원합니다. 실행이 필요한 Task는 Naver 또는 Station 관리자 페이지에서 이어서 여세요.`,
-        utilityLabel: "Utility > Settings",
-        utilityTab: "settings"
-      };
+    if (typeof workspacePolicy.activeFlowGate === "function") {
+      return workspacePolicy.activeFlowGate({
+        productFlow: state.productFlow,
+        contextSiteName: context.siteName,
+        taskAccess: currentTaskFlowAccess()
+      });
     }
     return null;
   }
 
   function syncFlowSurfaceState() {
-    if (state.productFlow?.workspaceAccess !== true) {
-      state.secondarySurfaceKind = "utility";
-      state.activeUtilityTab = "scope";
-      state.lastUtilityTab = "scope";
-      syncDerivedSurfaceState();
-      return;
-    }
-    const taskAccess = currentTaskFlowAccess();
-    if (!taskAccess.blocked) return;
-    state.secondarySurfaceKind = "utility";
-    state.activeUtilityTab = normalizeUtilityTab(taskAccess.utilityTab || "settings");
+    const blockedSurface =
+      typeof workspacePolicy.resolveBlockedTaskSurface === "function"
+        ? workspacePolicy.resolveBlockedTaskSurface({
+            productFlow: state.productFlow,
+            taskAccess: currentTaskFlowAccess()
+          })
+        : null;
+    if (!blockedSurface) return;
+    state.secondarySurfaceKind = blockedSurface.secondarySurfaceKind || "utility";
+    state.activeUtilityTab = normalizeUtilityTab(blockedSurface.activeUtilityTab || "scope");
     state.lastUtilityTab = state.activeUtilityTab;
     syncDerivedSurfaceState();
   }
@@ -736,20 +722,24 @@
   }
 
   function preferredEvidenceTabForTask(taskId = state.activeTask) {
-    const task = normalizeText(taskId || "").toUpperCase();
-    if (task === "PMS_RESERVATION_VALIDATION") return "validation";
-    if (task === "OTA_PMS_COMPARISON") return "validation";
-    if (task === "SHEET_MAPPING_REVIEW") return "trace";
-    if (Number(state.syncPreview?.errorCount || 0) > 0) return "blocking";
+    if (typeof workspacePolicy.preferredEvidenceTabForTask === "function") {
+      return workspacePolicy.preferredEvidenceTabForTask({
+        taskId,
+        syncPreviewErrorCount: state.syncPreview?.errorCount
+      });
+    }
     return "result";
   }
 
   function preferredUtilityTabForTask(taskId = state.activeTask) {
-    const task = normalizeText(taskId || "").toUpperCase();
-    const taskAccess = currentTaskFlowAccess(task);
-    if (taskAccess.blocked) return normalizeUtilityTab(taskAccess.utilityTab || "settings");
-    if (task === "SHEET_MAPPING_REVIEW") return "settings";
-    if (task === "PMS_RESERVATION_VALIDATION" || task === "OTA_PMS_COMPARISON") return "ops";
+    if (typeof workspacePolicy.preferredUtilityTabForTask === "function") {
+      return normalizeUtilityTab(
+        workspacePolicy.preferredUtilityTabForTask({
+          taskId,
+          currentTaskFlowAccess
+        })
+      );
+    }
     return "scope";
   }
 
@@ -762,83 +752,44 @@
   }
 
   function resolveTaskGuideModel(taskId = state.activeTask) {
-    const task = normalizeText(taskId || "").toUpperCase();
-    const mismatchCount = isSyncPreviewForActiveQuery() ? Number(state.syncPreview?.mismatchCount || 0) : 0;
-    const errorCount = Number(state.syncPreview?.errorCount || 0);
-    const warnCount = Number(state.verificationReport?.warnCount || 0);
-    const failCount = Number(state.verificationReport?.failCount || 0);
-    const reservationCount = Array.isArray(state.providerReservations) ? state.providerReservations.length : 0;
-    const anomalyCount = countReservationAuditAnomalies();
-    const sheetRows = Array.isArray(state.sheetValueRows) ? state.sheetValueRows.length : 0;
-    const scanMode = normalizeText(state.syncConfig?.scan?.mode || "auto") || "auto";
-
-    if (task === "PMS_RESERVATION_VALIDATION") {
-      return {
-        title: "Reservation Validation",
-        summary: `PMS 예약과 읽은 예약을 검증하고 anomaly, 누락, 분류 오류를 먼저 확인합니다. 예약 ${reservationCount}건 / 경고 ${warnCount}건 / 실패 ${failCount}건 / anomaly ${anomalyCount}건`,
-        action: reservationCount > 0 ? "누락/분류 오류와 anomaly를 검토하세요." : "먼저 예약을 읽어 검증 기준을 만드세요.",
-        primaryView: "검증 상태 / anomaly 요약",
-        evidence: "Validation Basis",
-        utility: "Ops",
-        evidenceButton: "Evidence > Validation Basis",
-        utilityButton: "Utility > Ops"
-      };
-    }
-    if (task === "SHEET_MAPPING_REVIEW") {
-      return {
-        title: "Sheet Mapping",
-        summary: `시트 구조, 좌표, 맵핑 규칙을 검토해 엔진 정합성을 유지합니다. 스캔 모드 ${scanMode} / 시트 행 ${sheetRows}건`,
-        action: state.secondarySurfaceKind === "utility" && state.activeUtilityTab === "settings"
-          ? "좌표와 맵핑 규칙을 검토하고 저장하세요."
-          : "시트 구조와 맵핑 규칙의 정합성을 확인하세요.",
-        primaryView: "시트 구조 / 맵핑 상태",
-        evidence: "Trace / Log",
-        utility: "Settings",
-        evidenceButton: "Evidence > Trace / Log",
-        utilityButton: "Utility > Settings"
-      };
-    }
-    if (task === "OTA_PMS_COMPARISON") {
-      return {
-        title: "OTA/PMS Audit",
-        summary: `OTA / PMS / Sheet를 교차 대조해 운영 리스크를 조기에 발견합니다. 예약 ${reservationCount}건 / 경고 ${warnCount}건 / 실패 ${failCount}건 / anomaly ${anomalyCount}건`,
-        action: reservationCount > 0 ? "교차 대조 결과와 운영 리스크를 검토하세요." : "먼저 예약과 조회 데이터를 읽어 대조 근거를 확보하세요.",
-        primaryView: "감사 요약 / 교차 검증 상태",
-        evidence: "Validation Basis",
-        utility: "Ops",
-        evidenceButton: "Evidence > Validation Basis",
-        utilityButton: "Utility > Ops"
-      };
+    if (typeof workspacePolicy.resolveTaskGuideModel === "function") {
+      return workspacePolicy.resolveTaskGuideModel({
+        taskId,
+        secondarySurfaceKind: state.secondarySurfaceKind,
+        activeUtilityTab: state.activeUtilityTab,
+        selectedStart: state.selectedStart,
+        selectedEnd: state.selectedEnd,
+        reservationCount: Array.isArray(state.providerReservations) ? state.providerReservations.length : 0,
+        warnCount: Number(state.verificationReport?.warnCount || 0),
+        failCount: Number(state.verificationReport?.failCount || 0),
+        anomalyCount: countReservationAuditAnomalies(),
+        sheetRows: Array.isArray(state.sheetValueRows) ? state.sheetValueRows.length : 0,
+        scanMode: normalizeText(state.syncConfig?.scan?.mode || "auto") || "auto",
+        mismatchCount: isSyncPreviewForActiveQuery() ? Number(state.syncPreview?.mismatchCount || 0) : 0,
+        errorCount: Number(state.syncPreview?.errorCount || 0),
+        hasLoadedBothInventoryForQuery,
+        resolveActiveQuery
+      });
     }
     return {
       title: "Inventory",
-      summary: `사이트와 시트 재고를 비교하고 불일치와 보정 미리보기를 검토합니다. 불일치 ${mismatchCount}건 / 차단 ${errorCount}건`,
-      action: !state.selectedStart || !state.selectedEnd
-        ? "먼저 범위를 선택하세요."
-        : !hasLoadedBothInventoryForQuery(resolveActiveQuery())
-          ? "사이트와 시트를 함께 조회해 비교 기준을 만드세요."
-          : mismatchCount > 0
-            ? "불일치와 보정 미리보기를 검토하세요."
-            : "비교 결과를 확인하고 필요 시 보정 미리보기를 실행하세요.",
-      primaryView: "사이트 vs 시트 비교 / 불일치 리뷰",
-      evidence: errorCount > 0 ? "Blocking" : "Result",
+      summary: "정책 모듈을 확인하세요.",
+      action: "구성 상태를 먼저 확인하세요.",
+      primaryView: "Result",
+      evidence: "Result",
       utility: "Scope",
-      evidenceButton: errorCount > 0 ? "Evidence > Blocking" : "Evidence > Result",
+      evidenceButton: "Evidence > Result",
       utilityButton: "Utility > Scope"
     };
   }
 
   function renderTaskGuideCard() {
-    if (!ui.taskGuideTitle || !ui.taskGuideSummary || !ui.taskGuideAction || !ui.taskGuidePrimaryView || !ui.taskGuideEvidence || !ui.taskGuideUtility) return;
-    const model = resolveTaskGuideModel(state.activeTask);
-    ui.taskGuideTitle.textContent = model.title;
-    ui.taskGuideSummary.textContent = model.summary;
-    ui.taskGuideAction.textContent = model.action;
-    ui.taskGuidePrimaryView.textContent = model.primaryView;
-    ui.taskGuideEvidence.textContent = model.evidence;
-    ui.taskGuideUtility.textContent = model.utility;
-    if (ui.taskGuideEvidenceBtn) ui.taskGuideEvidenceBtn.textContent = model.evidenceButton;
-    if (ui.taskGuideUtilityBtn) ui.taskGuideUtilityBtn.textContent = model.utilityButton;
+    if (typeof workspacePolicy.renderTaskGuideCard === "function") {
+      workspacePolicy.renderTaskGuideCard({
+        ui,
+        model: resolveTaskGuideModel(state.activeTask)
+      });
+    }
   }
 
   function stepLabelText() {
@@ -952,6 +903,16 @@
   }
 
   function currentCapabilityLabel() {
+    if (typeof appShell.currentCapabilityLabel === "function") {
+      return appShell.currentCapabilityLabel({
+        state: {
+          ...state,
+          currentTaskFlowAccess
+        },
+        readOnlyToolMode: READ_ONLY_TOOL_MODE,
+        isCurrentProviderApplyAllowed
+      });
+    }
     if (state.productFlow?.workspaceAccess !== true) return "세션 확인 필요";
     const taskAccess = currentTaskFlowAccess();
     if (taskAccess.blocked && taskAccess.reason === "host-scope") return "호스트 가드";
@@ -964,6 +925,18 @@
   }
 
   function nextActionLabel() {
+    if (typeof appShell.nextActionLabel === "function") {
+      return appShell.nextActionLabel({
+        state: {
+          ...state,
+          currentTaskFlowAccess
+        },
+        ui,
+        text: TEXT,
+        hasLoadedBothInventoryForQuery,
+        resolveActiveQuery
+      });
+    }
     const query = resolveActiveQuery();
     const task = normalizeText(state.activeTask || "").toUpperCase();
     const taskAccess = currentTaskFlowAccess(task);
@@ -984,6 +957,9 @@
   }
 
   function currentRangeSourceLabel() {
+    if (typeof appShell.currentRangeSourceLabel === "function") {
+      return appShell.currentRangeSourceLabel({ state });
+    }
     if (state.rangeSource === "host") {
       if (state.rangeSourceDetail === "url") return "호스트(URL)";
       if (state.rangeSourceDetail === "dom") return "호스트(DOM)";
@@ -1037,6 +1013,15 @@
   }
 
   function renderHostContextBar() {
+    if (typeof appShell.renderHostContextBar === "function") {
+      return appShell.renderHostContextBar({
+        ui,
+        state,
+        context,
+        resolveContextEntityText,
+        currentCapabilityLabel
+      });
+    }
     if (!ui.contextHostBadge || !ui.contextEntityName || !ui.contextConnectionStatus || !ui.contextPermissionState || !ui.contextLastRun) return;
     ui.contextHostBadge.textContent =
       context.providerType === "admin-station"
@@ -1056,6 +1041,12 @@
   }
 
   function renderFlowGateCard() {
+    if (typeof appShell.renderFlowGateCard === "function") {
+      return appShell.renderFlowGateCard({
+        ui,
+        activeFlowGate
+      });
+    }
     const gate = activeFlowGate();
     if (ui.flowGateCard) ui.flowGateCard.classList.toggle("hidden", !gate);
     if (!gate) return;
@@ -1066,6 +1057,35 @@
   }
 
   function renderWorkspaceShellState() {
+    if (typeof appShell.renderWorkspaceShellState === "function") {
+      return appShell.renderWorkspaceShellState({
+        ui,
+        state: {
+          ...state,
+          currentTaskFlowAccess,
+          isPanelVisible,
+          stepLabelText,
+          currentRangeSourceLabel,
+          nextActionLabel,
+          getTaskNavItems: () =>
+            typeof taskRegistry.listTaskMetas === "function"
+              ? taskRegistry.listTaskMetas().map((task) => [ui[task.buttonId], task.id])
+              : [
+                  [ui.taskNavInventoryBtn, "NAVER_STATION_SYNC"],
+                  [ui.taskNavReservationBtn, "PMS_RESERVATION_VALIDATION"],
+                  [ui.taskNavSheetBtn, "SHEET_MAPPING_REVIEW"],
+                  [ui.taskNavAuditBtn, "OTA_PMS_COMPARISON"]
+                ]
+        },
+        syncDerivedSurfaceState,
+        taskClassById,
+        taskLabelById,
+        renderTaskGuideCard,
+        renderFlowGateCard,
+        syncViewportFitMode,
+        renderHostContextBar
+      });
+    }
     if (!ui.wrap) return;
     syncDerivedSurfaceState();
     const workspaceBlocked = state.productFlow?.workspaceAccess !== true;
@@ -1098,12 +1118,16 @@
     }
     renderTaskGuideCard();
     renderFlowGateCard();
-    [
-      [ui.taskNavInventoryBtn, "NAVER_STATION_SYNC"],
-      [ui.taskNavReservationBtn, "PMS_RESERVATION_VALIDATION"],
-      [ui.taskNavSheetBtn, "SHEET_MAPPING_REVIEW"],
-      [ui.taskNavAuditBtn, "OTA_PMS_COMPARISON"]
-    ].forEach(([btn, taskId]) => {
+    const navItems =
+      typeof taskRegistry.listTaskMetas === "function"
+        ? taskRegistry.listTaskMetas().map((task) => [ui[task.buttonId], task.id])
+        : [
+            [ui.taskNavInventoryBtn, "NAVER_STATION_SYNC"],
+            [ui.taskNavReservationBtn, "PMS_RESERVATION_VALIDATION"],
+            [ui.taskNavSheetBtn, "SHEET_MAPPING_REVIEW"],
+            [ui.taskNavAuditBtn, "OTA_PMS_COMPARISON"]
+          ];
+    navItems.forEach(([btn, taskId]) => {
       const taskAccess = state.productFlow?.tasks?.[taskId] || { blocked: false };
       btn?.classList.toggle("is-active", normalizeText(state.activeTask || "").toUpperCase() === taskId);
       if (btn) btn.disabled = workspaceBlocked ? false : taskAccess.blocked === true;
@@ -1191,15 +1215,30 @@
   }
 
   function setActiveTask(taskId, options = {}) {
-    state.activeTask = normalizeText(taskId || "").toUpperCase() || "NAVER_STATION_SYNC";
-    const preferredEvidenceTab = preferredEvidenceTabForTask(state.activeTask);
-    const preferredUtilityTab = preferredUtilityTabForTask(state.activeTask);
-    state.lastEvidenceTab = preferredEvidenceTab;
-    state.lastUtilityTab = preferredUtilityTab;
-    if (options.openSettings === true) openUtilityTab("settings");
-    else if (options.openScope === true) openUtilityTab("scope");
-    else if (!state.selectedStart || !state.selectedEnd) openUtilityTab("scope");
-    else openEvidenceTab(preferredEvidenceTab);
+    const normalizedTaskId = normalizeText(taskId || "").toUpperCase() || "NAVER_STATION_SYNC";
+    const preferredEvidenceTab = preferredEvidenceTabForTask(normalizedTaskId);
+    const preferredUtilityTab = preferredUtilityTabForTask(normalizedTaskId);
+    const nextSurface =
+      typeof workspacePolicy.resolveTaskSurfaceSelection === "function"
+        ? workspacePolicy.resolveTaskSurfaceSelection({
+            taskId: normalizedTaskId,
+            options,
+            hasSelectedRange: Boolean(state.selectedStart && state.selectedEnd),
+            preferredEvidenceTab,
+            preferredUtilityTab
+          })
+        : null;
+    state.activeTask = normalizeText(nextSurface?.taskId || normalizedTaskId).toUpperCase() || "NAVER_STATION_SYNC";
+    state.lastEvidenceTab = normalizeEvidenceTab(nextSurface?.lastEvidenceTab || preferredEvidenceTab);
+    state.lastUtilityTab = normalizeUtilityTab(nextSurface?.lastUtilityTab || preferredUtilityTab);
+    if (nextSurface?.secondarySurfaceKind === "utility") {
+      state.secondarySurfaceKind = "utility";
+      state.activeUtilityTab = normalizeUtilityTab(nextSurface.activeUtilityTab || "scope");
+    } else {
+      state.secondarySurfaceKind = "evidence";
+      state.activeEvidenceTab = normalizeEvidenceTab(nextSurface?.activeEvidenceTab || preferredEvidenceTab);
+    }
+    syncDerivedSurfaceState();
     syncFlowSurfaceState();
     renderWorkspaceShellState();
   }
@@ -1226,6 +1265,7 @@
     state.rows = [];
     state.dates = [];
     state.valueRows = [];
+    state.providerRowMeta = null;
     state.providerReservations = [];
     state.providerReservationMeta = null;
     state.sheetSnapshot = null;
@@ -2412,6 +2452,7 @@
     state.rangeSourceDetail = "cleared";
     state.query = null;
     state.rows = [];
+    state.providerRowMeta = null;
     state.providerReservations = [];
     state.providerReservationMeta = null;
     state.dates = [];
@@ -5235,130 +5276,38 @@
   }
 
   function buildValidationRows(validation) {
-    return (validation?.issues || []).map((issue) => ({
-      date: issue?.date || "-",
-      type: issue?.level === "error" ? "SHEET_ERROR" : "SHEET_WARN",
-      detail: String(issue?.message || "")
-    }));
+    if (typeof applyPolicy.buildValidationRows === "function") {
+      return applyPolicy.buildValidationRows(validation);
+    }
+    return [];
   }
 
   function normalizePlannerWarning(warning) {
-    if (!warning) return null;
-    if (typeof warning === "string") {
-      const calendarMatch = warning.match(/\[station\]\s+no calendar rows for\s+(\d{4}-\d{2}-\d{2})/i);
-      if (calendarMatch) {
-        return {
-          provider: "STATION",
-          code: "STATION_NO_CALENDAR_ROWS",
-          date: calendarMatch[1],
-          message: warning
-        };
-      }
-      const priceSetMatch = warning.match(/\[station\]\s+no priceSetId for\s+(\d{4}-\d{2}-\d{2})/i);
-      if (priceSetMatch) {
-        return {
-          provider: "STATION",
-          code: "STATION_NO_PRICE_SET_ID",
-          date: priceSetMatch[1],
-          message: warning
-        };
-      }
-      return {
-        provider: "STATION",
-        code: "STATION_PLANNER_WARNING",
-        date: "-",
-        message: warning
-      };
+    if (typeof applyPolicy.normalizePlannerWarning === "function") {
+      return applyPolicy.normalizePlannerWarning(warning);
     }
-    if (typeof warning !== "object" || Array.isArray(warning)) return null;
-    return {
-      provider: normalizeText(warning.provider || "STATION").toUpperCase() || "STATION",
-      code: normalizeText(warning.code || "STATION_PLANNER_WARNING").toUpperCase() || "STATION_PLANNER_WARNING",
-      date: normalizeText(warning.date || "-") || "-",
-      message: String(warning.message || "")
-    };
+    return null;
   }
 
   function providerTypeFromProviderKey(providerKey) {
+    if (typeof applyPolicy.providerTypeFromProviderKey === "function") {
+      return applyPolicy.providerTypeFromProviderKey(providerKey);
+    }
     return normalizeText(providerKey).toUpperCase() === "STATION" ? "admin-station" : "naver-partner";
   }
 
   function buildSyncApplyPolicy(preview) {
-    const issues = [];
-    const pushIssue = (row) => {
-      if (!row || typeof row !== "object") return;
-      issues.push({
-        date: row.date || "-",
-        type: row.type || "적용 차단",
-        detail: row.detail || ""
-      });
-    };
-
-    const scanIssues = Array.isArray(preview?.snapshot?.scan?.validation?.issues)
-      ? preview.snapshot.scan.validation.issues
-      : [];
-    scanIssues.forEach((issue) => {
-      const severity = normalizeText(issue?.severity || "").toLowerCase();
-      const code = normalizeText(issue?.code || "").toUpperCase();
-      const message = String(issue?.message || code || "scan issue");
-      if (severity === "error") {
-        pushIssue({ type: "적용 차단(SCAN_ERROR)", detail: message });
-        return;
-      }
-      if (severity === "warn" && APPLY_BLOCKING_SCAN_WARN_CODES.has(code)) {
-        pushIssue({ type: "적용 차단(SCAN_WARN)", detail: message });
-      }
-    });
-
-    (preview?.validation?.issues || []).forEach((issue) => {
-      const level = normalizeText(issue?.level || "").toLowerCase();
-      const code = normalizeText(issue?.code || "").toUpperCase();
-      const message = String(issue?.message || code || "validation issue");
-      if (level === "error") {
-        pushIssue({ date: issue?.date || "-", type: "적용 차단(SHEET_ERROR)", detail: message });
-        return;
-      }
-      if (level === "warn" && APPLY_BLOCKING_PREVIEW_WARN_CODES.has(code)) {
-        pushIssue({ date: issue?.date || "-", type: "적용 차단(SHEET_WARN)", detail: message });
-      }
-    });
-
-    (preview?.warnings || [])
-      .map((warning) => normalizePlannerWarning(warning))
-      .filter(Boolean)
-      .forEach((warning) => {
-        if (!APPLY_BLOCKING_PLANNER_WARNING_CODES.has(warning.code)) return;
-        pushIssue({
-          date: warning.date || "-",
-          type: "적용 차단(PLAN_WARN)",
-          detail: warning.message || warning.code
-        });
-      });
-
-    const providerType = providerTypeFromProviderKey(preview?.providerKey || "");
-    const providerApply = preview?.syncConfig?.providerApply && typeof preview.syncConfig.providerApply === "object"
-      ? preview.syncConfig.providerApply
-      : {};
-    if (providerApply[providerType] === false) {
-      pushIssue({
-        type: "적용 차단(SETTINGS)",
-        detail: `${providerType === "naver-partner" ? TEXT.syncProviderApplyHintNaver : TEXT.syncProviderApplyHintStation} 설정이 꺼져 있습니다.`
+    if (typeof applyPolicy.buildSyncApplyPolicy === "function") {
+      return applyPolicy.buildSyncApplyPolicy({
+        preview,
+        text: TEXT,
+        applyBlockingScanWarnCodes: APPLY_BLOCKING_SCAN_WARN_CODES,
+        applyBlockingPreviewWarnCodes: APPLY_BLOCKING_PREVIEW_WARN_CODES,
+        applyBlockingPlannerWarningCodes: APPLY_BLOCKING_PLANNER_WARNING_CODES,
+        getPreviewSourceUsage
       });
     }
-
-    const previewSourceUsage = getPreviewSourceUsage(preview);
-    const providerRawCount = Number(previewSourceUsage?.counts?.provider_raw || 0);
-    if (providerRawCount > 0) {
-      pushIssue({
-        type: "적용 차단(LOW_TRUST_SOURCE)",
-        detail: `저신뢰 소스(provider_raw) ${providerRawCount}개가 감지되어 실제 적용을 차단했습니다. 시트 재고 데이터행을 먼저 고정하세요.`
-      });
-    }
-
-    return {
-      blocked: issues.length > 0,
-      issues
-    };
+    return { blocked: false, issues: [] };
   }
 
   function hasAnyInventoryRawByDate(valuesByDate) {
@@ -6006,245 +5955,40 @@
     };
   }
 
-  function cloneSyncPreviewTargets(targets) {
-    const cloned = {};
-    Object.entries(targets || {}).forEach(([day, value]) => {
-      if (value && typeof value === "object" && !Array.isArray(value)) cloned[day] = { ...value };
-      else cloned[day] = value;
-    });
-    return cloned;
-  }
-
-  function buildSyncPreviewTraceArtifacts(query, syncConfig, previewContext, targets, targetMode, validation) {
-    return {
-      tracePacket: buildTracePacketForMismatch(
-        query,
-        syncConfig,
-        previewContext.providerKey,
-        previewContext.roomPreset,
-        previewContext.normalizedRows,
-        previewContext.snapshot,
-        targets,
-        targetMode,
-        validation
-      ),
-      tracePackets: buildTracePacketsForMismatches(
-        query,
-        previewContext.providerKey,
-        previewContext.roomPreset,
-        previewContext.normalizedRows,
-        previewContext.snapshot,
-        targets,
-        targetMode
-      )
-    };
-  }
-
   function buildSyncPreviewFromData(query, syncConfig, rows, snapshot) {
-    const previewContext = buildSyncPreviewContext(snapshot, rows);
-    const {
-      providerTargets,
-      roomTargets,
-      targets,
-      targetMode,
-      validation
-    } = resolveSyncPreviewTargets(previewContext, syncConfig.stockMode);
-    const { actions, warnings } = planSyncPreviewActions(previewContext, targets);
-    const mismatchCount = countPreviewMismatches(previewContext.providerKey, actions);
-    const forcedTargets = cloneSyncPreviewTargets(targets);
-    const { tracePacket, tracePackets } = buildSyncPreviewTraceArtifacts(
-      query,
-      syncConfig,
-      previewContext,
-      targets,
-      targetMode,
-      validation
-    );
-    const preview = {
-      providerKey: previewContext.providerKey,
-      query,
-      snapshot,
-      targets,
-      targetMode,
-      providerTargets,
-      roomTargets,
-      providerItemMap: previewContext.providerItemMap,
-      validation,
-      actions,
-      warnings,
-      forced: { targets: forcedTargets, overrides: [] },
-      mismatchCount,
-      previewRows: buildPreviewRows(previewContext.providerKey, actions),
-      tracePacket,
-      tracePackets,
-      syncConfig,
-      rows: previewContext.normalizedRows
-    };
-
-    return {
-      ...preview,
-      policy: buildSyncApplyPolicy(preview)
-    };
+    return inventoryCompareController.buildSyncPreviewFromData(query, syncConfig, rows, snapshot);
   }
 
   async function buildSyncPreview(query, syncConfig, loadedRows = null, loadedSnapshot = null) {
-    const snapshot = loadedSnapshot || (
-      await fetchSheetSnapshot(syncConfig, query, false, false, { blockDetailMode: "light" })
-    );
-    const rows = Array.isArray(loadedRows)
-      ? loadedRows
-      : normalizeRows(await fetchProviderRows(context.providerType, query), query, context.providerType);
-    const basePreview = buildSyncPreviewFromData(query, syncConfig, rows, snapshot);
-    const currentMode = normalizeText(basePreview?.snapshot?.scan?.blockDetailMode || "light").toLowerCase() === "full"
-      ? "full"
-      : "light";
-    if (currentMode === "full") {
-      return annotatePreviewBlockScan(basePreview, { mode: "full", escalated: false, reasons: [] });
-    }
-
-    const escalationReasons = collectBlockScanEscalationReasons(basePreview);
-    if (escalationReasons.length <= 0) {
-      return annotatePreviewBlockScan(basePreview, { mode: "light", escalated: false, reasons: [] });
-    }
-
-    try {
-      const fullSnapshot = await fetchSheetSnapshot(syncConfig, query, false, false, {
-        blockDetailMode: "full"
-      });
-      const fullPreview = buildSyncPreviewFromData(query, syncConfig, rows, fullSnapshot);
-      return annotatePreviewBlockScan(fullPreview, {
-        mode: "full",
-        escalated: true,
-        reasons: escalationReasons,
-        fromMode: "light",
-        toMode: "full"
-      });
-    } catch (escalationError) {
-      return annotatePreviewBlockScan(basePreview, {
-        mode: "light",
-        escalated: false,
-        reasons: escalationReasons,
-        fromMode: "light",
-        toMode: "full",
-        escalationError: escalationError?.message ?? String(escalationError)
-      });
-    }
+    return inventoryCompareController.buildSyncPreview(query, syncConfig, loadedRows, loadedSnapshot);
   }
 
   async function refreshSyncPreview(query, loadedRows = null, loadedSnapshot = null) {
-    const syncConfig = await persistSyncConfig(false);
-    const preview = await buildSyncPreview(query, syncConfig, loadedRows, loadedSnapshot);
-    state.sheetQuery = query;
-    state.sheetSnapshot = preview.snapshot;
-    const validationRows = buildValidationRows(preview.validation);
-    state.syncPreview = preview;
-    renderSyncResult({
-      totalCount: preview.mismatchCount,
-      successCount: 0,
-      failCount: 0,
-      closedCount: countClosedItems(preview.providerKey, preview.actions),
-      blocks: preview?.policy?.issues || [],
-      errors: validationRows
-    });
-    updateSyncButtonText();
-    renderMismatchRows(null, query);
-    return preview;
+    return inventoryCompareController.refreshSyncPreview(query, loadedRows, loadedSnapshot);
   }
 
   async function reloadProviderRows(query) {
-    const [rawRows, reservationMetaRaw] = await Promise.all([
-      fetchProviderRows(context.providerType, query),
-      fetchProviderReservations(context.providerType, query, state.syncConfig).catch((error) => ({
-        records: [],
-        source: "error",
-        url: "",
-        candidateCount: 0,
-        attempts: [],
-        error: error?.message ?? String(error)
-      }))
-    ]);
-    const rows = normalizeRows(rawRows, query, context.providerType);
-    const reservationMeta = reservationMetaRaw && typeof reservationMetaRaw === "object" ? reservationMetaRaw : {};
+    return inventoryCompareController.reloadProviderRows(query);
+  }
 
-    state.query = query;
-    state.rows = rows;
-    state.providerReservations = Array.isArray(reservationMeta.records) ? reservationMeta.records : [];
-    state.providerReservationMeta = reservationMeta;
+  function formatProviderFetchRouteLabel(route) {
+    return inventoryCompareController.formatProviderFetchRouteLabel(route);
+  }
 
-    const model = buildValueModel(rows, query, { applyCorrections: state.correctionsApplied === true });
-    state.dates = model.dates;
-    state.valueRows = model.valueRows;
-    renderSummary(rows);
-    renderSiteValueTable(state.dates, state.valueRows);
-    refreshInventoryVerification();
-    await storageSet(PREF_KEY, { startDate: query.startDate, endDate: query.endDate });
-    return rows;
+  function buildProviderFetchStatusLabel(meta, rows) {
+    return inventoryCompareController.buildProviderFetchStatusLabel(meta, rows);
   }
 
   async function reloadSheetSnapshot(query) {
-    const syncConfig = await persistSyncConfig(false);
-    const snapshot = await fetchSheetSnapshot(syncConfig, query, false, false, { blockDetailMode: "light" });
-    const providerKey = requireInventoryProviderKey();
-    assertProviderInventorySource(snapshot, providerKey);
-
-    state.sheetQuery = query;
-    state.sheetSnapshot = snapshot;
-    const model = buildSheetValueModel(snapshot, providerKey, { applyCorrections: state.correctionsApplied === true });
-    state.sheetDates = model.dates;
-    state.sheetValueRows = model.valueRows;
-    renderSheetValueTable(state.sheetDates, state.sheetValueRows);
-    renderSheetInsightPanel(snapshot, state.sheetDates, state.sheetValueRows, providerKey);
-    refreshInventoryVerification();
-    return snapshot;
+    return inventoryCompareController.reloadSheetSnapshot(query);
   }
 
   function clearMismatchView(query = null) {
-    state.syncPreview = { ...(state.syncPreview || {}), mismatchCount: 0 };
-    updateSyncButtonText();
-    renderMismatchRows([], query);
+    return inventoryCompareController.clearMismatchView(query);
   }
 
   async function refreshMismatchFromLoaded(options = {}) {
-    const query = state.query;
-    if (!query || !state.sheetSnapshot || !state.sheetQuery || !isSameQuery(query, state.sheetQuery)) {
-      clearMismatchView(query || state.sheetQuery || null);
-      return null;
-    }
-
-    const currentConfig = sanitizeSyncConfig(readSyncConfigFromUI());
-    state.syncConfig = currentConfig;
-    const prevSnapshotRef = state.sheetSnapshot;
-    const preview = await buildSyncPreview(query, currentConfig, state.rows, state.sheetSnapshot);
-    state.syncPreview = preview;
-    if (preview?.snapshot) {
-      state.sheetSnapshot = preview.snapshot;
-      state.sheetQuery = query;
-      if (preview.snapshot !== prevSnapshotRef) {
-        const providerKey = requireInventoryProviderKey();
-        const model = buildSheetValueModel(preview.snapshot, providerKey, { applyCorrections: state.correctionsApplied === true });
-        state.sheetDates = model.dates;
-        state.sheetValueRows = model.valueRows;
-        renderSheetValueTable(state.sheetDates, state.sheetValueRows);
-        renderSheetInsightPanel(preview.snapshot, state.sheetDates, state.sheetValueRows, providerKey);
-        refreshInventoryVerification();
-      }
-    }
-    updateSyncButtonText();
-    updateCorrectionButtonState();
-    renderMismatchRows(null, query);
-
-    if (options?.renderSyncResult !== false) {
-      renderSyncResult({
-        totalCount: preview.mismatchCount,
-        successCount: 0,
-        failCount: 0,
-        closedCount: countClosedItems(preview.providerKey, preview.actions),
-        blocks: preview?.policy?.issues || [],
-        errors: buildValidationRows(preview.validation)
-      });
-    }
-    markActionTime("comparison");
-    return preview;
+    return inventoryCompareController.refreshMismatchFromLoaded(options);
   }
 
   function rebuildLoadedValueTablesForDisplayMode() {
@@ -6563,6 +6307,7 @@
     runtime.naverQueue = state.naverQueue;
     state.naverQueueMeta = { lastFlushedAt: 0 };
     runtime.naverQueueMeta = state.naverQueueMeta;
+    state.providerRowMeta = null;
     state.providerReservations = [];
     state.providerReservationMeta = null;
     state.verificationReport = null;
@@ -6614,18 +6359,7 @@
   }
 
   function renderSyncPreviewResult(preview, errors = null) {
-    const previewErrors = Array.isArray(errors) ? errors : buildValidationRows(preview.validation);
-    renderSyncResult({
-      totalCount: preview.mismatchCount,
-      successCount: 0,
-      failCount: 0,
-      closedCount: countClosedItems(preview.providerKey, preview.actions),
-      blocks: preview?.policy?.issues || [],
-      errors: previewErrors
-    });
-    updateSyncButtonText();
-    renderMismatchRows(null, preview?.query || resolveActiveQuery());
-    markActionTime("comparison");
+    return inventoryCompareController.renderSyncPreviewResult(preview, errors);
   }
 
   function assertSyncRunReady(query) {
@@ -6644,11 +6378,7 @@
   }
 
   async function prepareSyncPreviewForRun(query) {
-    const syncConfig = await persistSyncConfig(false);
-    const preview = buildSyncPreviewFromData(query, syncConfig, state.rows, state.sheetSnapshot);
-    state.syncPreview = preview;
-    renderSyncPreviewResult(preview);
-    return preview;
+    return inventoryCompareController.prepareSyncPreviewForRun(query);
   }
 
   function blockSyncRunForValidation(preview) {
@@ -6801,18 +6531,7 @@
       const sourceLabel = context.providerType === "naver-partner" ? "simple-management API" : "calendar API";
       const dayCount = buildDateRange(query.startDate, query.endDate).length;
       const roomTypeCount = new Set((rows || []).map((row) => String(row?.roomId || ""))).size;
-      const sourceCount = (rows || []).reduce(
-        (acc, row) => {
-          const key = normalizeText(row?.source || "api").toLowerCase();
-          if (key === "dom_fallback") acc.dom += 1;
-          else acc.api += 1;
-          return acc;
-        },
-        { api: 0, dom: 0 }
-      );
-      const sourceMixLabel = sourceCount.dom > 0
-        ? `, 소스 API ${sourceCount.api} + DOM ${sourceCount.dom}`
-        : `, 소스 API ${sourceCount.api}`;
+      const sourceMixLabel = buildProviderFetchStatusLabel(state.providerRowMeta, rows);
       const reservationSource = normalizeText(state.providerReservationMeta?.source || "").toLowerCase();
       const reservationCounts = state.providerReservationMeta?.statusCounts && typeof state.providerReservationMeta.statusCounts === "object"
         ? state.providerReservationMeta.statusCounts

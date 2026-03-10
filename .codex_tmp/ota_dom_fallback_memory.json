@@ -1,0 +1,110 @@
+{
+  "META": {
+    "task_kind": "poc-classification",
+    "tags": [
+      "ota-query",
+      "dom-fallback",
+      "bridge-candidate",
+      "app-centric-transition"
+    ]
+  },
+  "CONTEXT": {
+    "goal": "Verify whether OTA query can keep operational coverage without DOM fallback and reclassify it from hold if the PoC is decisive.",
+    "summary": "The app-centric transition plan left OTA query on hold because `fetchProviderRows` mixes API-first loading with DOM fallback/merge when coverage is too low.",
+    "files": [
+      "src/io/pms.fetch.js",
+      "tests/regression_ota_dom_fallback_poc.mjs",
+      "docs/architecture/APP_CENTRIC_TRANSITION_PLAN.md"
+    ],
+    "constraints": [
+      "Work on one problem only: OTA query coverage without DOM fallback.",
+      "Do not declare app-first without verification evidence.",
+      "Keep the code change minimal and non-destructive."
+    ]
+  },
+  "SIGNAL": {
+    "symptoms": [
+      "The transition plan classified OTA query as hold because DOM fallback coverage safety was unverified.",
+      "`fetchProviderRows` falls back to DOM rows when provider API fails or coverage is below threshold."
+    ],
+    "keywords": [
+      "OTA query",
+      "DOM fallback",
+      "coverage",
+      "bridge-candidate",
+      "pms.fetch"
+    ]
+  },
+  "ROOT_CAUSE": {
+    "status": "confirmed",
+    "summary": "OTA query is not purely app-first today because low-coverage API responses still rely on the DOM merge branch to recover acceptable coverage.",
+    "evidence": [
+      "Code inspection showed `fetchProviderRows` uses `assessProviderRowsCoverage` and merges DOM rows whenever API coverage is unacceptable.",
+      "The new PoC reproduced both providers with 9/9 API-only coverage in the healthy path and 3 API + 6 DOM rows in the degraded path."
+    ]
+  },
+  "ACTION": {
+    "summary": "Exported the shared coverage helper, added a regression-style PoC for Station and Naver, and reclassified OTA query from hold to bridge-candidate in the architecture document.",
+    "changes": [
+      "Exposed `assessProviderRowsCoverage` from `src/io/pms.fetch.js` for testable PoC measurement.",
+      "Added `tests/regression_ota_dom_fallback_poc.mjs` to compare API-only and degraded API+DOM scenarios.",
+      "Updated `docs/architecture/APP_CENTRIC_TRANSITION_PLAN.md` to record the PoC result and move OTA query to `bridge-candidate`."
+    ],
+    "forbidden_zones": [
+      "Live credential material",
+      "Provider write/apply flow",
+      "Unrelated OTA/PMS refactors"
+    ]
+  },
+  "VALIDATION": {
+    "overall": "passed",
+    "procedures": [
+      {
+        "name": "Targeted functional verification",
+        "type": "command",
+        "result": "passed",
+        "evidence": [
+          "`node tests/regression_ota_dom_fallback_poc.mjs` passed."
+        ]
+      },
+      {
+        "name": "Adjacent regression check",
+        "type": "command",
+        "result": "passed",
+        "evidence": [
+          "`node tests/regression_pms_fetch_wings_post.mjs` passed after the export change."
+        ]
+      },
+      {
+        "name": "Legacy branch and constraint review",
+        "type": "inspection",
+        "result": "passed",
+        "evidence": [
+          "No unrelated files were changed and the DOM fallback logic itself was not expanded."
+        ]
+      }
+    ]
+  },
+  "OUTCOME": {
+    "classification": "success",
+    "summary": "The small PoC was decisive enough to move OTA query from hold to bridge-candidate, not app-first.",
+    "verified_facts": [
+      "Both providers satisfied the current coverage threshold with API-only full-grid responses.",
+      "Both providers still needed DOM merge to recover acceptable coverage from degraded 3-row API responses.",
+      "The transition document now reflects OTA query as `bridge-candidate`."
+    ],
+    "remaining_risks": [
+      "The PoC does not measure how often low-coverage API responses occur in live sessions."
+    ]
+  },
+  "REUSE_RULE": {
+    "use_when": [
+      "A migration plan is blocked on whether an API-first feature is truly app-first or still needs a bridge for degraded coverage.",
+      "A shared fetcher has an explicit fallback branch and you need a minimal, reproducible classification PoC."
+    ],
+    "avoid_when": [
+      "The feature still lacks a clear API-first path or the fallback branch cannot be isolated in code."
+    ],
+    "fallback": "If production frequency is still disputed after the harness PoC, add runtime instrumentation before promoting the feature to app-first."
+  }
+}

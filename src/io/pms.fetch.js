@@ -4,6 +4,7 @@
   const root = globalThis;
   const App = (root.App = root.App || {});
   App.io = App.io || {};
+  App.runtime = App.runtime || {};
   const ns = (App.io.pmsFetch = App.io.pmsFetch || {});
   const C = App.constants || {};
   const {
@@ -123,6 +124,9 @@
         };
   let naverBizItemsCache = { ts: 0, items: [] };
   const pmsReservationCache = App.runtime.pmsReservationCache || (App.runtime.pmsReservationCache = new Map());
+  const providerFetchInstrumentation =
+    App.runtime.providerFetchInstrumentation ||
+    (App.runtime.providerFetchInstrumentation = { byProvider: {} });
   const PMS_RESERVATION_CACHE_TTL_MS = 15000;
   const PMS_FETCH_TIMEOUT_MS = 15000;
   const PMS_FETCH_RETRY_LIMIT = 2;
@@ -365,6 +369,146 @@
     } catch (_) {
       return null;
     }
+  }
+
+  function summarizeProviderRowSources(rows) {
+    return (Array.isArray(rows) ? rows : []).reduce(
+      (acc, row) => {
+        const key = normalizeText(row?.source || "api").toLowerCase();
+        if (key === "dom_fallback") acc.dom += 1;
+        else if (!key || key === "api") acc.api += 1;
+        else acc.other += 1;
+        acc.total += 1;
+        return acc;
+      },
+      { api: 0, dom: 0, other: 0, total: 0 }
+    );
+  }
+
+  function cloneCoverageSummary(coverage) {
+    if (!coverage || typeof coverage !== "object") return null;
+    return {
+      expectedDays: Number(coverage.expectedDays || 0),
+      expectedRooms: Number(coverage.expectedRooms || 0),
+      expectedCells: Number(coverage.expectedCells || 0),
+      minimumRows: Number(coverage.minimumRows || 0),
+      rowCount: Number(coverage.rowCount || 0),
+      distinctDates: Number(coverage.distinctDates || 0),
+      acceptable: Boolean(coverage.acceptable)
+    };
+  }
+
+  function ensureProviderFetchStats(providerType) {
+    const key = normalizeText(providerType || "");
+    if (!key) return null;
+    if (!providerFetchInstrumentation.byProvider || typeof providerFetchInstrumentation.byProvider !== "object") {
+      providerFetchInstrumentation.byProvider = {};
+    }
+    if (!providerFetchInstrumentation.byProvider[key]) {
+      providerFetchInstrumentation.byProvider[key] = {
+        providerType: key,
+        totalFetches: 0,
+        apiOnlyAccept: 0,
+        apiDomMerge: 0,
+        domOnlyFallback: 0,
+        apiOnlyInsufficient: 0,
+        apiErrorNoDom: 0,
+        lastEvent: null,
+        updatedAt: ""
+      };
+    }
+    return providerFetchInstrumentation.byProvider[key];
+  }
+
+  function cloneProviderFetchStats(stats) {
+    if (!stats || typeof stats !== "object") return null;
+    return {
+      providerType: normalizeText(stats.providerType || ""),
+      totalFetches: Number(stats.totalFetches || 0),
+      apiOnlyAccept: Number(stats.apiOnlyAccept || 0),
+      apiDomMerge: Number(stats.apiDomMerge || 0),
+      domOnlyFallback: Number(stats.domOnlyFallback || 0),
+      apiOnlyInsufficient: Number(stats.apiOnlyInsufficient || 0),
+      apiErrorNoDom: Number(stats.apiErrorNoDom || 0),
+      updatedAt: normalizeText(stats.updatedAt || ""),
+      lastEvent: stats.lastEvent && typeof stats.lastEvent === "object" ? { ...stats.lastEvent } : null
+    };
+  }
+
+  function buildProviderFetchMeta({
+    providerType,
+    route,
+    query,
+    rows,
+    apiRows = [],
+    domRows = [],
+    apiCoverage = null,
+    finalCoverage = null,
+    mergedCoverage = null,
+    apiError = null
+  }) {
+    return {
+      providerType: normalizeText(providerType || ""),
+      route: normalizeText(route || ""),
+      query: query && typeof query === "object"
+        ? {
+            startDate: normalizeText(query.startDate || ""),
+            endDate: normalizeText(query.endDate || "")
+          }
+        : { startDate: "", endDate: "" },
+      returnedRowCount: Array.isArray(rows) ? rows.length : 0,
+      apiRowCount: Array.isArray(apiRows) ? apiRows.length : 0,
+      domRowCount: Array.isArray(domRows) ? domRows.length : 0,
+      sourceCount: summarizeProviderRowSources(rows),
+      apiCoverage: cloneCoverageSummary(apiCoverage),
+      finalCoverage: cloneCoverageSummary(finalCoverage),
+      mergedCoverage: cloneCoverageSummary(mergedCoverage),
+      apiError: apiError ? String(apiError?.message || apiError) : "",
+      recordedAt: new Date().toISOString()
+    };
+  }
+
+  function recordProviderFetchMeta(meta) {
+    const providerType = normalizeText(meta?.providerType || "");
+    if (!providerType) return null;
+    const stats = ensureProviderFetchStats(providerType);
+    if (!stats) return null;
+    stats.totalFetches += 1;
+    if (meta?.route === "api_only_accept") stats.apiOnlyAccept += 1;
+    else if (meta?.route === "api_dom_merge") stats.apiDomMerge += 1;
+    else if (meta?.route === "dom_only_fallback") stats.domOnlyFallback += 1;
+    else if (meta?.route === "api_error_no_dom") stats.apiErrorNoDom += 1;
+    else stats.apiOnlyInsufficient += 1;
+    stats.updatedAt = new Date().toISOString();
+    const sessionCounts = {
+      apiOnlyAccept: stats.apiOnlyAccept,
+      apiDomMerge: stats.apiDomMerge,
+      domOnlyFallback: stats.domOnlyFallback,
+      apiOnlyInsufficient: stats.apiOnlyInsufficient,
+      apiErrorNoDom: stats.apiErrorNoDom,
+      totalFetches: stats.totalFetches
+    };
+    stats.lastEvent = {
+      ...meta,
+      sessionCounts
+    };
+    return cloneProviderFetchStats(stats)?.lastEvent || null;
+  }
+
+  function getLastProviderFetchMeta(providerType = "") {
+    const stats = ensureProviderFetchStats(providerType);
+    const cloned = cloneProviderFetchStats(stats);
+    return cloned?.lastEvent || null;
+  }
+
+  function getProviderFetchInstrumentation(providerType = "") {
+    const key = normalizeText(providerType || "");
+    if (key) return cloneProviderFetchStats(ensureProviderFetchStats(key));
+    const byProvider = {};
+    Object.entries(providerFetchInstrumentation.byProvider || {}).forEach(([name, stats]) => {
+      byProvider[name] = cloneProviderFetchStats(stats);
+    });
+    return { byProvider };
   }
 
   function normalizeLookupKey(value) {
@@ -1375,6 +1519,19 @@
     if (apiError) {
       const domRows = extractProviderRowsFromDom(providerType, query);
       if (domRows.length > 0) {
+        const finalCoverage = assessProviderRowsCoverage(domRows, query, providerType);
+        recordProviderFetchMeta(
+          buildProviderFetchMeta({
+            providerType,
+            route: "dom_only_fallback",
+            query,
+            rows: domRows,
+            apiRows,
+            domRows,
+            finalCoverage,
+            apiError
+          })
+        );
         console.warn("[inventory] provider API failed; fallback to DOM snapshot rows", {
           providerType,
           rowCount: domRows.length,
@@ -1382,17 +1539,68 @@
         });
         return domRows;
       }
+      recordProviderFetchMeta(
+        buildProviderFetchMeta({
+          providerType,
+          route: "api_error_no_dom",
+          query,
+          rows: apiRows,
+          apiRows,
+          domRows: [],
+          finalCoverage: assessProviderRowsCoverage(apiRows, query, providerType),
+          apiError
+        })
+      );
       throw apiError;
     }
 
     const apiCoverage = assessProviderRowsCoverage(apiRows, query, providerType);
-    if (apiCoverage.acceptable) return apiRows;
+    if (apiCoverage.acceptable) {
+      recordProviderFetchMeta(
+        buildProviderFetchMeta({
+          providerType,
+          route: "api_only_accept",
+          query,
+          rows: apiRows,
+          apiRows,
+          apiCoverage,
+          finalCoverage: apiCoverage
+        })
+      );
+      return apiRows;
+    }
     const domRows = extractProviderRowsFromDom(providerType, query);
-    if (!domRows.length) return apiRows;
+    if (!domRows.length) {
+      recordProviderFetchMeta(
+        buildProviderFetchMeta({
+          providerType,
+          route: "api_only_insufficient",
+          query,
+          rows: apiRows,
+          apiRows,
+          apiCoverage,
+          finalCoverage: apiCoverage
+        })
+      );
+      return apiRows;
+    }
 
     const merged = mergeProviderRowsPreferApi(apiRows, domRows);
     const mergedCoverage = assessProviderRowsCoverage(merged, query, providerType);
     if (mergedCoverage.acceptable || merged.length > apiRows.length) {
+      recordProviderFetchMeta(
+        buildProviderFetchMeta({
+          providerType,
+          route: "api_dom_merge",
+          query,
+          rows: merged,
+          apiRows,
+          domRows,
+          apiCoverage,
+          finalCoverage: mergedCoverage,
+          mergedCoverage
+        })
+      );
       console.warn("[inventory] provider API low coverage; merged API+DOM snapshot", {
         providerType,
         api: apiCoverage,
@@ -1400,6 +1608,19 @@
       });
       return merged;
     }
+    recordProviderFetchMeta(
+      buildProviderFetchMeta({
+        providerType,
+        route: "api_only_insufficient",
+        query,
+        rows: apiRows,
+        apiRows,
+        domRows,
+        apiCoverage,
+        finalCoverage: apiCoverage,
+        mergedCoverage
+      })
+    );
     return apiRows;
   }
 
@@ -1688,6 +1909,8 @@
     fetchStationRows,
     fetchNaverRows,
     fetchProviderRows,
+    assessProviderRowsCoverage,
+    summarizeProviderRowSources,
     fetchProviderReservations,
     assertReadonlyPmsRequest,
     buildPmsReservationCacheKey,
@@ -1703,6 +1926,8 @@
     resolveNaverBusinessId,
     resolvePresetRoomId,
     normalizeRows,
+    getLastProviderFetchMeta,
+    getProviderFetchInstrumentation,
   });
 })();
 

@@ -1,0 +1,32 @@
+{
+  "task_id": "task-20260308-ota-fetch-instrumentation",
+  "classification": "success",
+  "validation_overall": "passed",
+  "goal_met": true,
+  "major_regression": false,
+  "approved_scope_only": true,
+  "memory_update_complete": true,
+  "final_result": [
+    "Added live OTA fetch-route instrumentation in `fetchProviderRows` for API직행, API+DOM 병합, and DOM대체.",
+    "Integrated duplicated API/DOM source counting into a shared fetch-layer helper and switched the UI status line to consume that meta."
+  ],
+  "verified_facts": [
+    "`node tests/regression_ota_dom_fallback_poc.mjs` passed and now validates `api_only_accept`, `api_dom_merge`, and `dom_only_fallback` for both providers.",
+    "`node tests/regression_pms_fetch_wings_post.mjs` passed.",
+    "`node tests/regression_ui_surface_split.mjs` passed.",
+    "`python3 tests/regression_secret_hygiene_py.py` passed.",
+    "`node --check src/io/pms.fetch.js`, `node --check src/sheetScanner.entry.js`, and `node --check tests/regression_ota_dom_fallback_poc.mjs` all passed."
+  ],
+  "memory_updates": [
+    "Stored the reusable rule that fetch-route instrumentation belongs in the fetch layer and source-summary reuse should collapse UI/test duplication."
+  ],
+  "remaining_risks": [
+    "The code can now count live-route frequency, but actual operational incidence still requires real session accumulation."
+  ],
+  "not_done": [
+    "No aggregated report or export for the new counters was added beyond the status line and runtime instrumentation object."
+  ],
+  "next_step": [
+    "Collect live OTA sessions and review `App.runtime.providerFetchInstrumentation` to decide whether the DOM-dependent routes are rare enough to downgrade from bridge-candidate later."
+  ]
+}

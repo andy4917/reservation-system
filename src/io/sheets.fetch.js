@@ -5,6 +5,7 @@
   const App = (root.App = root.App || {});
   App.io = App.io || {};
   const ns = (App.io.sheetsFetch = App.io.sheetsFetch || {});
+  const entryPolicy = root.InventoryEntryPolicy || {};
   const C = App.constants || {};
   const {
     FIXED_NAVER_BUSINESS_ID,
@@ -76,13 +77,12 @@
   } = A;
   const PKG_ROW_LABEL_RE = /(pkg|package|\uD328\uD0A4\uC9C0)/i;
   function detectContext() {
-    const host = location.host.toLowerCase();
-    if (host.includes("partner.booking.naver.com")) {
-      return { providerType: "naver-partner", siteName: TEXT.naver };
-    }
-    if (host.includes("admin.admin-stationbyuhc.com")) {
-      return { providerType: "admin-station", siteName: TEXT.station };
-    }
+    const providerType =
+      typeof entryPolicy.detectProviderTypeFromHost === "function"
+        ? entryPolicy.detectProviderTypeFromHost(location.host)
+        : "";
+    if (providerType === "naver-partner") return { providerType, siteName: TEXT.naver };
+    if (providerType === "admin-station") return { providerType, siteName: TEXT.station };
     return null;
   }
 

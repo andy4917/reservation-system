@@ -1,0 +1,126 @@
+{
+  "META": {
+    "task_kind": "instrumentation",
+    "tags": [
+      "ota-query",
+      "fetchProviderRows",
+      "instrumentation",
+      "bridge-candidate",
+      "integration"
+    ]
+  },
+  "CONTEXT": {
+    "goal": "Apply the remaining OTA query instrumentation so live runs can distinguish API-only accept, API+DOM merge, and DOM-only fallback, while collapsing duplicate source-count handling.",
+    "summary": "The previous PoC reclassified OTA query to bridge-candidate, but the code still lacked runtime counters and UI-visible instrumentation for the three fetch routes.",
+    "files": [
+      "src/io/pms.fetch.js",
+      "src/sheetScanner.entry.js",
+      "tests/regression_ota_dom_fallback_poc.mjs",
+      "docs/architecture/APP_CENTRIC_TRANSITION_PLAN.md"
+    ],
+    "constraints": [
+      "Keep the change minimal and localized to OTA query measurement.",
+      "Do not widen DOM fallback behavior or touch write/apply logic.",
+      "Prefer integrating duplicate source-count logic instead of adding parallel code paths."
+    ]
+  },
+  "SIGNAL": {
+    "symptoms": [
+      "OTA query route classification had been verified in a harness but not instrumented for live session frequency tracking.",
+      "UI status text recomputed source counts ad hoc instead of consuming the fetch-layer result."
+    ],
+    "keywords": [
+      "fetchProviderRows",
+      "instrumentation",
+      "api_only_accept",
+      "api_dom_merge",
+      "dom_only_fallback",
+      "source summary"
+    ]
+  },
+  "ROOT_CAUSE": {
+    "status": "confirmed",
+    "summary": "The fetch layer returned only rows, so route choice and source mix stayed implicit and duplicated across consumers instead of being recorded once and reused.",
+    "evidence": [
+      "Before this change, `loadInventory` recalculated API/DOM source counts directly from rows and had no access to route-level counters.",
+      "Adding fetch-layer meta and a shared source-summary helper let the UI and test consume the same measured result."
+    ]
+  },
+  "ACTION": {
+    "summary": "Added provider-level fetch instrumentation and shared source-summary helpers in `pms.fetch`, wired `sheetScanner.entry` to reuse the measured meta, and extended the existing OTA PoC to validate all three routes plus cumulative counters.",
+    "changes": [
+      "Added `summarizeProviderRowSources`, `getLastProviderFetchMeta`, and `getProviderFetchInstrumentation` to `src/io/pms.fetch.js`.",
+      "Recorded provider fetch outcomes for `api_only_accept`, `api_dom_merge`, `dom_only_fallback`, `api_only_insufficient`, and `api_error_no_dom`.",
+      "Stored the last provider-row meta in `src/sheetScanner.entry.js` and rendered current route plus session counters from the fetch-layer instrumentation.",
+      "Extended `tests/regression_ota_dom_fallback_poc.mjs` to verify API-only, degraded merge, and DOM-only fallback scenarios with route counters.",
+      "Updated the architecture document to reflect that runtime instrumentation now exists."
+    ],
+    "forbidden_zones": [
+      "Provider apply/mutation code",
+      "Credential storage",
+      "Unrelated UI refactors"
+    ]
+  },
+  "VALIDATION": {
+    "overall": "passed",
+    "procedures": [
+      {
+        "name": "OTA fetch route PoC",
+        "type": "command",
+        "result": "passed",
+        "evidence": [
+          "`node tests/regression_ota_dom_fallback_poc.mjs` passed."
+        ]
+      },
+      {
+        "name": "Adjacent fetch regression",
+        "type": "command",
+        "result": "passed",
+        "evidence": [
+          "`node tests/regression_pms_fetch_wings_post.mjs` passed."
+        ]
+      },
+      {
+        "name": "Sheet scanner surface and hygiene",
+        "type": "command",
+        "result": "passed",
+        "evidence": [
+          "`node tests/regression_ui_surface_split.mjs` passed.",
+          "`python3 tests/regression_secret_hygiene_py.py` passed."
+        ]
+      },
+      {
+        "name": "Syntax verification",
+        "type": "command",
+        "result": "passed",
+        "evidence": [
+          "`node --check src/io/pms.fetch.js` passed.",
+          "`node --check src/sheetScanner.entry.js` passed.",
+          "`node --check tests/regression_ota_dom_fallback_poc.mjs` passed."
+        ]
+      }
+    ]
+  },
+  "OUTCOME": {
+    "classification": "success",
+    "summary": "OTA query now exposes reusable live-route instrumentation, and duplicated API/DOM source counting was integrated into one fetch-layer helper.",
+    "verified_facts": [
+      "The fetch layer now records per-provider route counters and last-event meta.",
+      "The UI status line now consumes the fetch-layer meta instead of recomputing source counts separately.",
+      "The existing OTA PoC now verifies all three route classes and cumulative counters for both providers."
+    ],
+    "remaining_risks": [
+      "Live production frequency still depends on collecting enough real sessions after deployment."
+    ]
+  },
+  "REUSE_RULE": {
+    "use_when": [
+      "A fetch path needs live-route instrumentation and multiple consumers currently recompute the same source summary.",
+      "You need to distinguish API-only success, API+fallback merge, and DOM-only fallback without changing the business behavior."
+    ],
+    "avoid_when": [
+      "The fetch layer is not the single source of truth for the returned rows or different consumers intentionally need divergent summaries."
+    ],
+    "fallback": "If a route still cannot be distinguished after helper extraction, record the raw branch decision in the fetch layer first and only then update downstream UI/report consumers."
+  }
+}

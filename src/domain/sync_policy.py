@@ -1,25 +1,34 @@
 from __future__ import annotations
 
-DEFAULT_NAVER_BUSINESS_ID = "1356779"
-DEFAULT_STATION_BRANCH_ID = "18"
-DEFAULT_NAVER_ROOM_IDS = ["6556948", "6556938", "7043386"]
-DEFAULT_STATION_ROOM_IDS = ["62", "59", "258"]
+import json
+import re
+from pathlib import Path
 
-DEFAULT_STATION_API_BASE = "https://api.admin-stationbyuhc.com"
-DEFAULT_NAVER_API_BASE = "https://api-partner.booking.naver.com"
+
+def _load_sync_policy_payload() -> dict:
+    source_path = Path(__file__).resolve().parents[1] / "shared" / "syncPolicy.js"
+    source = source_path.read_text(encoding="utf-8")
+    match = re.search(r"const POLICY_JSON = `(?P<payload>\{.*?\})`;", source, re.S)
+    if not match:
+        raise RuntimeError(f"POLICY_JSON not found in {source_path}")
+    return json.loads(match.group("payload"))
+
+
+_PAYLOAD = _load_sync_policy_payload()
+
+DEFAULT_NAVER_BUSINESS_ID = str(_PAYLOAD["defaultNaverBusinessId"])
+DEFAULT_STATION_BRANCH_ID = str(_PAYLOAD["defaultStationBranchId"])
+DEFAULT_NAVER_ROOM_IDS = list(_PAYLOAD["defaultNaverRoomIds"])
+DEFAULT_STATION_ROOM_IDS = list(_PAYLOAD["defaultStationRoomIds"])
+
+DEFAULT_STATION_API_BASE = str(_PAYLOAD["defaultStationApiBase"])
+DEFAULT_NAVER_API_BASE = str(_PAYLOAD["defaultNaverApiBase"])
 
 PROVIDER_TARGET_MAX = {
-    "NAVER": 4,
-    "STATION": 1,
+    key: int(value)
+    for key, value in dict(_PAYLOAD["providerTargetMax"]).items()
 }
 
-APPLY_BLOCKING_VALIDATION_WARN_CODES = {
-    "CURRENT_EXCEEDS_MAXIMUM",
-    "MAX_DIFFERS_FROM_BASELINE",
-    "TARGET_EXCEEDS_PROVIDER_MAX",
-}
+APPLY_BLOCKING_VALIDATION_WARN_CODES = set(_PAYLOAD["applyBlockingValidationWarnCodes"])
 
-APPLY_BLOCKING_STATION_WARNING_CODES = {
-    "STATION_NO_CALENDAR_ROWS",
-    "STATION_NO_PRICE_SET_ID",
-}
+APPLY_BLOCKING_STATION_WARNING_CODES = set(_PAYLOAD["applyBlockingStationWarningCodes"])

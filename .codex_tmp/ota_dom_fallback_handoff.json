@@ -1,0 +1,31 @@
+{
+  "task_id": "task-20260308-ota-dom-fallback-poc",
+  "classification": "success",
+  "validation_overall": "passed",
+  "goal_met": true,
+  "major_regression": false,
+  "approved_scope_only": true,
+  "memory_update_complete": true,
+  "final_result": [
+    "Added a small OTA query PoC that compares API-only coverage against degraded API+DOM recovery for both Station and Naver.",
+    "Reclassified OTA query from `hold` to `bridge-candidate` in the app-centric transition plan."
+  ],
+  "verified_facts": [
+    "`node tests/regression_ota_dom_fallback_poc.mjs` passed.",
+    "In the PoC, both providers returned 9 API rows and 0 DOM rows in the healthy API-only path.",
+    "In the degraded path, both providers recovered from 3 API rows to 9 covered rows only after DOM merge.",
+    "`node tests/regression_pms_fetch_wings_post.mjs` also passed after exporting the coverage helper."
+  ],
+  "memory_updates": [
+    "Prepared a reusable memory entry capturing the rule: API-only success plus degraded DOM recovery implies `bridge-candidate`, not `app-first`."
+  ],
+  "remaining_risks": [
+    "The PoC is synthetic and does not quantify live-session low-coverage frequency."
+  ],
+  "not_done": [
+    "No runtime instrumentation was added yet to measure real OTA low-coverage incidence."
+  ],
+  "next_step": [
+    "If you want to decide whether OTA query can ever move from `bridge-candidate` to `app-first`, add runtime counters around `fetchProviderRows` for API-only accept, DOM merge, and DOM-only fallback frequency."
+  ]
+}

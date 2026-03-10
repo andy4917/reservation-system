@@ -6,48 +6,90 @@
   App.ui = App.ui || {};
   const ns = (App.ui.productFlow = App.ui.productFlow || {});
   if (ns.__ready) return;
+  const sharedEntryPolicy = root.InventoryEntryPolicy || {};
+  const taskRegistry = App.ui?.taskRegistry || {};
 
-  const ENTRY_HOSTS = Object.freeze({
-    "naver-partner": Object.freeze({
-      providerType: "naver-partner",
-      providerLabel: "NAVER",
-      directEntryLabel: "Naver Partner",
-      hostnames: Object.freeze(["partner.booking.naver.com"])
-    }),
-    "admin-station": Object.freeze({
-      providerType: "admin-station",
-      providerLabel: "STATION",
-      directEntryLabel: "Station Admin",
-      hostnames: Object.freeze(["admin.admin-stationbyuhc.com"])
-    }),
-    "wings-pms": Object.freeze({
-      providerType: "wings-pms",
-      providerLabel: "WINGS",
-      directEntryLabel: "WINGS PMS",
-      hostnames: Object.freeze(["pms.sanhait.com"])
-    })
-  });
+  function buildFallbackTasks() {
+    return Object.freeze({
+      NAVER_STATION_SYNC: Object.freeze({
+        id: "NAVER_STATION_SYNC",
+        label: "Inventory",
+        requiredCapability: "provider-session",
+        supportedHosts: Object.freeze(["naver-partner", "admin-station"]),
+        guardUtilityTab: "scope"
+      }),
+      PMS_RESERVATION_VALIDATION: Object.freeze({
+        id: "PMS_RESERVATION_VALIDATION",
+        label: "Reservation Validation",
+        requiredCapability: "wings",
+        supportedHosts: Object.freeze(["naver-partner", "admin-station"]),
+        guardUtilityTab: "settings"
+      }),
+      SHEET_MAPPING_REVIEW: Object.freeze({
+        id: "SHEET_MAPPING_REVIEW",
+        label: "Sheet Mapping",
+        requiredCapability: "sheets",
+        supportedHosts: Object.freeze(["naver-partner", "admin-station"]),
+        guardUtilityTab: "settings"
+      }),
+      OTA_PMS_COMPARISON: Object.freeze({
+        id: "OTA_PMS_COMPARISON",
+        label: "OTA/PMS Audit",
+        requiredCapability: "wings",
+        supportedHosts: Object.freeze(["naver-partner", "admin-station"]),
+        guardUtilityTab: "settings"
+      })
+    });
+  }
 
-  const INDIRECT_HOST_RULES = Object.freeze({
-    sheets: Object.freeze({
-      integrationKey: "sheets",
-      label: "Google Sheets",
-      hostPatterns: Object.freeze([
-        /(?:^|\.)docs\.google\.com$/i,
-        /(?:^|\.)sheets\.google\.com$/i,
-        /(?:^|\.)sheets\.googleapis\.com$/i
-      ])
-    }),
-    wings: Object.freeze({
-      integrationKey: "wings",
-      label: "WINGS\/PMS",
-      hostPatterns: Object.freeze([
-        /(?:^|\.)pms\.sanhait\.com$/i,
-        /(?:^|\.)sanhait\.com$/i,
-        /(?:^|\.)wings\.co\.kr$/i
-      ])
-    })
-  });
+  function buildFallbackEntryHosts() {
+    return Object.freeze({
+      "naver-partner": Object.freeze({
+        providerType: "naver-partner",
+        providerLabel: "NAVER",
+        directEntryLabel: "Naver Partner",
+        hostnames: Object.freeze(["partner.booking.naver.com"])
+      }),
+      "admin-station": Object.freeze({
+        providerType: "admin-station",
+        providerLabel: "STATION",
+        directEntryLabel: "Station Admin",
+        hostnames: Object.freeze(["admin.admin-stationbyuhc.com"])
+      }),
+      "wings-pms": Object.freeze({
+        providerType: "wings-pms",
+        providerLabel: "WINGS",
+        directEntryLabel: "WINGS PMS",
+        hostnames: Object.freeze(["pms.sanhait.com"])
+      })
+    });
+  }
+
+  function buildFallbackIndirectHostRules() {
+    return Object.freeze({
+      sheets: Object.freeze({
+        integrationKey: "sheets",
+        label: "Google Sheets",
+        hostPatterns: Object.freeze([
+          /(?:^|\.)docs\.google\.com$/i,
+          /(?:^|\.)sheets\.google\.com$/i,
+          /(?:^|\.)sheets\.googleapis\.com$/i
+        ])
+      }),
+      wings: Object.freeze({
+        integrationKey: "wings",
+        label: "WINGS\/PMS",
+        hostPatterns: Object.freeze([
+          /(?:^|\.)pms\.sanhait\.com$/i,
+          /(?:^|\.)sanhait\.com$/i,
+          /(?:^|\.)wings\.co\.kr$/i
+        ])
+      })
+    });
+  }
+
+  const ENTRY_HOSTS = sharedEntryPolicy.ENTRY_HOSTS || buildFallbackEntryHosts();
+  const INDIRECT_HOST_RULES = sharedEntryPolicy.INDIRECT_HOST_RULES || buildFallbackIndirectHostRules();
 
   const INTEGRATIONS = Object.freeze({
     "provider-session": Object.freeze({
@@ -67,53 +109,36 @@
     })
   });
 
-  const TASKS = Object.freeze({
-    NAVER_STATION_SYNC: Object.freeze({
-      id: "NAVER_STATION_SYNC",
-      label: "Inventory",
-      requiredCapability: "provider-session",
-      supportedHosts: Object.freeze(["naver-partner", "admin-station"]),
-      guardUtilityTab: "scope"
-    }),
-    PMS_RESERVATION_VALIDATION: Object.freeze({
-      id: "PMS_RESERVATION_VALIDATION",
-      label: "Reservation Validation",
-      requiredCapability: "wings",
-      supportedHosts: Object.freeze(["naver-partner", "admin-station"]),
-      guardUtilityTab: "settings"
-    }),
-    SHEET_MAPPING_REVIEW: Object.freeze({
-      id: "SHEET_MAPPING_REVIEW",
-      label: "Sheet Mapping",
-      requiredCapability: "sheets",
-      supportedHosts: Object.freeze(["naver-partner", "admin-station"]),
-      guardUtilityTab: "settings"
-    }),
-    OTA_PMS_COMPARISON: Object.freeze({
-      id: "OTA_PMS_COMPARISON",
-      label: "OTA/PMS Audit",
-      requiredCapability: "wings",
-      supportedHosts: Object.freeze(["naver-partner", "admin-station"]),
-      guardUtilityTab: "settings"
-    })
-  });
+  const TASKS = taskRegistry.TASKS || buildFallbackTasks();
 
   function normalizeText(value) {
+    if (typeof sharedEntryPolicy.normalizeText === "function") {
+      return sharedEntryPolicy.normalizeText(value);
+    }
     return String(value ?? "").trim();
   }
 
   function normalizeProviderType(value) {
+    if (typeof sharedEntryPolicy.normalizeProviderType === "function") {
+      return sharedEntryPolicy.normalizeProviderType(value);
+    }
     const text = normalizeText(value).toLowerCase();
     if (Object.prototype.hasOwnProperty.call(ENTRY_HOSTS, text)) return text;
     return "";
   }
 
   function getEntryHostPolicy(providerType) {
+    if (typeof sharedEntryPolicy.getEntryHostPolicy === "function") {
+      return sharedEntryPolicy.getEntryHostPolicy(providerType);
+    }
     const normalized = normalizeProviderType(providerType);
     return normalized ? ENTRY_HOSTS[normalized] : null;
   }
 
   function detectProviderTypeFromHost(host) {
+    if (typeof sharedEntryPolicy.detectProviderTypeFromHost === "function") {
+      return sharedEntryPolicy.detectProviderTypeFromHost(host);
+    }
     const normalizedHost = normalizeText(host).toLowerCase();
     if (!normalizedHost) return "";
     const entry = Object.values(ENTRY_HOSTS).find((policy) =>
@@ -123,6 +148,9 @@
   }
 
   function detectIndirectIntegrationFromHost(host) {
+    if (typeof sharedEntryPolicy.detectIndirectIntegrationFromHost === "function") {
+      return sharedEntryPolicy.detectIndirectIntegrationFromHost(host);
+    }
     const normalizedHost = normalizeText(host).toLowerCase();
     if (!normalizedHost) return null;
     return (
@@ -133,6 +161,9 @@
   }
 
   function detectEntrySupportByUrl(urlRaw) {
+    if (typeof sharedEntryPolicy.detectEntrySupportByUrl === "function") {
+      return sharedEntryPolicy.detectEntrySupportByUrl(urlRaw);
+    }
     try {
       const parsed = new URL(String(urlRaw || ""));
       const providerType = detectProviderTypeFromHost(parsed.hostname);
@@ -203,7 +234,10 @@
   }
 
   function evaluateTaskAccess(taskId, capabilities, workspaceAccess, providerType) {
-    const task = TASKS[normalizeText(taskId).toUpperCase()] || TASKS.NAVER_STATION_SYNC;
+    const task =
+      typeof taskRegistry.getTaskMeta === "function"
+        ? taskRegistry.getTaskMeta(taskId)
+        : TASKS[normalizeText(taskId).toUpperCase()] || TASKS.NAVER_STATION_SYNC;
     if (!workspaceAccess) {
       return {
         blocked: true,
@@ -262,7 +296,8 @@
     const capabilities = buildCapabilitySnapshot(input);
     const workspaceAccess = Boolean(entryHost) && capabilities["provider-session"].ready === true;
     const tasks = Object.fromEntries(
-      Object.keys(TASKS).map((taskId) => [taskId, evaluateTaskAccess(taskId, capabilities, workspaceAccess, providerType)])
+      (Array.isArray(taskRegistry.TASK_ORDER) ? taskRegistry.TASK_ORDER : Object.keys(TASKS))
+        .map((taskId) => [taskId, evaluateTaskAccess(taskId, capabilities, workspaceAccess, providerType)])
     );
 
     return {

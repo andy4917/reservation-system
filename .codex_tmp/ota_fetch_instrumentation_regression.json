@@ -1,0 +1,56 @@
+{
+  "task_id": "task-20260308-ota-fetch-instrumentation",
+  "checks": [
+    {
+      "name": "Targeted functional verification",
+      "required": true,
+      "kind": "command",
+      "result": "passed",
+      "evidence": [
+        "`node tests/regression_ota_dom_fallback_poc.mjs` passed.",
+        "The PoC now verifies `api_only_accept`, `api_dom_merge`, and `dom_only_fallback` for both providers.",
+        "The same test also verified cumulative per-provider counters: `apiOnlyAccept=1`, `apiDomMerge=1`, `domOnlyFallback=1`, `totalFetches=3`."
+      ]
+    },
+    {
+      "name": "Constraint review",
+      "required": true,
+      "kind": "inspection",
+      "result": "passed",
+      "evidence": [
+        "The change stayed inside `src/io/pms.fetch.js`, `src/sheetScanner.entry.js`, the OTA transition document, and the existing OTA PoC test.",
+        "No provider write path, credentials, or unrelated workflow was modified."
+      ]
+    },
+    {
+      "name": "Legacy branch and fallback scan",
+      "required": true,
+      "kind": "inspection",
+      "result": "passed",
+      "evidence": [
+        "DOM fallback branches were not widened; they are only measured and surfaced with route labels and counters.",
+        "Source-count reduction logic was centralized into `summarizeProviderRowSources` instead of remaining duplicated in UI and tests."
+      ]
+    },
+    {
+      "name": "Hardcoding and temporary patch scan",
+      "required": true,
+      "kind": "inspection",
+      "result": "passed",
+      "evidence": [
+        "`git diff --check -- src/io/pms.fetch.js src/sheetScanner.entry.js tests/regression_ota_dom_fallback_poc.mjs docs/architecture/APP_CENTRIC_TRANSITION_PLAN.md` returned no issues.",
+        "`python3 tests/regression_secret_hygiene_py.py` passed."
+      ]
+    },
+    {
+      "name": "Residual-risk review",
+      "required": true,
+      "kind": "analysis",
+      "result": "passed",
+      "evidence": [
+        "Instrumentation is now present, but live production frequency still needs actual session sampling over time.",
+        "The remaining uncertainty is about observed incidence, not about whether the code can distinguish the three fetch routes."
+      ]
+    }
+  ]
+}

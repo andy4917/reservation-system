@@ -5,11 +5,13 @@
 ## 문서 구조
 
 - 루트: `README.md`, `AGENTS.md`만 유지
+- 아키텍처/전환 문서: `docs/architecture/`
 - 시트 문서: `docs/sheets/`
 - 연동 문서: `docs/integrations/`
 - 작업 인계/세션 메모: `tasks/handoffs/`
 
 아키텍처 참고:
+- 앱 중심 전환 분류 계획: `docs/architecture/APP_CENTRIC_TRANSITION_PLAN.md`
 - OTA Adapter Layer: `docs/integrations/OTA_ADAPTER_LAYER.md`
   - 운영 모드: NAVER 직접 API, BOOKING/AGODA/TRIP/AIRBNB는 WINGS HAR 기반
 - Inventory Planner: `docs/integrations/INVENTORY_PLANNER.md`
