@@ -18,7 +18,7 @@
       persistSyncConfig,
       fetchSheetSnapshot,
       fetchProviderRows,
-      fetchProviderReservations,
+      loadProviderReservations,
       normalizeRows,
       getLastProviderFetchMeta,
       getProviderFetchInstrumentation,
@@ -216,14 +216,7 @@
     async function reloadProviderRows(query) {
       const [rawRows, reservationMetaRaw] = await Promise.all([
         fetchProviderRows(context.providerType, query),
-        fetchProviderReservations(context.providerType, query, state.syncConfig).catch((error) => ({
-          records: [],
-          source: "error",
-          url: "",
-          candidateCount: 0,
-          attempts: [],
-          error: error?.message ?? String(error)
-        }))
+        loadProviderReservations(query)
       ]);
       const rows = normalizeRows(rawRows, query, context.providerType);
       const reservationMeta = reservationMetaRaw && typeof reservationMetaRaw === "object" ? reservationMetaRaw : {};
@@ -232,9 +225,6 @@
       state.rows = rows;
       state.providerRowMeta =
         typeof getLastProviderFetchMeta === "function" ? getLastProviderFetchMeta(context.providerType) : null;
-      state.providerReservations = Array.isArray(reservationMeta.records) ? reservationMeta.records : [];
-      state.providerReservationMeta = reservationMeta;
-
       const model = buildValueModel(rows, query, { applyCorrections: state.correctionsApplied === true });
       state.dates = model.dates;
       state.valueRows = model.valueRows;

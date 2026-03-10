@@ -72,7 +72,9 @@
   const appShell = App.ui?.appShell || {};
   const workspacePolicy = App.ui?.workspacePolicy || {};
   const applyPolicy = App.ui?.applyPolicy || {};
+  const reservationAuditControllerNs = App.ui?.reservationAuditController || {};
   const inventoryCompareControllerNs = App.ui?.inventoryCompareController || {};
+  const applyControllerNs = App.ui?.applyController || {};
   const {
     detectProviderTypeFromHost,
     evaluateProductFlow
@@ -435,6 +437,29 @@
     naverQueue: runtime.naverQueue || (runtime.naverQueue = new Map()),
     naverQueueMeta: runtime.naverQueueMeta || (runtime.naverQueueMeta = { lastFlushedAt: 0 })
   };
+  const reservationAuditController =
+    typeof reservationAuditControllerNs.createReservationAuditController === "function"
+      ? reservationAuditControllerNs.createReservationAuditController({
+        state,
+        ui,
+        context,
+        text: TEXT,
+        readOnlyToolMode: READ_ONLY_TOOL_MODE,
+        fetchProviderReservations,
+        normalizeText,
+        normalizeReservationStatusBucket,
+        isCurrentProviderApplyAllowed,
+        isSyncPreviewForActiveQuery,
+        createVerificationReport,
+        verifySiteInventoryAccuracy,
+        verifySheetInventoryAccuracy,
+        verifyProviderReservationsAgainstSheetCore,
+        renderInventoryVerification,
+        renderHostContextBar,
+        activeProviderKey,
+        isSameQuery
+      })
+      : null;
   const inventoryCompareController =
     typeof inventoryCompareControllerNs.createInventoryCompareController === "function"
       ? inventoryCompareControllerNs.createInventoryCompareController({
@@ -448,7 +473,7 @@
         persistSyncConfig,
         fetchSheetSnapshot,
         fetchProviderRows,
-        fetchProviderReservations,
+        loadProviderReservations: (query) => reservationAuditController.loadProviderReservations(query),
         normalizeRows,
         getLastProviderFetchMeta,
         getProviderFetchInstrumentation,
@@ -481,6 +506,38 @@
         markActionTime,
         resolveActiveQuery,
         isSameQuery
+      })
+      : null;
+  const applyController =
+    typeof applyControllerNs.createApplyController === "function"
+      ? applyControllerNs.createApplyController({
+        state,
+        ui,
+        text: TEXT,
+        readOnlyToolMode: READ_ONLY_TOOL_MODE,
+        normalizeText,
+        resolveActiveQuery,
+        isSyncPreviewForActiveQuery,
+        isSyncApplyEnabled,
+        countClosedItems,
+        renderWorkflowProgress,
+        renderSupportPolicySurface,
+        renderSyncResult,
+        updateSyncButtonText,
+        setStatus,
+        updateSyncApprovalUiRef: (options) => updateSyncApprovalUi(options),
+        buildSyncApplyPolicy,
+        countClosedItemsForPreview: (preview) => countClosedItems(preview.providerKey, preview.actions),
+        buildErrorRowsFromResults,
+        prepareSyncPreviewForRun,
+        renderSyncPreviewResult,
+        setSyncResultVisible,
+        setLoading,
+        getSelectedQuery,
+        assertSyncRunReady,
+        applyStationActions,
+        enqueueNaverActions,
+        executeQueuedNaverActions
       })
       : null;
   const PANEL_ANIM_MS = 220;
@@ -1403,54 +1460,19 @@
   }
 
   function isSyncApprovalRequired() {
-    if (READ_ONLY_TOOL_MODE === true) return false;
-    if (!isSyncApplyEnabled()) return false;
-    if (Number(state.syncPreview?.mismatchCount || 0) <= 0) return false;
-    return isSyncPreviewForActiveQuery();
+    return applyController.isSyncApprovalRequired();
   }
 
   function isSyncApprovalReady() {
-    return !isSyncApprovalRequired() || state.syncApprovalChecked === true;
+    return applyController.isSyncApprovalReady();
   }
 
   function buildSyncApprovalFingerprint() {
-    const query = resolveActiveQuery();
-    const isCurrentPreview = isSyncPreviewForActiveQuery();
-    const mismatchCount = isCurrentPreview ? Number(state.syncPreview?.mismatchCount || 0) : 0;
-    const closedCount = isCurrentPreview ? countClosedItems(state.syncPreview?.providerKey, state.syncPreview?.actions || []) : 0;
-    const validationErrorCount = Number(state.syncPreview?.validation?.errorCount || 0);
-    return [
-      query?.startDate || "-",
-      query?.endDate || "-",
-      normalizeText(isCurrentPreview ? state.syncPreview?.providerKey : "-"),
-      mismatchCount,
-      closedCount,
-      validationErrorCount
-    ].join("::");
+    return applyController.buildSyncApprovalFingerprint();
   }
 
   function updateSyncApprovalUi(options = {}) {
-    if (!ui.syncApprovalWrap || !ui.syncApprovalCheck) return;
-    const isCurrentPreview = isSyncPreviewForActiveQuery();
-    const mismatchCount = isCurrentPreview ? Number(state.syncPreview?.mismatchCount || 0) : 0;
-    const closedCount = isCurrentPreview ? countClosedItems(state.syncPreview?.providerKey, state.syncPreview?.actions || []) : 0;
-    const query = resolveActiveQuery();
-    const fingerprint = buildSyncApprovalFingerprint();
-    if (options.reset === true || state.syncApprovalFingerprint !== fingerprint) {
-      state.syncApprovalChecked = false;
-      state.syncApprovalFingerprint = fingerprint;
-    }
-    const required = isSyncApprovalRequired();
-    ui.syncApprovalWrap.classList.toggle("hidden", !required);
-    if (ui.syncApprovalMismatch) ui.syncApprovalMismatch.textContent = String(mismatchCount);
-    if (ui.syncApprovalClosed) ui.syncApprovalClosed.textContent = String(closedCount);
-    if (ui.syncApprovalPeriod) {
-      ui.syncApprovalPeriod.textContent = query ? `${query.startDate} ~ ${query.endDate}` : TEXT.noPeriod;
-    }
-    ui.syncApprovalCheck.checked = state.syncApprovalChecked === true;
-    ui.syncApprovalCheck.disabled = Boolean(state.loading) || !required;
-    renderWorkflowProgress();
-    renderSupportPolicySurface();
+    return applyController.updateSyncApprovalUi(options);
   }
 
   function resolveWorkflowStep() {
@@ -1498,88 +1520,15 @@
   }
 
   function countReservationAuditAnomalies() {
-    const counts = state.providerReservationMeta?.statusCounts;
-    if (counts && Number.isFinite(Number(counts.auditAnomaly))) {
-      return Number(counts.auditAnomaly);
-    }
-    return (Array.isArray(state.providerReservations) ? state.providerReservations : []).filter((row) => row?.auditAnomaly === true).length;
+    return reservationAuditController.countReservationAuditAnomalies();
   }
 
   function renderUserOpsSummary() {
-    if (!ui.userSyncState || !ui.userMismatchCount || !ui.userPmsStatus || !ui.userLoadState || !ui.userOpsHint) return;
-    const mismatchCount = isSyncPreviewForActiveQuery() ? Number(state.syncPreview?.mismatchCount || 0) : 0;
-    const mismatchCard = ui.userMismatchCount?.closest?.(".card");
-    const readonlyMode = READ_ONLY_TOOL_MODE === true;
-    const blocked = readonlyMode ? false : (Boolean(state.syncPreview?.policy?.blocked) || !isCurrentProviderApplyAllowed());
-    const hasSite = Boolean(state.query && Array.isArray(state.rows) && state.rows.length > 0);
-    const hasSheet = Boolean(state.sheetQuery && state.sheetSnapshot);
-    const reservationCounts = state.providerReservationMeta?.statusCounts && typeof state.providerReservationMeta.statusCounts === "object"
-      ? state.providerReservationMeta.statusCounts
-      : {};
-    const activeCount = Number.isFinite(Number(reservationCounts.active))
-      ? Number(reservationCounts.active)
-      : (state.providerReservations || []).filter((row) => normalizeReservationStatusBucket(row?.statusBucket || row?.status || "") === "ACTIVE").length;
-    const canceledCount = Number.isFinite(Number(reservationCounts.canceled))
-      ? Number(reservationCounts.canceled)
-      : (state.providerReservations || []).filter((row) => normalizeReservationStatusBucket(row?.statusBucket || row?.status || "") === "CANCELED").length;
-    const anomalyCount = countReservationAuditAnomalies();
-
-    let syncState = "대기";
-    let hint = TEXT.userHintIdle;
-    if (state.loading) {
-      syncState = "처리 중";
-      hint = readonlyMode ? "조회 또는 검토 계산이 진행 중입니다." : "조회 또는 적용이 진행 중입니다.";
-    } else if (readonlyMode) {
-      syncState = mismatchCount > 0 ? "검토 필요" : hasSite && hasSheet ? "검토 가능" : "대기";
-      hint = "읽기 전용 모드입니다. 시트/OTA 쓰기 없이 조회와 비교 결과만 제공합니다.";
-    } else if (blocked) {
-      syncState = "차단됨";
-      hint = "적용은 차단 상태입니다. 차단 사유는 Evidence > Blocking에서, 정책 근거는 Utility > Ops에서 확인하세요.";
-    } else if (mismatchCount > 0) {
-      syncState = "검토 필요";
-      hint = "불일치가 있어 검토가 필요합니다. 상세 불일치는 Evidence에서, 정책과 soft-match 근거는 Utility > Ops에서 확인하세요.";
-    } else if (hasSite && hasSheet) {
-      syncState = "적용 가능";
-      hint = "사이트/시트 조회가 완료되었습니다. Task에는 상태만 표시되고 상세 근거는 Evidence / Utility로 분리됩니다.";
-    }
-
-    ui.userSyncState.textContent = syncState;
-    ui.userMismatchCount.textContent = String(mismatchCount);
-    if (mismatchCard) mismatchCard.classList.toggle("is-critical", mismatchCount > 0);
-    ui.userPmsStatus.textContent =
-      state.providerReservationMeta?.source === "pms-unconfigured"
-        ? "설정 필요"
-        : state.providerReservations.length > 0 || activeCount > 0 || canceledCount > 0
-          ? `활성 ${activeCount} / 취소 ${canceledCount}`
-          : "미조회";
-    ui.userLoadState.textContent = hasSite && hasSheet ? "사이트+시트" : hasSite ? "사이트" : hasSheet ? "시트" : "대기";
-    if (anomalyCount > 0 && !state.loading) {
-      hint = `${hint}\n- night audit anomaly 후보 ${anomalyCount}건은 Utility > Ops에서 확인하세요.`;
-    }
-    ui.userOpsHint.textContent = hint;
-    renderHostContextBar();
+    return reservationAuditController.renderUserOpsSummary();
   }
 
   function renderOpsMetaSummary() {
-    if (ui.opsPolicySummary) {
-      const mismatchCount = isSyncPreviewForActiveQuery() ? Number(state.syncPreview?.mismatchCount || 0) : 0;
-      const blocked = READ_ONLY_TOOL_MODE === true ? false : (Boolean(state.syncPreview?.policy?.blocked) || !isCurrentProviderApplyAllowed());
-      const statusLine = READ_ONLY_TOOL_MODE === true
-        ? (mismatchCount > 0 ? "검토 필요" : "대기/검토 가능")
-        : (blocked ? "차단" : mismatchCount > 0 ? "검토 필요" : "대기/적용 가능");
-      ui.opsPolicySummary.textContent =
-        `정책 요약\n- 상태모델: ACTIVE / CANCELED (NOSHOW는 ACTIVE + anomaly)\n- 현재 판정: ${statusLine}\n- 현재 불일치: ${mismatchCount}건\n- 수기 OTA(STATION/NAVER)는 PMS 누락 오류에서 제외`;
-    }
-    if (ui.opsRetentionSummary) {
-      const reservationCount = Array.isArray(state.providerReservations) ? state.providerReservations.length : 0;
-      ui.opsRetentionSummary.textContent =
-        `보존 데이터\n- 런타임 예약요약: ${reservationCount}건\n- 유지: 예약번호, OTA, 날짜, 박수, 객실, 이름 정규화, 전화 끝자리, 토큰 해시\n- 폐기: full note/remark, PMS raw payload, HAR raw payload, plain token/cookie`;
-    }
-    if (ui.opsEvidenceSummary) {
-      const anomalyCount = countReservationAuditAnomalies();
-      ui.opsEvidenceSummary.textContent =
-        `판정 근거\n- exact ID > blocking(날짜/OTA/객실) > soft-match(이름/전화/remark-note token)\n- soft-match 임계값: 7조건 중 3개 이상 + 날짜근거 1개 + OTA/객실 1개\n- audit anomaly: ${anomalyCount}건`;
-    }
+    return reservationAuditController.renderOpsMetaSummary();
   }
 
   function setSecretsMasked(flag) {
@@ -3506,37 +3455,11 @@
   }
 
   function verifyProviderReservationsAgainstSheet(report, query) {
-    if (typeof verifyProviderReservationsAgainstSheetCore !== "function") return;
-    return verifyProviderReservationsAgainstSheetCore({
-      report,
-      query,
-      sheetSnapshot: state.sheetSnapshot,
-      sheetQuery: state.sheetQuery,
-      providerKey: activeProviderKey(),
-      providerReservationMeta: state.providerReservationMeta,
-      providerReservations: state.providerReservations,
-      isSameQuery
-    });
+    return reservationAuditController.verifyProviderReservationsAgainstSheet(report, query);
   }
 
   function buildInventoryVerificationReport() {
-    const report = createVerificationReport();
-    const basis = [];
-
-    if (state.query) {
-      basis.push(`${TEXT.siteInventory}: ${state.query.startDate} ~ ${state.query.endDate}`);
-      verifySiteInventoryAccuracy(report, state.query);
-    }
-    if (state.sheetQuery) {
-      basis.push(`${TEXT.sheetInventory}: ${state.sheetQuery.startDate} ~ ${state.sheetQuery.endDate}`);
-      verifySheetInventoryAccuracy(report, state.sheetQuery);
-    }
-    if (state.query && state.sheetQuery && isSameQuery(state.query, state.sheetQuery)) {
-      basis.push(`PMS 예약: ${state.query.startDate} ~ ${state.query.endDate}`);
-      verifyProviderReservationsAgainstSheet(report, state.query);
-    }
-    report.basis = basis.length ? basis.join(" | ") : TEXT.noPeriod;
-    return report;
+    return reservationAuditController.buildInventoryVerificationReport();
   }
 
   function buildVerificationIssueRows(report) {
@@ -3574,13 +3497,7 @@
   }
 
   function refreshInventoryVerification() {
-    state.verificationReport = buildInventoryVerificationReport();
-    state.syncPreview = {
-      ...(state.syncPreview || {}),
-      reservationPairs: state.verificationReport?.reservationPairs || [],
-      reservationMismatches: state.verificationReport?.reservationMismatches || []
-    };
-    renderInventoryVerification(state.verificationReport);
+    return reservationAuditController.refreshInventoryVerification();
   }
 
   function buildValueModel(rows, query, options = null) {
@@ -6382,40 +6299,11 @@
   }
 
   function blockSyncRunForValidation(preview) {
-    if (preview.mismatchCount <= 0) {
-      setStatus(TEXT.statusSyncNoDiff);
-      ui.status.classList.add("ok");
-      return true;
-    }
-    const policy = preview?.policy && typeof preview.policy === "object"
-      ? preview.policy
-      : buildSyncApplyPolicy(preview);
-    if (policy.blocked) {
-      renderSyncResult({
-        totalCount: preview.mismatchCount,
-        successCount: 0,
-        failCount: 1,
-        closedCount: countClosedItems(preview.providerKey, preview.actions),
-        blocks: policy.issues,
-        errors: []
-      });
-      setStatus(policy.issues[0]?.detail || "적용 차단 규칙에 의해 실행을 중단했습니다.", "error");
-      return true;
-    }
-    if (isSyncApprovalRequired() && state.syncApprovalChecked !== true) {
-      setStatus(TEXT.statusNeedSyncApproval, "warn");
-      return true;
-    }
-    return false;
+    return applyController.blockSyncRunForValidation(preview);
   }
 
   function blockSyncRunForPreviewMode(preview) {
-    if (isSyncApplyEnabled()) return false;
-    renderSyncPreviewResult(preview, []);
-    state.syncPreview = preview;
-    setStatus(TEXT.statusSyncApplySkipped);
-    ui.status.classList.add("ok");
-    return true;
+    return applyController.blockSyncRunForPreviewMode(preview);
   }
 
   function getPreviewSourceUsage(preview) {
@@ -6432,86 +6320,23 @@
   }
 
   function confirmSyncRun(preview, query) {
-    const providerName = preview.providerKey === "STATION" ? TEXT.station : TEXT.naver;
-    return window.confirm(
-      `${providerName} 불일치 ${preview.mismatchCount}건을 적용하시겠습니까?` +
-        `\n기간: ${query.startDate} ~ ${query.endDate}`
-    );
+    return applyController.confirmSyncRun(preview, query);
   }
 
   async function executeSyncPreviewActions(preview) {
-    if (preview.providerKey === "STATION") {
-      const results = await applyStationActions(preview.actions, preview.syncConfig.sleepMs);
-      return { mode: "immediate", queueSize: 0, results };
-    }
-    enqueueNaverActions(preview.actions);
-    return executeQueuedNaverActions(preview.syncConfig, preview.syncConfig.sleepMs, "manual");
+    return applyController.executeSyncPreviewActions(preview);
   }
 
   function finalizeSyncRun(preview, results) {
-    const successCount = (results || []).filter((row) => row.status === "APPLIED").length;
-    const apiFailCount = (results || []).filter((row) => row.status === "FAILED").length;
-    const summary = {
-      totalCount: preview.mismatchCount,
-      successCount,
-      failCount: apiFailCount,
-      closedCount: countClosedItems(preview.providerKey, preview.actions),
-      errors: buildErrorRowsFromResults(preview.providerKey, results)
-    };
-    renderSyncResult(summary);
-
-    state.syncPreview = { ...preview, mismatchCount: summary.failCount > 0 ? Math.max(1, summary.failCount) : 0 };
-    state.syncApprovalChecked = false;
-    updateSyncApprovalUi({ reset: true });
-    updateSyncButtonText();
-    if (summary.failCount > 0) {
-      setStatus(`${TEXT.statusSyncDone}: 성공 ${successCount}건, 실패 ${summary.failCount}건`, "error");
-    } else {
-      setStatus(`${TEXT.statusSyncDone}: 성공 ${successCount}건. ${TEXT.statusSyncVerifyByManualLoad}`);
-      ui.status.classList.add("ok");
-    }
+    return applyController.finalizeSyncRun(preview, results);
   }
 
   function handleSyncRunError(error) {
-    setStatus(error?.message ?? String(error), "error");
-    renderSyncResult({
-      totalCount: 0,
-      successCount: 0,
-      failCount: 1,
-      closedCount: 0,
-      blocks: [],
-      errors: [{ date: "-", type: "실행 오류", detail: error?.message ?? String(error) }]
-    });
-    state.syncPreview = { mismatchCount: 0 };
-    updateSyncButtonText();
+    return applyController.handleSyncRunError(error);
   }
 
   async function runSheetSync() {
-    try {
-      state.syncRunning = true;
-      updateSyncButtonText();
-      setSyncResultVisible(true);
-      setLoading(true);
-      setStatus(TEXT.statusSyncing);
-
-      const query = getSelectedQuery();
-      if (!assertSyncRunReady(query)) return;
-      const preview = await prepareSyncPreviewForRun(query);
-      renderSyncPreviewResult(preview, []);
-      state.syncPreview = preview;
-      if (preview.mismatchCount > 0) {
-        setStatus(`${TEXT.statusSyncDone}: 불일치 ${preview.mismatchCount}건`);
-      } else {
-        setStatus(TEXT.statusSyncNoDiff);
-      }
-      ui.status.classList.add("ok");
-    } catch (error) {
-      handleSyncRunError(error);
-    } finally {
-      state.syncRunning = false;
-      setLoading(false);
-      updateSyncButtonText();
-    }
+    return applyController.runSheetSync();
   }
 
   async function loadInventory() {
@@ -6532,24 +6357,7 @@
       const dayCount = buildDateRange(query.startDate, query.endDate).length;
       const roomTypeCount = new Set((rows || []).map((row) => String(row?.roomId || ""))).size;
       const sourceMixLabel = buildProviderFetchStatusLabel(state.providerRowMeta, rows);
-      const reservationSource = normalizeText(state.providerReservationMeta?.source || "").toLowerCase();
-      const reservationCounts = state.providerReservationMeta?.statusCounts && typeof state.providerReservationMeta.statusCounts === "object"
-        ? state.providerReservationMeta.statusCounts
-        : {};
-      const activeReservationCount = Number.isFinite(Number(reservationCounts.active))
-        ? Number(reservationCounts.active)
-        : (state.providerReservations || []).filter((row) => normalizeReservationStatusBucket(row?.statusBucket || row?.status || "") === "ACTIVE").length;
-      const canceledReservationCount = Number.isFinite(Number(reservationCounts.canceled))
-        ? Number(reservationCounts.canceled)
-        : (state.providerReservations || []).filter((row) => normalizeReservationStatusBucket(row?.statusBucket || row?.status || "") === "CANCELED").length;
-      const reservationLabel =
-        reservationSource === "pms-api"
-          ? `, PMS 예약 활성 ${activeReservationCount}건 / 취소 ${canceledReservationCount}건`
-          : state.providerReservations.length > 0
-            ? `, PMS 예약 활성 ${activeReservationCount}건 / 취소 ${canceledReservationCount}건`
-            : reservationSource === "pms-unconfigured"
-              ? ", PMS 예약 설정 없음"
-              : "";
+      const reservationLabel = reservationAuditController.buildReservationLoadStatusLabel();
       setStatus(
         `${TEXT.statusLoadedSite} (${sourceLabel}): ${rows.length}건 (객실타입 ${roomTypeCount} x ${dayCount}일, 원본 표시${sourceMixLabel}${reservationLabel})`
       );
