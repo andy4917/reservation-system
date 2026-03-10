@@ -1,6 +1,6 @@
-# 예약 사이트 재고 관리 확장
+# 예약 통합관리 앱 전환 저장소
 
-네이버/스테이션 관리자 페이지에서 재고 현황 조회 + 시트 기반 OTA 캘린더 적용을 수행하는 Chrome MV3 확장입니다.
+현재 저장소는 데스크톱 앱 중심 전환을 진행 중이며, Chrome MV3 확장은 인증/세션/DOM 브리지로 축소하는 중입니다.
 
 ## 문서 구조
 
@@ -32,7 +32,7 @@
 python3.10 setup.py build_ext --inplace
 ```
 
-## 대상 페이지
+## 브리지 대상 페이지
 
 - `https://partner.booking.naver.com/*`
 - `https://admin.admin-stationbyuhc.com/*`
@@ -63,30 +63,16 @@ python3.10 setup.py build_ext --inplace
 - 사용자 OAuth 로그인 화면 없이 시트 조회 가능
 - 주의: 실제 `clientSecret`/`refreshToken`은 저장소에 커밋하지 말고 로컬 전용 값으로만 사용
 
-## 주요 기능
+## 현재 주요 축
 
-- 날짜 범위 선택 후 현황 조회
-- 사용자 UI와 운영 UI 분리
-  - 사용자 UI: 조회/적용 조작, 상태, 요약만 표시
-  - 운영 UI: 설정 패널 안 `운영 전용` 섹션에서만 로그/검증 사유/trace/정책/보존 데이터/상세 표를 표시
-- `설정` 버튼으로 시트 설정 패널 열기/닫기
-- `OTA 캘린더 적용` 버튼으로 불일치 항목 반영
-- 적용 방향:
-  시트 목표 재고값을 OTA 운영 API로 반영
-  - Station: `PATCH /admin/branch/{branchId}/apply/price-set`
-  - Naver: `POST /stock-schedules`, `POST /sale-schedules`
-- 결과 요약:
-  - 변환 총 건
-  - 성공 건
-  - 실패 건
-  - 닫음 처리건
-- 운영 전용 내보내기:
-  - Trace JSON/CSV
-  - correction diff CSV
-  - unknown color CSV
-  - 골든셋 JSON+CSV 번들
+- 데스크톱 앱 골격: `app/`
+- 브리지 전용 확장:
+  - 세션 캡처
+  - 현재 탭 context
+  - DOM snapshot
+- 확장 UI 패널 런타임은 제거 중이며, 메인 조작면은 앱으로 이동합니다.
 
-## 설치
+## 확장 브리지 설치
 
 먼저 로드 전용 폴더를 생성합니다.
 
@@ -100,6 +86,10 @@ python3.10 setup.py build_ext --inplace
 2. `개발자 모드` 활성화
 3. `압축해제된 확장 프로그램 로드` 클릭
 4. `dist/uhs-extension` 폴더 선택
+
+주의:
+- 현재 확장은 메인 작업 UI가 아니라 브리지 역할만 담당합니다.
+- 메인 사용자 플로우는 `app/` 아래 데스크톱 앱 런타임으로 이동 중입니다.
 
 ## SSO 세션 재사용 / 인증 번들
 

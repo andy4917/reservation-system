@@ -12,11 +12,11 @@
 ## 관측 사실
 
 - 현재 저장소는 `manifest.json` 기반 Chrome MV3 확장이다.
-- 사용자 가시 UX는 주로 `src/ui/*`, `src/sheetScanner.entry.js`에 있다.
+- 기존 사용자 가시 UX는 주로 `src/ui/*`, `src/sheetScanner.entry.js`에 있었으나, 해당 확장 패널 런타임은 제거되고 브리지 전용 확장으로 축소 중이다.
 - 브라우저 세션/쿠키 브리지는 `src/background.js`, `src/scan/normalize.js`에 있다.
 - OTA 조회는 `src/io/pms.fetch.js`에서 API 우선 후 DOM fallback/merge를 사용한다.
 - WINGS/PMS 읽기 전용 요청은 `src/pms/wings.adapter.js`와 `docs/integrations/WINGS_PMS_INTEGRATION.md`에 정리되어 있다.
-- 현재 진입 UX는 `src/ui/productFlow.js`의 direct-entry host, provider-session gate에 묶여 있다.
+- 앱 메인 셸은 `app/` 아래에서 새로 구축 중이며, 확장은 `src/extensionBridge.entry.js` 중심의 브리지 역할만 남긴다.
 
 ## UNKNOWN / 가정
 
@@ -35,15 +35,15 @@
 
 | 기능명 | 입력 | 처리 | 출력 | 현재 진입점 | 브라우저 의존 | 세션 의존 | API·OAuth 대체 가능성 | 분류 | 근거 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 호스트 진입/Task gate | 현재 호스트, provider 상태 | direct-entry host 판정, task 접근 제한 | 시작 가능/차단 상태 | `src/ui/productFlow.js`, `src/sheetScanner.entry.js` | 현재는 있음 | 예 | 앱 상태 관리로 대체 가능 | `app-first` | 현재 UX 문제의 중심이며, 기능 자체는 앱 셸이 더 자연스럽게 소유 가능 |
-| 설정 관리 | 지점, 시트, OAuth, PMS preset, auth bundle | sanitize, 저장, 복원, 보조 미리보기 | 저장된 설정, 설정 상태 | `src/sheetScanner.entry.js`, `src/ui/panelEvents.js`, `src/scan/normalize.js` | 현재는 `chrome.storage` 사용 | 부분 있음 | 앱 저장소 + 앱 비밀 저장으로 대체 가능 | `app-first` | 값 편집/저장은 본질적으로 앱 책임이며, 현재도 주로 데이터 정규화 중심 |
-| 시트 조회·스캔 | spreadsheet, sheetName, row/range, token | Sheets API 조회, 좌표 해석, 스냅샷 구성 | 시트 snapshot, block/model | `src/io/sheets.fetch.js`, `src/scan/*`, `src/sheetScanner.entry.js` | 없음 | Google auth 필요 | 가능 | `app-first` | 브라우저 DOM 없이 API와 스캔 로직으로 동작 |
-| OTA 조회 | 날짜 범위, provider, 현재 인증 재료 | Naver/Station API 조회, coverage 평가, DOM merge | provider rows | `src/io/pms.fetch.js`, `src/sheetScanner.entry.js` | 현재 혼합 | 예 | 부분 가능, API 우선 + 저커버리지 시 브리지 필요 | `bridge-candidate` | 작은 PoC에서 두 provider 모두 API-only 정상 경로는 통과했지만, 저커버리지 입력에서는 DOM merge가 커버리지를 실질 복구했다. |
+| 호스트 진입/Task gate | 현재 호스트, provider 상태 | direct-entry host 판정, task 접근 제한 | 시작 가능/차단 상태 | legacy `src/ui/productFlow.js`, new `app/` shell | 현재는 앱으로 이동 중 | 예 | 앱 상태 관리로 대체 가능 | `app-first` | 현재 UX 문제의 중심이며, 기능 자체는 앱 셸이 더 자연스럽게 소유 가능 |
+| 설정 관리 | 지점, 시트, OAuth, PMS preset, auth bundle | sanitize, 저장, 복원, 보조 미리보기 | 저장된 설정, 설정 상태 | legacy `src/sheetScanner.entry.js`, target `app/` settings | 현재는 앱으로 이동 중 | 부분 있음 | 앱 저장소 + 앱 비밀 저장으로 대체 가능 | `app-first` | 값 편집/저장은 본질적으로 앱 책임이며, 현재도 주로 데이터 정규화 중심 |
+| 시트 조회·스캔 | spreadsheet, sheetName, row/range, token | Sheets API 조회, 좌표 해석, 스냅샷 구성 | 시트 snapshot, block/model | `src/io/sheets.fetch.js`, `src/scan/*` | 없음 | Google auth 필요 | 가능 | `app-first` | 브라우저 DOM 없이 API와 스캔 로직으로 동작 |
+| OTA 조회 | 날짜 범위, provider, 현재 인증 재료 | Naver/Station API 조회, coverage 평가, DOM merge | provider rows | `src/io/pms.fetch.js`, bridge `src/extensionBridge.entry.js` | 현재 혼합 | 예 | 부분 가능, API 우선 + 저커버리지 시 브리지 필요 | `bridge-candidate` | 작은 PoC에서 두 provider 모두 API-only 정상 경로는 통과했지만, 저커버리지 입력에서는 DOM merge가 커버리지를 실질 복구했다. |
 | PMS 예약 검증 | WINGS URL, auth bundle/HAR, 시트/OTA 데이터 | 읽기 전용 요청 구성, 응답 정규화, 예약 매칭 | mismatch, anomaly, 검증 결과 | `src/pms/wings.adapter.js`, `src/report/reservationVerification.js`, `docs/integrations/WINGS_PMS_INTEGRATION.md` | 부분 있음 | 예 | HAR/auth bundle로 일부 대체 가능 | `hold` | 읽기 전용 경로는 있으나 세션 지속성과 앱 단독 운영 품질은 미확인 |
 | 재고 diff/검증 | 시트 snapshot, provider rows, 정책 | diff 계산, 최대값/경고/차단 검증 | mismatch list, approval context | `src/engine/rules.js`, `src/report/validator.js`, `src/report/reservationVerification.js` | 없음 | 없음 | 가능 | `app-first` | 정책/검증 엔진은 UI와 브라우저에 묶이지 않음 |
-| 결과 요약·로그·오류 표시 | 조회/검증/apply 결과 | KPI, 상태, blocker, error render | 결과 화면, 경고, 로그 | `src/sheetScanner.entry.js`, `src/ui/panelTemplate.js`, `src/ui/panelEvents.js` | 현재는 있음 | 없음 | 앱 UI로 대체 가능 | `app-first` | 사용자가 실제 보는 주 플로우이며 앱 소유가 맞음 |
-| 복사용 출력·artifact export | loaded rows, snapshot, trace, report | copy text 생성, CSV/JSON bundle 생성 | 복사 텍스트, CSV/JSON 파일 | `src/sheetScanner.entry.js`, `src/ui/panelEvents.js`, `src/report/*` | 현재는 일부 `document` 사용 | 없음 | 앱 파일 저장/클립보드로 대체 가능 | `app-first` | 업무 핵심이 결과 수집/정리/표시 후 사람 손 후처리라는 요구와 직접 일치 |
-| 실제 apply | diff preview, approval, provider actions | Station/Naver 쓰기 요청 실행 | apply result, partial/fail summary | `src/sheetScanner.entry.js`, `src/channel_executors/*`, `src/constants.js` | 현재는 호스트 진입에 묶임 | 예 | 이론상 가능하나 쓰기 안전성 미확인 | `hold` | v1 핵심 목표 밖이고, 인증/감사/승인 경계 재설계가 필요 |
+| 결과 요약·로그·오류 표시 | 조회/검증/apply 결과 | KPI, 상태, blocker, error render | 결과 화면, 경고, 로그 | target `app/renderer/*` | 앱으로 이동 중 | 없음 | 앱 UI로 대체 가능 | `app-first` | 사용자가 실제 보는 주 플로우이며 앱 소유가 맞음 |
+| 복사용 출력·artifact export | loaded rows, snapshot, trace, report | copy text 생성, CSV/JSON bundle 생성 | 복사 텍스트, CSV/JSON 파일 | target `app/services/*`, `src/report/*` | 현재는 일부 `document` 사용 | 없음 | 앱 파일 저장/클립보드로 대체 가능 | `app-first` | 업무 핵심이 결과 수집/정리/표시 후 사람 손 후처리라는 요구와 직접 일치 |
+| 실제 apply | diff preview, approval, provider actions | Station/Naver 쓰기 요청 실행 | apply result, partial/fail summary | target app service + bridge write path, `src/channel_executors/*` | 현재는 호스트/세션에 묶임 | 예 | 이론상 가능하나 쓰기 안전성 미확인 | `hold` | v1 핵심 목표 밖이고, 인증/감사/승인 경계 재설계가 필요 |
 | 세션 캡처·복원 | 현재 열린 탭, providerType, cookie/token | 쿠키 export/import, bearer 추출, auth bundle 구성 | 구조화된 auth bundle, 세션 준비 상태 | `src/scan/normalize.js`, `src/background.js` | 필수 | 필수 | 앱 단독 대체 어려움 | `bridge-candidate` | 쿠키/토큰은 현재 브라우저 컨텍스트에서만 직접 추출 |
 | DOM 기반 보정·fallback | 현재 페이지 DOM, API 결과, query | DOM snapshot 추출, API 결과와 merge | 보완된 rows, 커버리지 보정 | `src/io/pms.fetch.js` | 필수 | 보통 예 | 대체 경로 미확정 | `bridge-candidate` | 현재 코드가 `querySelectorAll` 기반 DOM rows와 API rows를 병합 |
 
@@ -235,7 +235,7 @@
 ### 운영 계측
 
 - `src/io/pms.fetch.js`는 provider별로 `api_only_accept`, `api_dom_merge`, `dom_only_fallback` 누적 카운터와 마지막 fetch 메타를 `App.runtime.providerFetchInstrumentation`에 기록한다.
-- `src/sheetScanner.entry.js` 상태 문구는 이 계측을 그대로 사용해 현재 조회 경로와 세션 누적치(`직행 / 병합 / DOM대체`)를 함께 표시한다.
+- legacy 확장 패널에서는 상태 문구가 조회 경로와 세션 누적치를 함께 표시했으나, 현재는 동일 계측을 앱 셸로 옮기는 방향으로 전환 중이다.
 
 ## 현재 권장 결론
 
