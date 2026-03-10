@@ -639,6 +639,35 @@
     return `Sheet scan validation failed: ${summary}`;
   }
 
+  const validationSupport = {
+    toPositiveIntOrNull,
+    buildScanValidationIssues,
+    buildRawDerivedMismatchIssues,
+    buildFormulaSoldVacRangeMismatchIssues,
+    buildProviderValueRowMismatchIssues,
+    buildProviderValueSourceCoverageIssues,
+    buildInventoryDataRowSlotIssues,
+    summarizeReservationBlocksDetailed,
+    buildValidationErrorMessage
+  };
+
+  const inventorySelection = {
+    normalizeOneBasedRange,
+    buildProviderInventoryTypeRanges,
+    hasCompleteProviderInventoryTypeRanges,
+    hasAnyProviderInventoryTypeRanges,
+    buildRoomSoldVacFormulaScanRange,
+    toOneBasedRangeObject,
+    toOneBasedTypeRanges,
+    rowAliasHasInventoryTypeKey,
+    rowAliasLooksPkg,
+    pickBestInventoryDataRowInRange,
+    collectProviderInventoryDataRowsByTypeRanges,
+    toTraceSafeValue,
+    evaluateProviderValueSourceCandidate,
+    pickProviderInventoryValueSource
+  };
+
   function quoteSheetTitleForA1(sheetTitle) {
     const rawTitle = String(sheetTitle || "");
     const escapedTitle = rawTitle.replace(/'/g, "''");
@@ -901,6 +930,21 @@
     };
   }
 
+  const sheetReadRuntime = {
+    quoteSheetTitleForA1,
+    summarizeSheetsFieldViolations,
+    assertReadonlySheetsRequest,
+    fetchSheetMetadataAnchors,
+    fetchSheetValuesBatch,
+    scanConfigFromMetadata,
+    loadSheetReadHints,
+    getCachedSheetSnapshot,
+    cacheSheetSnapshotResult,
+    buildSheetReadPlan,
+    executeSheetRead,
+    assembleSnapshotFromSheetRead
+  };
+
 
   function getCachedSheetSnapshot(cacheKey, bypassCache = false) {
     if (bypassCache || !cacheKey) return null;
@@ -922,24 +966,24 @@
     return snapshot;
   }
 
-  async function resolveSheetSnapshotFetchPlan(syncConfig, query, forceRefreshToken = false, useFullRange = false, options = null) {
+  function buildSheetReadPlan({
+    syncConfig,
+    query,
+    options = null,
+    spreadsheetId,
+    accessToken,
+    sheetHints,
+    effectiveScanCfg,
+    useFullRange = false
+  }) {
     const opts = options && typeof options === "object" ? options : {};
     const blockDetailMode = normalizeText(opts.blockDetailMode || "light").toLowerCase() === "full" ? "full" : "light";
     const bypassCache = opts.bypassCache === true;
     const legacyFieldMask = opts.legacyFieldMask === true;
-    const spreadsheetRaw = normalizeText(syncConfig?.spreadsheet || "");
-    const spreadsheetId = extractSpreadsheetId(spreadsheetRaw);
-    if (!spreadsheetId) {
-      if (!spreadsheetRaw) throw new Error(TEXT.statusSyncNeedSheet);
-      throw new Error(`Invalid spreadsheet ID/URL: ${spreadsheetRaw.slice(0, 120)}`);
-    }
-    const scanCfg = sanitizeScanConfig(syncConfig.scan || {});
-    const accessToken = await ensureGoogleAccessToken(syncConfig, forceRefreshToken);
     const safeTitle = quoteSheetTitleForA1(syncConfig.sheetName);
-    const sheetHints = await loadSheetReadHints(spreadsheetId, syncConfig.sheetName, accessToken);
-    const effectiveScanCfg = resolveEffectiveScanConfig(scanCfg, sheetHints.scan || {});
-    const enforceFixedReadRange = normalizeText(effectiveScanCfg?.mode || "").toLowerCase() === "manual";
-    const effectiveUseFullRange = Boolean(useFullRange || enforceFixedReadRange);
+    const scanCfg = sanitizeScanConfig(syncConfig.scan || {});
+    const effectiveUseFullRange =
+      Boolean(useFullRange || normalizeText(effectiveScanCfg?.mode || "").toLowerCase() === "manual");
     const quickCacheKeyBase = buildSnapshotQuickCacheKey(
       spreadsheetId,
       syncConfig.sheetName,
@@ -988,6 +1032,10 @@
       "effectiveValue(stringValue,numberValue,boolValue,errorValue)," +
       "effectiveFormat(backgroundColor)" +
       "))))";
+    const requestUrl = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`);
+    requestUrl.searchParams.set("ranges", rangeA1);
+    requestUrl.searchParams.set("includeGridData", "true");
+    requestUrl.searchParams.set("fields", legacyFieldMask ? fieldsLegacy : fieldsAdvanced);
     return {
       opts,
       blockDetailMode,
@@ -1006,29 +1054,27 @@
       endColA1,
       rangeA1,
       effectiveRoomTypeByRoomNo,
-      fields: legacyFieldMask ? fieldsLegacy : fieldsAdvanced
+      request: {
+        method: "GET",
+        url: requestUrl.toString(),
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${accessToken}`
+        }
+      }
     };
   }
 
-  async function fetchSheetSnapshotPayload(plan, syncConfig, query, forceRefreshToken = false, useFullRange = false, options = null) {
-    const url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${plan.spreadsheetId}`);
-    url.searchParams.set("ranges", plan.rangeA1);
-    url.searchParams.set("includeGridData", "true");
-    url.searchParams.set("fields", plan.fields);
-
-    const method = "GET";
-    assertReadonlySheetsRequest(method, url);
-    const response = await fetch(url, {
-      method,
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${plan.accessToken}`
-      }
+  async function executeSheetRead(plan) {
+    assertReadonlySheetsRequest(plan.request?.method, plan.request?.url);
+    const response = await fetch(plan.request.url, {
+      method: plan.request.method,
+      headers: plan.request.headers
     });
 
     if (response.status === 401 || response.status === 403) {
-      if (!forceRefreshToken && hasGoogleRefreshCredentials(syncConfig)) {
-        return fetchSheetSnapshot(syncConfig, query, true, useFullRange, options);
+      if (!plan.forceRefreshToken && plan.canRefreshCredentials) {
+        return { retry: { forceRefreshToken: true } };
       }
       const text = await response.text();
       throw new Error(`Google Sheets auth failed (${response.status}): ${text.slice(0, 280)}`);
@@ -1037,13 +1083,10 @@
       const text = await response.text();
       if (
         response.status === 400 &&
-        !plan.legacyFieldMask &&
+        !plan.opts?.legacyFieldMask &&
         /invalid field|invalid value at 'fields'|cannot find matching fields|error expanding 'fields' parameter/i.test(text || "")
       ) {
-        return fetchSheetSnapshot(syncConfig, query, forceRefreshToken, useFullRange, {
-          ...plan.opts,
-          legacyFieldMask: true
-        });
+        return { retry: { options: { ...plan.opts, legacyFieldMask: true } } };
       }
       const violationSummary = summarizeSheetsFieldViolations(text);
       if (violationSummary) {
@@ -1057,36 +1100,27 @@
     const firstGrid = Array.isArray(firstSheet?.data) ? firstSheet.data[0] : null;
     if (!firstGrid) {
       if (!plan.effectiveUseFullRange && plan.effectiveScanCfg.mode !== "manual") {
-        return fetchSheetSnapshot(syncConfig, query, forceRefreshToken, true, options);
+        return { retry: { useFullRange: true } };
       }
       throw new Error("Google Sheets grid data is empty in the selected range.");
     }
     return { payload, firstSheet, firstGrid };
   }
 
-  async function fetchSheetSnapshot(syncConfig, query, forceRefreshToken = false, useFullRange = false, options = null) {
-    const plan = await resolveSheetSnapshotFetchPlan(syncConfig, query, forceRefreshToken, useFullRange, options);
-    const quickCached = getCachedSheetSnapshot(plan.quickCacheKey, plan.bypassCache);
-    if (quickCached) return quickCached;
-    const cachedSnapshot = getCachedSheetSnapshot(plan.snapshotCacheKey, plan.bypassCache);
-    if (cachedSnapshot) return cachedSnapshot;
-    const payloadResult = await fetchSheetSnapshotPayload(plan, syncConfig, query, forceRefreshToken, useFullRange, options);
-    if (payloadResult && !payloadResult.payload) return payloadResult;
+  function assembleSnapshotFromSheetRead(plan, payloadResult, syncConfig, query) {
     const { payload, firstSheet, firstGrid } = payloadResult;
-
-    try {
-      const matrix = buildSheetMatrix(
-        firstGrid,
-        plan.scanStartRow,
-        firstSheet?.merges || [],
-        { spreadsheetTheme: payload?.spreadsheetTheme || null }
-      );
+    const matrix = buildSheetMatrix(
+      firstGrid,
+      plan.scanStartRow,
+      firstSheet?.merges || [],
+      { spreadsheetTheme: payload?.spreadsheetTheme || null }
+    );
       const { dateRow, dateCols } = findDateColumns(matrix, matrix.startRow, syncConfig.year, plan.effectiveScanCfg);
       const filteredDateCols = dateCols.filter((dc) => dc.dateKey >= query.startDate && dc.dateKey <= query.endDate);
       if (!filteredDateCols.length) throw new Error("No date columns found for the selected period.");
       const roomStartRow = oneBasedToZeroBased(plan.effectiveScanCfg.roomStartRow) ?? (dateRow + 2);
       const manualRoomTypeRanges = buildManualRoomTypeRanges(plan.effectiveScanCfg);
-      const formulaScanRange = buildRoomSoldVacFormulaScanRange(plan.effectiveScanCfg);
+      const formulaScanRange = inventorySelection.buildRoomSoldVacFormulaScanRange(plan.effectiveScanCfg);
       const formulaHints = detectRoomTypeFormulaHints(matrix, filteredDateCols, formulaScanRange);
       const rawFormulaRanges = formulaHints?.roomTypeRanges || {};
       const isFormulaRangeSane = (() => {
@@ -1127,12 +1161,12 @@
       const inventorySearchStartRow = oneBasedToZeroBased(plan.effectiveScanCfg.inventorySearchStartRow) ?? (dateRow + 2);
       const stationRow = oneBasedToZeroBased(plan.effectiveScanCfg.stationInventoryRow);
       const naverRow = oneBasedToZeroBased(plan.effectiveScanCfg.naverInventoryRow);
-      const manualStationTypeRanges = buildProviderInventoryTypeRanges(plan.effectiveScanCfg, "STATION");
-      const manualNaverTypeRanges = buildProviderInventoryTypeRanges(plan.effectiveScanCfg, "NAVER");
-      const hasManualStationTypeRanges = hasCompleteProviderInventoryTypeRanges(manualStationTypeRanges);
-      const hasManualNaverTypeRanges = hasCompleteProviderInventoryTypeRanges(manualNaverTypeRanges);
-      const hasAnyManualStationTypeRanges = hasAnyProviderInventoryTypeRanges(manualStationTypeRanges);
-      const hasAnyManualNaverTypeRanges = hasAnyProviderInventoryTypeRanges(manualNaverTypeRanges);
+      const manualStationTypeRanges = inventorySelection.buildProviderInventoryTypeRanges(plan.effectiveScanCfg, "STATION");
+      const manualNaverTypeRanges = inventorySelection.buildProviderInventoryTypeRanges(plan.effectiveScanCfg, "NAVER");
+      const hasManualStationTypeRanges = inventorySelection.hasCompleteProviderInventoryTypeRanges(manualStationTypeRanges);
+      const hasManualNaverTypeRanges = inventorySelection.hasCompleteProviderInventoryTypeRanges(manualNaverTypeRanges);
+      const hasAnyManualStationTypeRanges = inventorySelection.hasAnyProviderInventoryTypeRanges(manualStationTypeRanges);
+      const hasAnyManualNaverTypeRanges = inventorySelection.hasAnyProviderInventoryTypeRanges(manualNaverTypeRanges);
       const shouldSkipInventoryScan =
         plan.effectiveScanCfg.mode === "manual" &&
         (
@@ -1164,10 +1198,10 @@
       else roomScanEndRow = Math.min(matrix.maxRow, roomStartRow + 180);
       roomScanEndRow = Math.max(roomStartRow, roomScanEndRow);
       const naverDataRows = hasManualNaverTypeRanges
-        ? collectProviderInventoryDataRowsByTypeRanges(matrix, filteredDateCols, manualNaverTypeRanges, naverInventoryRowOptions)
+        ? inventorySelection.collectProviderInventoryDataRowsByTypeRanges(matrix, filteredDateCols, manualNaverTypeRanges, naverInventoryRowOptions)
         : collectProviderInventoryDataRows(matrix, inventoryRows.NAVER, filteredDateCols, 3, naverInventoryRowOptions);
       const stationDataRows = hasManualStationTypeRanges
-        ? collectProviderInventoryDataRowsByTypeRanges(matrix, filteredDateCols, manualStationTypeRanges, stationInventoryRowOptions)
+        ? inventorySelection.collectProviderInventoryDataRowsByTypeRanges(matrix, filteredDateCols, manualStationTypeRanges, stationInventoryRowOptions)
         : collectProviderInventoryDataRows(matrix, inventoryRows.STATION, filteredDateCols, 3, stationInventoryRowOptions);
       const naverRoomValues = extractInventoryRoomValuesByDate(
         matrix,
@@ -1183,14 +1217,14 @@
         ROOM_PRESETS["admin-station"] || [],
         "STATION"
       );
-      const naverValueSource = pickProviderInventoryValueSource(
+      const naverValueSource = inventorySelection.pickProviderInventoryValueSource(
         matrix,
         filteredDateCols,
         "NAVER",
         inventoryRows.NAVER,
         naverDataRows
       );
-      const stationValueSource = pickProviderInventoryValueSource(
+      const stationValueSource = inventorySelection.pickProviderInventoryValueSource(
         matrix,
         filteredDateCols,
         "STATION",
@@ -1258,15 +1292,15 @@
         acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {});
-      const reservationBlockSummary = summarizeReservationBlocksDetailed(reservationBlocks);
+      const reservationBlockSummary = validationSupport.summarizeReservationBlocksDetailed(reservationBlocks);
       const providerKey = context.providerType === "admin-station" ? "STATION" : "NAVER";
       const hostDiagnostics = providerKey === "STATION" ? stationDerived.diagnostics : naverDerived.diagnostics;
       const formulaTypeCounts = isFormulaRangeSane ? (formulaHints?.expectedTypeCounts || {}) : {};
       const fallbackTypeCounts = countExpectedRoomTypesFromMap(plan.effectiveRoomTypeByRoomNo);
       const expectedTypeCounts = {
-        urban: toPositiveIntOrNull(formulaTypeCounts.urban) ?? Number(fallbackTypeCounts.urban || 0),
-        doubleTwin: toPositiveIntOrNull(formulaTypeCounts.doubleTwin) ?? Number(fallbackTypeCounts.doubleTwin || 0),
-        grand: toPositiveIntOrNull(formulaTypeCounts.grand) ?? Number(fallbackTypeCounts.grand || 0)
+        urban: validationSupport.toPositiveIntOrNull(formulaTypeCounts.urban) ?? Number(fallbackTypeCounts.urban || 0),
+        doubleTwin: validationSupport.toPositiveIntOrNull(formulaTypeCounts.doubleTwin) ?? Number(fallbackTypeCounts.doubleTwin || 0),
+        grand: validationSupport.toPositiveIntOrNull(formulaTypeCounts.grand) ?? Number(fallbackTypeCounts.grand || 0)
       };
       const detectedTypeCounts = summarizeDetectedRoomTypeCounts(hostDiagnostics?.roomTypeCounts || {});
       const expectedPartitionCounts = countExpectedPartitionRooms(plan.effectiveRoomTypeByRoomNo);
@@ -1304,13 +1338,13 @@
         (expectedRoomCount > 0 && detectedRoomCount < Math.max(3, Math.floor(expectedRoomCount * 0.8)));
       const hostRawRoomValues = providerKey === "STATION" ? stationRoomValues : naverRoomValues;
       const hostDerivedRoomValues = providerKey === "STATION" ? stationDerived.roomValues : naverDerived.roomValues;
-      const rawDerivedAudit = buildRawDerivedMismatchIssues(
+      const rawDerivedAudit = validationSupport.buildRawDerivedMismatchIssues(
         providerKey,
         filteredDateCols,
         hostRawRoomValues,
         hostDerivedRoomValues
       );
-      const naverProviderValueRowAudit = buildProviderValueRowMismatchIssues(
+      const naverProviderValueRowAudit = validationSupport.buildProviderValueRowMismatchIssues(
         "NAVER",
         filteredDateCols,
         naverProviderRowValues,
@@ -1318,7 +1352,7 @@
         inventoryRows.NAVER,
         naverValueSource.row
       );
-      const stationProviderValueRowAudit = buildProviderValueRowMismatchIssues(
+      const stationProviderValueRowAudit = validationSupport.buildProviderValueRowMismatchIssues(
         "STATION",
         filteredDateCols,
         stationProviderRowValues,
@@ -1328,14 +1362,14 @@
       );
       const hostProviderValueRowAudit = providerKey === "STATION" ? stationProviderValueRowAudit : naverProviderValueRowAudit;
       const hostProviderCoverageAudit = providerKey === "STATION"
-        ? buildProviderValueSourceCoverageIssues("STATION", filteredDateCols, stationValueSource.values, stationValueSource.row)
-        : buildProviderValueSourceCoverageIssues("NAVER", filteredDateCols, naverValueSource.values, naverValueSource.row);
+        ? validationSupport.buildProviderValueSourceCoverageIssues("STATION", filteredDateCols, stationValueSource.values, stationValueSource.row)
+        : validationSupport.buildProviderValueSourceCoverageIssues("NAVER", filteredDateCols, naverValueSource.values, naverValueSource.row);
       const hostInventoryDataRows = providerKey === "STATION" ? stationDataRows : naverDataRows;
       const hostManualTypeRanges = providerKey === "STATION" ? manualStationTypeRanges : manualNaverTypeRanges;
       const hostHasAnyManualTypeRanges = providerKey === "STATION" ? hasAnyManualStationTypeRanges : hasAnyManualNaverTypeRanges;
       const hostHasCompleteManualTypeRanges =
         providerKey === "STATION" ? hasManualStationTypeRanges : hasManualNaverTypeRanges;
-      const hostDataRowSlotIssues = buildInventoryDataRowSlotIssues(
+      const hostDataRowSlotIssues = validationSupport.buildInventoryDataRowSlotIssues(
         providerKey,
         hostInventoryDataRows,
         hostManualTypeRanges,
@@ -1344,7 +1378,7 @@
           hasCompleteManualTypeRanges: hostHasCompleteManualTypeRanges
         }
       );
-      const formulaRangeMismatchIssues = buildFormulaSoldVacRangeMismatchIssues(formulaHints);
+      const formulaRangeMismatchIssues = validationSupport.buildFormulaSoldVacRangeMismatchIssues(formulaHints);
       const extraValidationIssues = [
         ...rawDerivedAudit.issues,
         ...formulaRangeMismatchIssues,
@@ -1380,20 +1414,16 @@
           message: "Detected room partitions mismatch expected partitions."
         });
       }
-      const validationIssues = buildScanValidationIssues(
+      const validationIssues = validationSupport.buildScanValidationIssues(
         expectedTypeCounts,
         detectedRoomCount,
         hasTypeMismatch,
         hasInsufficientRows,
         extraValidationIssues
       );
-      const validationErrorMessage = buildValidationErrorMessage(validationIssues);
+      const validationErrorMessage = validationSupport.buildValidationErrorMessage(validationIssues);
       if (validationErrorMessage) {
         throw new Error(validationErrorMessage);
-      }
-
-      if (!plan.effectiveUseFullRange && plan.effectiveScanCfg.mode !== "manual" && (hasTypeMismatch || hasInsufficientRows)) {
-        return fetchSheetSnapshot(syncConfig, query, forceRefreshToken, true, options);
       }
 
       const snapshot = {
@@ -1509,10 +1539,10 @@
             expectedTypeCounts: isFormulaRangeSane
               ? (formulaHints?.expectedTypeCounts || { urban: null, doubleTwin: null, grand: null })
               : { urban: null, doubleTwin: null, grand: null },
-            soldRanges: toOneBasedTypeRanges(formulaHints?.soldRanges || {}),
-            vacRanges: toOneBasedTypeRanges(formulaHints?.vacRanges || {})
+            soldRanges: inventorySelection.toOneBasedTypeRanges(formulaHints?.soldRanges || {}),
+            vacRanges: inventorySelection.toOneBasedTypeRanges(formulaHints?.vacRanges || {})
           },
-          roomSoldVacScanRange: toOneBasedRangeObject(formulaScanRange),
+          roomSoldVacScanRange: inventorySelection.toOneBasedRangeObject(formulaScanRange),
           inventorySearchStartRow: inventorySearchStartRow + 1,
           inventoryRows: {
             NAVER: Number.isInteger(inventoryRows.NAVER) ? inventoryRows.NAVER + 1 : null,
@@ -1532,10 +1562,10 @@
           },
           inventoryTypeRanges: {
             NAVER: {
-              ...toOneBasedTypeRanges(manualNaverTypeRanges || {})
+              ...inventorySelection.toOneBasedTypeRanges(manualNaverTypeRanges || {})
             },
             STATION: {
-              ...toOneBasedTypeRanges(manualStationTypeRanges || {})
+              ...inventorySelection.toOneBasedTypeRanges(manualStationTypeRanges || {})
             }
           },
           fetchMode: plan.effectiveUseFullRange ? "full" : "fast",
@@ -1569,10 +1599,61 @@
       const hasProviderRow = snapshot.inventoryRows?.[providerKey] !== undefined;
       const providerValues = providerKey === "STATION" ? snapshot.stationValues : snapshot.naverValues;
       const hasProviderValues = Object.values(providerValues || {}).some((inv) => normalizeText(inv?.raw || ""));
-      if (!plan.effectiveUseFullRange && plan.effectiveScanCfg.mode !== "manual" && (!hasProviderRow && !hasProviderValues)) {
+      return {
+        snapshot,
+        needsFullRangeRetry:
+          !plan.effectiveUseFullRange &&
+          plan.effectiveScanCfg.mode !== "manual" &&
+          (
+            hasTypeMismatch ||
+            hasInsufficientRows ||
+            (!hasProviderRow && !hasProviderValues)
+          )
+      };
+  }
+
+  async function fetchSheetSnapshot(syncConfig, query, forceRefreshToken = false, useFullRange = false, options = null) {
+    const spreadsheetRaw = normalizeText(syncConfig?.spreadsheet || "");
+    const spreadsheetId = extractSpreadsheetId(spreadsheetRaw);
+    if (!spreadsheetId) {
+      if (!spreadsheetRaw) throw new Error(TEXT.statusSyncNeedSheet);
+      throw new Error(`Invalid spreadsheet ID/URL: ${spreadsheetRaw.slice(0, 120)}`);
+    }
+    const accessToken = await ensureGoogleAccessToken(syncConfig, forceRefreshToken);
+    const sheetHints = await loadSheetReadHints(spreadsheetId, syncConfig.sheetName, accessToken);
+    const effectiveScanCfg = resolveEffectiveScanConfig(sanitizeScanConfig(syncConfig.scan || {}), sheetHints.scan || {});
+    const plan = buildSheetReadPlan({
+      syncConfig,
+      query,
+      options,
+      spreadsheetId,
+      accessToken,
+      sheetHints,
+      effectiveScanCfg,
+      useFullRange
+    });
+    plan.forceRefreshToken = forceRefreshToken === true;
+    plan.canRefreshCredentials = hasGoogleRefreshCredentials(syncConfig);
+    const quickCached = getCachedSheetSnapshot(plan.quickCacheKey, plan.bypassCache);
+    if (quickCached) return quickCached;
+    const cachedSnapshot = getCachedSheetSnapshot(plan.snapshotCacheKey, plan.bypassCache);
+    if (cachedSnapshot) return cachedSnapshot;
+    const readResult = await executeSheetRead(plan);
+    if (readResult?.retry) {
+      return fetchSheetSnapshot(
+        syncConfig,
+        query,
+        readResult.retry.forceRefreshToken === true ? true : forceRefreshToken,
+        readResult.retry.useFullRange === true ? true : useFullRange,
+        readResult.retry.options || options
+      );
+    }
+    try {
+      const assembled = assembleSnapshotFromSheetRead(plan, readResult, syncConfig, query);
+      if (assembled.needsFullRangeRetry) {
         return fetchSheetSnapshot(syncConfig, query, forceRefreshToken, true, options);
       }
-      return cacheSheetSnapshotResult(plan.snapshotCacheKey, plan.quickCacheKey, snapshot);
+      return cacheSheetSnapshotResult(plan.snapshotCacheKey, plan.quickCacheKey, assembled.snapshot);
     } catch (error) {
       if (!plan.effectiveUseFullRange && plan.effectiveScanCfg.mode !== "manual") {
         return fetchSheetSnapshot(syncConfig, query, forceRefreshToken, true, options);
@@ -1588,6 +1669,9 @@
     scanConfigFromMetadata,
     loadSheetReadHints,
     fetchSheetSnapshot,
+    validationSupport,
+    inventorySelection,
+    sheetReadRuntime,
   });
 })();
 
