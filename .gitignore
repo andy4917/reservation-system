@@ -11,6 +11,8 @@ output_review/
 *.pyc
 build/
 dist/
+dist-app/
+node_modules/
 # native extension build artifacts
 *.so
 *.pyd
