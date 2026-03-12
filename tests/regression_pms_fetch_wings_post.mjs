@@ -24,8 +24,14 @@ async function main() {
 
   const normalize = globalThis.App?.scan?.normalize;
   const pmsFetch = globalThis.App?.io?.pmsFetch;
+  const wingsAdapter = globalThis.App?.pms?.wingsAdapter;
   assert.ok(normalize, "App.scan.normalize is required");
   assert.ok(pmsFetch, "App.io.pmsFetch is required");
+  assert.ok(wingsAdapter?.lookupEndpointMeta, "App.pms.wingsAdapter lookupEndpointMeta is required");
+  assert.equal(
+    wingsAdapter.lookupEndpointMeta("/pms/biz/ir01_0124/insertAssignedRoom.do")?.readOnly,
+    false
+  );
 
   const sanitized = normalize.sanitizeSyncConfig({
     pmsReservationUrl: "https://pms.sanhait.com/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do",
@@ -99,9 +105,12 @@ async function main() {
   assert.equal(result.records[0].statusBucket, "ACTIVE");
   assert.equal(result.records[0].guestName, "홍길동");
   assert.equal(result.records[0].phoneTail, "5678");
+  assert.equal(result.records[0].nationalityCode, "");
+  assert.equal(result.records[0].sourceCode, "AGODA");
   assert.equal(Array.isArray(result.records[0].identityTokenHashes), true);
   assert.equal("raw" in result.records[0], false);
   assert.deepEqual(result.statusCounts, { active: 1, canceled: 0, auditAnomaly: 0 });
+  assert.equal(result.endpointCapability, "reservation_lookup");
 
   const cacheKey = pmsFetch.buildPmsReservationCacheKey(
     "admin-station",
@@ -126,6 +135,80 @@ async function main() {
   assert.equal(calls.length, 1, "same request should reuse short-term cache");
   assert.notEqual(cachedResult, result, "cached result should be cloned");
   assert.equal(cachedResult.records[0].reservationNo, "25170918");
+
+  const branchCalls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    branchCalls.push({ url, options });
+    const body = String(options.body || "");
+    const propertyNo = /PROPERTY_NO=([^&]+)/.exec(body)?.[1] || "91";
+    const branchName = propertyNo === "13" ? "COEX" : "GANGNAM";
+    const roomNo = propertyNo === "13" ? "0701" : "0501";
+    return {
+      ok: true,
+      status: 200,
+      async text() {
+        return JSON.stringify({
+          rows: [
+            {
+              RSVN_NO: `R-${propertyNo}`,
+              GLOBAL_RSVN_NO: `G-${propertyNo}`,
+              ARRV_DATE: "20260301",
+              DEPT_DATE: "20260303",
+              ROOM_NO: roomNo,
+              ACCOUNT: `테스트-${branchName.toLowerCase()}`,
+              SOURCE_CODE: "AGODA",
+              ROOM_AMT: "100000",
+              RSVN_STATUS_CODE: "RC",
+              PROPERTY_NO: propertyNo
+            }
+          ]
+        });
+      }
+    };
+  };
+  const multiBranchConfig = normalize.sanitizeSyncConfig({
+    pmsBranchProfiles: [
+      {
+        branch: "강남",
+        pmsPreset: {
+          presetKey: "wings-global-guest-list",
+          propertyNo: "91",
+          bsnsCode: "91",
+          pageId: "IR04_0100X_V03"
+        },
+        pmsAuthBundle: {
+          method: "POST",
+          contentType: "form",
+          requestBody: "PROPERTY_NO=91&BSNS_CODE=91&ARRV_DATE_F=20260301&ARRV_DATE_T=20260307"
+        }
+      },
+      {
+        branch: "코엑스",
+        pmsReservationUrl: "https://pms.sanhait.com/pms/biz/ir04_0200X_V03/searchListRsvn.do",
+        pmsAuthBundle: {
+          method: "POST",
+          contentType: "form",
+          requestBody: "PROPERTY_NO=13&BSNS_CODE=13&ARRV_DATE_F=20260301&ARRV_DATE_T=20260307"
+        }
+      }
+    ]
+  });
+  const multiBranchResult = await pmsFetch.fetchProviderReservations("admin-station", {
+    startDate: "2026-03-01",
+    endDate: "2026-04-15"
+  }, multiBranchConfig);
+  assert.equal(branchCalls.length, 2, "branch profiles should fetch once per configured profile");
+  assert.match(String(branchCalls[0].options.body || ""), /ARRV_DATE_T=2026-03-31/);
+  assert.match(String(branchCalls[1].options.body || ""), /ARRV_DATE_T=2026-03-31/);
+  assert.equal(multiBranchResult.records.length, 2);
+  assert.deepEqual(
+    multiBranchResult.records.map((row) => row.branch).sort(),
+    ["COEX", "GANGNAM"]
+  );
+  assert.equal(multiBranchResult.profilesFetched[1].endpointCapability, "reservation_lookup_local");
+  assert.equal(multiBranchResult.query.endDate, "2026-03-31");
+  assert.equal(multiBranchResult.query.limited, true);
+  assert.equal(multiBranchResult.profilesFetched.length, 2);
 
   let retryCalls = 0;
   globalThis.fetch = async () => {

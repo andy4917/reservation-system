@@ -46,6 +46,7 @@
   let bridgePushTimer = null;
   /** @type {AuthSummary | null} */
   let latestAuthSummary = null;
+  let latestAuthBundle = null;
   /** @type {BridgeContext["providerType"]} */
   let latestAuthProvider = null;
   let lastAuthCaptureAt = 0;
@@ -439,6 +440,7 @@
           }
           latestAuthProvider = context.providerType;
           lastAuthCaptureAt = Date.now();
+          latestAuthBundle = response?.authBundle || null;
           resolve(response?.summary || null);
         }
       );
@@ -464,6 +466,7 @@
       rows,
       infoSummary,
       authSummary: latestAuthSummary,
+      authBundle: latestAuthBundle,
       updatedAt: new Date().toISOString()
     };
     const payloadKey = buildPayloadFingerprint(snapshot, rows, context);

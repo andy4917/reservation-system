@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import requests
+from requests.adapters import HTTPAdapter
 
 from src.domain.sheet_domain import (
     AuditError,
@@ -13,8 +14,17 @@ from src.domain.sheet_domain import (
 
 
 class GoogleSheetsReadonlyClient:
-    def __init__(self, access_token: str):
+    def __init__(self, access_token: str, session: Optional[requests.Session] = None):
         self.access_token = access_token
+        self._session = session or self._build_session()
+
+    @staticmethod
+    def _build_session() -> requests.Session:
+        session = requests.Session()
+        adapter = HTTPAdapter(pool_connections=8, pool_maxsize=8, max_retries=2)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        return session
 
     def _request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         if method.upper() != "GET":
@@ -24,7 +34,7 @@ class GoogleSheetsReadonlyClient:
         headers = kwargs.pop("headers", {})
         headers["Authorization"] = f"Bearer {self.access_token}"
         headers["Accept"] = "application/json"
-        resp = requests.request(method, url, headers=headers, timeout=30, **kwargs)
+        resp = self._session.request(method, url, headers=headers, timeout=30, **kwargs)
         if resp.status_code >= 400:
             raise AuditError(
                 f"Google Sheets API error {resp.status_code}: {resp.text[:500]}"

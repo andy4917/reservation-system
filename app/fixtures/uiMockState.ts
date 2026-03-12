@@ -4,10 +4,12 @@ import { getProviderCapabilityCards } from "../services/providerRegistry";
 export const uiMockState: WorkspaceMockState = {
   runtimeMode: "dry-run",
   activeTask: "inventory-compare",
+  selectedBranch: "ALL",
   selectedRange: {
     startDate: "2026-03-12",
     endDate: "2026-03-15"
   },
+  activeRunContext: null,
   bridgeStatus: {
     connected: false,
     sessionAvailable: false,
@@ -48,6 +50,13 @@ export const uiMockState: WorkspaceMockState = {
     "Type coverage: Urban 20/20, Double 20/20, Grand 1/1"
   ],
   inventoryCompareLoading: false,
+  sheetRead: {
+    supportLevel: "dry-run-only",
+    sourceLabel: "Dry-run sheet fixture",
+    lastRunAt: "2026-03-10T06:56:46.000Z",
+    summary: null,
+    logs: ["Sheet runtime not requested yet."]
+  },
   reservationAuditLoading: false,
   searchQuery: "",
   searchResults: [],

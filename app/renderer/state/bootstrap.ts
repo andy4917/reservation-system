@@ -37,11 +37,8 @@ export async function bootstrapUiState() {
           authConfigured: bridgeRuntime?.authConfigured ?? state.bridgeStatus.authConfigured,
           code: bridgeRuntime?.code || state.bridgeStatus.code,
           recoveryAction: bridgeRuntime?.recoveryAction || state.bridgeStatus.recoveryAction,
-          message: runtime.connected
-            ? `Desktop runtime connected: ${runtime.bridgeVersion}`
-            : state.bridgeStatus.message
-        },
-        logs: [...state.logs, `Desktop runtime ping received: ${runtime.bridgeVersion}`]
+          message: runtime.connected ? "Live workspace available." : state.bridgeStatus.message
+        }
       }));
     }
 
@@ -50,6 +47,7 @@ export async function bootstrapUiState() {
       const bridgeIssue = resolveBridgeIssue({
         runtimeMode: "live",
         supportLevel: context.sessionAvailable ? (hasUpstreamAuth ? "partial-live" : "fixture-fallback") : "fixture-fallback",
+        provider: context.provider,
         sessionAvailable: context.sessionAvailable,
         hasUpstreamAuth,
         bridgeRuntimeCode: bridgeRuntime?.code || null,
@@ -81,23 +79,14 @@ export async function bootstrapUiState() {
           capability: bridgeRuntime?.capability || state.bridgeStatus.capability,
           activeHost: context.host || state.bridgeStatus.activeHost,
           provider: context.provider || state.bridgeStatus.provider,
-          message: context.sessionAvailable
-            ? `Bridge context ready: ${context.provider ?? "unknown"} @ ${context.host ?? "unknown host"}`
-            : bridgeRuntime?.message || state.bridgeStatus.message,
+          message: context.sessionAvailable ? "Live workspace available." : "Live workspace unavailable.",
           code: bridgeIssue.code,
-          recoveryAction: bridgeIssue.recoveryAction,
-          authConfigured: bridgeRuntime?.authConfigured ?? state.bridgeStatus.authConfigured,
-          writeEnabled:
-            Boolean(context.sessionAvailable && hasUpstreamAuth) &&
-            bridgeRuntime?.capability !== "degraded"
+            recoveryAction: bridgeIssue.recoveryAction,
+            authConfigured: bridgeRuntime?.authConfigured ?? state.bridgeStatus.authConfigured,
+            writeEnabled:
+              Boolean(context.sessionAvailable && hasUpstreamAuth)
         },
-        logs: [
-          ...state.logs,
-          bridgeMeta?.port ? `Extension bridge server listening on 127.0.0.1:${bridgeMeta.port}` : null,
-          context.sessionAvailable
-            ? `Bridge context detected: ${context.provider ?? "unknown"} @ ${context.host ?? "unknown host"}`
-            : "Bridge context unavailable. Live mode stays on fixture fallback."
-        ].filter((line): line is string => Boolean(line)),
+        logs: state.logs,
         bridgeSummary: {
           authSummary: bridgeSummary?.authSummary || null,
           infoSummary: bridgeSummary?.infoSummary || null,
@@ -114,15 +103,12 @@ export async function bootstrapUiState() {
             capability: bridgeRuntime?.capability || state.bridgeStatus.capability,
             activeHost: context.host || state.bridgeStatus.activeHost,
             provider: context.provider || state.bridgeStatus.provider,
-            message: context.sessionAvailable
-              ? `Bridge context ready: ${context.provider ?? "unknown"} @ ${context.host ?? "unknown host"}`
-              : bridgeRuntime?.message || state.bridgeStatus.message,
+            message: context.sessionAvailable ? "Live workspace available." : "Live workspace unavailable.",
             code: bridgeIssue.code,
             recoveryAction: bridgeIssue.recoveryAction,
             authConfigured: bridgeRuntime?.authConfigured ?? state.bridgeStatus.authConfigured,
             writeEnabled:
-              Boolean(context.sessionAvailable && hasUpstreamAuth) &&
-              bridgeRuntime?.capability !== "degraded"
+              Boolean(context.sessionAvailable && hasUpstreamAuth)
           },
           bridgeSummary: {
             authSummary: bridgeSummary?.authSummary || null,

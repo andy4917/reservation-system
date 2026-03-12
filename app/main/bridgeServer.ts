@@ -21,6 +21,19 @@ interface BridgePayload {
     channels: string[];
     dates: string[];
   } | null;
+  authBundle: {
+    provider: ProviderType;
+    capturedAt: string;
+    sourceHost?: string;
+    sourceUrls?: string[];
+    cookies?: Array<Record<string, unknown>>;
+    material?: {
+      cookieHeader?: string;
+      csrfToken?: string;
+      role?: string;
+      bearerToken?: string;
+    };
+  } | null;
   bodyTextSample: string;
   updatedAt: string;
 }
@@ -37,6 +50,7 @@ interface BridgePreviewRow {
 
 interface BridgeRecord extends BridgePayload {
   receivedAt: number;
+  ttlMs: number;
 }
 
 type RateLimitState = {
@@ -59,6 +73,7 @@ const DEFAULT_PORT = Number(process.env.UHS_BRIDGE_PORT || 45123);
 const BRIDGE_UPDATE_PATH = process.env.UHS_BRIDGE_UPDATE_PATH?.trim() || "/bridge/update";
 const BRIDGE_STATE_PATH = process.env.UHS_BRIDGE_STATE_PATH?.trim() || "/bridge/state";
 const BRIDGE_TTL_MS = 20_000;
+const LOCAL_APP_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const BRIDGE_MAX_BODY_BYTES = Number(process.env.UHS_BRIDGE_MAX_BODY_BYTES || 128 * 1024);
 const BRIDGE_RATE_LIMIT_WINDOW_MS = Number(process.env.UHS_BRIDGE_RATE_LIMIT_WINDOW_MS || 10_000);
 const BRIDGE_RATE_LIMIT_MAX_REQUESTS = Number(process.env.UHS_BRIDGE_RATE_LIMIT_MAX_REQUESTS || 20);
@@ -231,8 +246,35 @@ function normalizeInfoSummary(value: unknown): BridgePayload["infoSummary"] {
   };
 }
 
+function normalizeAuthBundle(value: unknown): BridgePayload["authBundle"] {
+  if (!value || typeof value !== "object") return null;
+  const bundle = value as Record<string, unknown>;
+  const provider = normalizeProviderType(bundle.provider);
+  if (!provider) return null;
+  return {
+    provider,
+    capturedAt: normalizeString(bundle.capturedAt) || new Date().toISOString(),
+    sourceHost: normalizeString(bundle.sourceHost) || undefined,
+    sourceUrls: Array.isArray(bundle.sourceUrls)
+      ? bundle.sourceUrls.filter((entry): entry is string => typeof entry === "string" && Boolean(entry.trim()))
+      : [],
+    cookies: Array.isArray(bundle.cookies)
+      ? bundle.cookies.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry))
+      : [],
+    material:
+      bundle.material && typeof bundle.material === "object"
+        ? {
+            cookieHeader: normalizeString((bundle.material as Record<string, unknown>).cookieHeader) || undefined,
+            csrfToken: normalizeString((bundle.material as Record<string, unknown>).csrfToken) || undefined,
+            role: normalizeString((bundle.material as Record<string, unknown>).role) || undefined,
+            bearerToken: normalizeString((bundle.material as Record<string, unknown>).bearerToken) || undefined
+          }
+        : undefined
+  };
+}
+
 function isFresh(record: BridgeRecord | undefined) {
-  return Boolean(record) && Date.now() - (record?.receivedAt || 0) <= BRIDGE_TTL_MS;
+  return Boolean(record) && Date.now() - (record?.receivedAt || 0) <= (record?.ttlMs || BRIDGE_TTL_MS);
 }
 
 function assertRateLimit(clientKey: string) {
@@ -321,15 +363,17 @@ function normalizePayload(value: unknown): BridgePayload | null {
     rows,
     authSummary: normalizeAuthSummary(payload.authSummary),
     infoSummary: normalizeInfoSummary(payload.infoSummary),
+    authBundle: normalizeAuthBundle(payload.authBundle),
     bodyTextSample: normalizeString(payload.bodyTextSample) || "",
     updatedAt: normalizeString(payload.updatedAt) || new Date().toISOString()
   };
 }
 
-function handleBridgeUpdate(payload: BridgePayload) {
+function handleBridgeUpdate(payload: BridgePayload, ttlMs = BRIDGE_TTL_MS) {
   bridgeState.set(payload.provider as ProviderType, {
     ...payload,
-    receivedAt: Date.now()
+    receivedAt: Date.now(),
+    ttlMs
   });
 }
 
@@ -566,6 +610,29 @@ export function getLatestBridgeSummary(provider?: ProviderType | null) {
         }
       : null
   };
+}
+
+export function getLatestBridgeAuthBundle(provider?: ProviderType | null) {
+  const record = selectLatestRecord(provider || "wings-pms");
+  return record?.authBundle || null;
+}
+
+export function upsertLocalBridgePayload(
+  payload: {
+    provider: ProviderType;
+    host: string | null;
+    url: string | null;
+    title: string | null;
+    rows: ProviderInventoryCompareRow[];
+    authSummary: BridgePayload["authSummary"];
+    infoSummary: BridgePayload["infoSummary"];
+    authBundle: BridgePayload["authBundle"];
+    bodyTextSample: string;
+    updatedAt: string;
+  },
+  ttlMs = LOCAL_APP_SESSION_TTL_MS
+) {
+  handleBridgeUpdate(payload, ttlMs);
 }
 
 export function __resetBridgeStateForTests() {

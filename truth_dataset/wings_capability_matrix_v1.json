@@ -1,0 +1,1502 @@
+{
+  "matrix_version": "wings-capability-matrix-v1",
+  "source": {
+    "endpoint_report": "truth_dataset/reports/wings_har_endpoint_catalog.json",
+    "branch_mapping": "truth_dataset/branch_provider_mapping_v1.json"
+  },
+  "capability_count": 26,
+  "capabilities": [
+    {
+      "capability": "reservation_lookup",
+      "group": "reservation",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "auth_pass_yn",
+        "filter_auth_pass_yn",
+        "filter_filters_0_field",
+        "filter_filters_0_value",
+        "filter_filters_10_field",
+        "filter_filters_10_value",
+        "filter_filters_11_field",
+        "filter_filters_11_value",
+        "filter_filters_12_field",
+        "filter_filters_12_value",
+        "filter_filters_13_field",
+        "filter_filters_13_value",
+        "filter_filters_14_field",
+        "filter_filters_14_value",
+        "filter_filters_15_field",
+        "filter_filters_15_value",
+        "filter_filters_16_field",
+        "filter_filters_16_value",
+        "filter_filters_17_field",
+        "filter_filters_17_value",
+        "filter_filters_18_field",
+        "filter_filters_18_value",
+        "filter_filters_19_field",
+        "filter_filters_19_value",
+        "filter_filters_1_field",
+        "filter_filters_1_value",
+        "filter_filters_20_field",
+        "filter_filters_20_value",
+        "filter_filters_21_field",
+        "filter_filters_21_value"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows",
+        "total"
+      ],
+      "response_row_keys": [
+        "account",
+        "arrv_date",
+        "car_no",
+        "cncl_date",
+        "comt",
+        "deposit_amt",
+        "deposit_no",
+        "f_g",
+        "global_rsvn_no",
+        "group_id",
+        "guest_name",
+        "guest_name_css",
+        "guest_rsvn_no",
+        "ind_group_code",
+        "market_code",
+        "mobile_no",
+        "mobile_no_encoding",
+        "mobile_no_mskyn",
+        "nat_code",
+        "nights",
+        "no_information_yn",
+        "room_amt",
+        "room_no",
+        "rsvn_gest_name",
+        "rsvn_gest_tel_no_encoding",
+        "rsvn_gest_tel_no_encyn",
+        "rsvn_no_hid",
+        "rsvn_seq_no",
+        "source_code",
+        "total_row_count"
+      ]
+    },
+    {
+      "capability": "reservation_lookup_local",
+      "group": "reservation",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir04_0200X_V03/searchListRsvn.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "auth_pass_yn",
+        "filter_auth_pass_yn",
+        "filter_filters_0_field",
+        "filter_filters_0_value",
+        "filter_filters_10_field",
+        "filter_filters_10_value",
+        "filter_filters_11_field",
+        "filter_filters_11_value",
+        "filter_filters_12_field",
+        "filter_filters_12_value",
+        "filter_filters_13_field",
+        "filter_filters_13_value",
+        "filter_filters_14_field",
+        "filter_filters_14_value",
+        "filter_filters_15_field",
+        "filter_filters_15_value",
+        "filter_filters_16_field",
+        "filter_filters_16_value",
+        "filter_filters_17_field",
+        "filter_filters_17_value",
+        "filter_filters_18_field",
+        "filter_filters_18_value",
+        "filter_filters_19_field",
+        "filter_filters_1_field",
+        "filter_filters_1_value",
+        "filter_filters_20_field",
+        "filter_filters_20_value",
+        "filter_filters_21_field",
+        "filter_filters_22_field",
+        "filter_filters_22_value"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows",
+        "total"
+      ],
+      "response_row_keys": [
+        "account",
+        "arrv_date",
+        "cncl_date",
+        "comt",
+        "custm_no",
+        "email",
+        "f_g",
+        "global_rsvn_no",
+        "group_id",
+        "guest_name",
+        "guest_name_css",
+        "ind_group_code",
+        "market_code",
+        "mobile_no",
+        "mobile_no_encoding",
+        "mobile_no_mskyn",
+        "nat_code",
+        "nights",
+        "no_information_yn",
+        "room_amt",
+        "room_no",
+        "rsvn_cnfm_yn",
+        "rsvn_gest_name",
+        "rsvn_gest_tel_no_encoding",
+        "rsvn_gest_tel_no_encyn",
+        "rsvn_status_code",
+        "source_code",
+        "total_row_count",
+        "vip_code",
+        "vip_name"
+      ]
+    },
+    {
+      "capability": "reservation_detail",
+      "group": "reservation",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir01_0102/searchFITReserv.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "auth_pass_yn",
+        "group_id",
+        "page_id",
+        "rsvn_no",
+        "rsvn_seq_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "groupidcheck",
+        "intermemocnt",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "arrv_date",
+        "assigned_room_cnt",
+        "booker_no",
+        "cancel_by_id",
+        "company_name",
+        "confirmed_by_name",
+        "crdt_card_no_encyn",
+        "deposit_amt",
+        "deposit_no",
+        "first_reg_dt",
+        "group_id",
+        "guest_msg_cnt",
+        "guest_title_code_name",
+        "mail_addr",
+        "mobile_no_encoding",
+        "nights",
+        "rate_name",
+        "region_name",
+        "req_prsn_name",
+        "req_prsn_telno",
+        "res_id_no",
+        "room_type_name",
+        "rsvn_cnfm_yn",
+        "rsvn_gest_tel_no",
+        "self_acmp_code",
+        "seq_no",
+        "smoke_yn",
+        "solar_yn",
+        "std_room_fee",
+        "taxbill_issue_yn"
+      ]
+    },
+    {
+      "capability": "reservation_summary",
+      "group": "reservation",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03_SUM.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "accompany",
+        "arrv_date_f",
+        "arrv_date_t",
+        "bsns_code",
+        "car_no",
+        "check_in_by_id",
+        "check_in_by_name",
+        "corp_custm_name",
+        "corp_custm_no",
+        "dept_date_f",
+        "dept_date_t",
+        "display_option",
+        "global_rsvn_no",
+        "guest_name",
+        "ind_group_code",
+        "ind_group_code_array",
+        "market_code",
+        "nat_code",
+        "pp_bsns_code",
+        "prmt_emp_id",
+        "property_no",
+        "rate_code",
+        "room_no",
+        "room_type_code",
+        "rsvn_by_id",
+        "rsvn_by_name",
+        "rsvn_date_f",
+        "rsvn_date_t",
+        "rsvn_folio_no",
+        "rsvn_status_code"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "accompany",
+        "account",
+        "adult_cnt",
+        "arrv_date",
+        "car_no",
+        "chck_out_date",
+        "cncl_date",
+        "comt",
+        "deposit_amt",
+        "deposit_no",
+        "global_rsvn_no",
+        "group_id",
+        "guest_memo",
+        "guest_rsvn_no",
+        "ind_group_code",
+        "market_code",
+        "nat_code",
+        "nights",
+        "no_information_yn",
+        "rate",
+        "room_amt",
+        "room_no",
+        "rsvn_gest_name",
+        "rsvn_no",
+        "rsvn_no_hid",
+        "rsvn_seq_no",
+        "rsvn_status_code",
+        "source_code",
+        "total_row_count",
+        "vip_code"
+      ]
+    },
+    {
+      "capability": "linked_reservation_lookup",
+      "group": "reservation",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/fd01_0101/searchListLinkedReservation.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "conn_rsvn_no",
+        "property_no",
+        "rsvn_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": []
+    },
+    {
+      "capability": "room_block_chart",
+      "group": "inventory",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir01_0300/searchListRoomBlockChart_V03.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "base_date",
+        "duration",
+        "floor_code",
+        "property_no",
+        "room_chart_style_code",
+        "room_type_code",
+        "rsvn_step_code",
+        "rsvn_step_code_array",
+        "search_key",
+        "start_date",
+        "status_option",
+        "status_option_array"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "d08_1",
+        "d08_2",
+        "d09_2",
+        "d12_1",
+        "d12_2",
+        "d13_1",
+        "d13_2",
+        "d23_1",
+        "d23_2",
+        "floor_code_name",
+        "r02_1",
+        "r02_2",
+        "r09_2",
+        "r13_1",
+        "r13_2",
+        "r25_1",
+        "r25_2",
+        "room_type_name",
+        "s08_1",
+        "s08_2",
+        "s10_1",
+        "s10_2",
+        "s11_1",
+        "s11_2",
+        "s18_1",
+        "s18_2",
+        "s19_1",
+        "s19_2",
+        "s23_1",
+        "s23_2"
+      ]
+    },
+    {
+      "capability": "room_availability_chart",
+      "group": "inventory",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir01_0300/searchListRoomAvaiable.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "date_s",
+        "display_option",
+        "duration",
+        "property_no",
+        "rsvn_step_code",
+        "rsvn_step_code_array",
+        "start_date",
+        "status_option",
+        "status_option_array"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "code",
+        "dec_point",
+        "property_no",
+        "record_type",
+        "room_type_code",
+        "tot_rooms",
+        "ttl_rooms",
+        "val_01",
+        "val_02",
+        "val_03",
+        "val_04",
+        "val_10",
+        "val_11",
+        "val_12",
+        "val_13",
+        "val_14",
+        "val_15",
+        "val_16",
+        "val_17",
+        "val_18",
+        "val_19",
+        "val_20",
+        "val_21",
+        "val_22",
+        "val_23",
+        "val_24",
+        "val_25",
+        "val_26",
+        "val_30",
+        "val_31"
+      ]
+    },
+    {
+      "capability": "room_availability_summary",
+      "group": "inventory",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir02_0100/searchListRoomAvailable.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "date_s",
+        "disp_option",
+        "property_no",
+        "status_option",
+        "status_option_array"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "code",
+        "dec_point",
+        "property_no",
+        "record_type",
+        "room_type_code",
+        "tot_rooms",
+        "ttl_rooms",
+        "val_01",
+        "val_02",
+        "val_03",
+        "val_04",
+        "val_10",
+        "val_11",
+        "val_12",
+        "val_13",
+        "val_14",
+        "val_15",
+        "val_16",
+        "val_17",
+        "val_18",
+        "val_19",
+        "val_20",
+        "val_21",
+        "val_22",
+        "val_23",
+        "val_24",
+        "val_25",
+        "val_26",
+        "val_30",
+        "val_31"
+      ]
+    },
+    {
+      "capability": "source_catalog",
+      "group": "catalog",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir04/searchListSource.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "property_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "valuelist"
+      ],
+      "response_row_keys": [
+        "active_yn",
+        "category_code",
+        "category_name",
+        "row_num",
+        "source_code",
+        "source_code_name",
+        "total_row_count",
+        "use_yn"
+      ]
+    },
+    {
+      "capability": "nationality_language_lookup",
+      "group": "guest",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/comn/searchLangByNatCode.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "nat_code",
+        "property_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "lang_code",
+        "lang_name",
+        "nat_code"
+      ]
+    },
+    {
+      "capability": "assigned_room_guest_info",
+      "group": "room_assignment",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir01_0124/searchGuestInfo.do"
+      ],
+      "branches": [
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "rsvn_no",
+        "rsvn_seq_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "arrv_date",
+        "room_type_code",
+        "rsvn_status_code"
+      ]
+    },
+    {
+      "capability": "assigned_room_lookup",
+      "group": "room_assignment",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir01_0124/searchListAssignedRoom.do"
+      ],
+      "branches": [
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "arrv_date",
+        "bsns_code",
+        "dept_date",
+        "floor_code",
+        "force_by_user_yn",
+        "ind_group_code",
+        "property_no",
+        "room_clean_status_code",
+        "room_no_f",
+        "room_no_t",
+        "room_status_code",
+        "room_status_code_array",
+        "room_type_code",
+        "room_type_code_array",
+        "room_type_code_input",
+        "room_type_name",
+        "rsvn_name_res",
+        "rsvn_no",
+        "rsvn_room_cnt",
+        "rsvn_seq_no",
+        "rsvn_status_code",
+        "smoke_yn",
+        "value_of_cursor",
+        "view_code"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "arrv_date",
+        "assn_seq_no",
+        "bsns_code",
+        "dept_date",
+        "do_not_move_yn",
+        "inhs_gest_name",
+        "is_checked",
+        "property_no",
+        "room_clean_status_code",
+        "room_no",
+        "room_status_code",
+        "room_type_code",
+        "rsvn_no",
+        "rsvn_seq_no",
+        "seq_number"
+      ]
+    },
+    {
+      "capability": "assignable_room_lookup",
+      "group": "room_assignment",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir01_0124/searchListRoom.do"
+      ],
+      "branches": [
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "arrv_date",
+        "bsns_code",
+        "dept_date",
+        "floor_code",
+        "force_by_user_yn",
+        "ind_group_code",
+        "property_no",
+        "room_clean_status_code",
+        "room_no_f",
+        "room_no_t",
+        "room_status_code",
+        "room_status_code_array",
+        "room_type_code",
+        "room_type_code_array",
+        "room_type_code_input",
+        "room_type_name",
+        "rsvn_name_res",
+        "rsvn_no",
+        "rsvn_room_cnt",
+        "rsvn_seq_no",
+        "rsvn_status_code",
+        "smoke_yn",
+        "value_of_cursor",
+        "view_code"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "assigned_yn",
+        "chk",
+        "expd_yn",
+        "inhouse_yn",
+        "is_checked",
+        "lsos_code",
+        "lsos_name",
+        "room_clean_status_code",
+        "room_no",
+        "room_no_order",
+        "room_status_code",
+        "room_type_code",
+        "room_type_name",
+        "room_view",
+        "smoke_yn",
+        "smoke_yn_desc",
+        "view_code",
+        "view_code_name"
+      ]
+    },
+    {
+      "capability": "assignable_room_type_lookup",
+      "group": "room_assignment",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir01_0124/searchListRoomTypeByParam.do"
+      ],
+      "branches": [
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "bsns_code",
+        "property_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "max_nop_cnt",
+        "room_category_name",
+        "room_cnt",
+        "room_type_code",
+        "room_type_name",
+        "row_num",
+        "status",
+        "std_nop_cnt",
+        "std_room_fee",
+        "total_row_count",
+        "use_yn"
+      ]
+    },
+    {
+      "capability": "account_contract_lookup",
+      "group": "account",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/comn02_0301/searchListAccountContract.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "auth_pass_yn",
+        "custm_no",
+        "filter_auth_pass_yn",
+        "filter_filterlength",
+        "filter_filters_0_field",
+        "filter_filters_0_value",
+        "filter_filters_1_field",
+        "filter_filters_1_value",
+        "filter_filters_2_field",
+        "filter_filters_2_value",
+        "filter_filters_3_field",
+        "filter_filters_3_value",
+        "filter_filters_4_field",
+        "filter_filters_4_value",
+        "filter_page_id",
+        "page",
+        "page_id",
+        "pagesize",
+        "property_no",
+        "skip",
+        "take"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows",
+        "total"
+      ],
+      "response_row_keys": [
+        "birth_encyn",
+        "bsns_name",
+        "calc_pay_code",
+        "cont_end_date",
+        "cpny_tel_no",
+        "crdt_card_no",
+        "custm_name",
+        "custm_no",
+        "email",
+        "email_mskyn",
+        "market_code",
+        "market_name",
+        "mobile_no",
+        "mobile_no_encoding",
+        "mobile_no_mskyn",
+        "prmt_emp_no",
+        "region_name",
+        "res_id_no_encoding",
+        "res_id_no_mskyn",
+        "rsvn_gest_name",
+        "rsvn_gest_tel_no",
+        "rsvn_gest_tel_no_encoding",
+        "rsvn_gest_tel_no_encyn",
+        "secretary_name",
+        "source_code",
+        "source_name",
+        "tel_no",
+        "tel_no_encoding",
+        "tel_no_encyn",
+        "total_row_count"
+      ]
+    },
+    {
+      "capability": "assigned_room_delete",
+      "group": "room_assignment",
+      "read_only": false,
+      "paths": [
+        "/pms/biz/ir01_0124/deleteAssignedRoom.do"
+      ],
+      "branches": [
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "datamodel",
+        "deletemodel"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg"
+      ],
+      "response_row_keys": []
+    },
+    {
+      "capability": "assigned_room_insert",
+      "group": "room_assignment",
+      "read_only": false,
+      "paths": [
+        "/pms/biz/ir01_0124/insertAssignedRoom.do"
+      ],
+      "branches": [
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "arrv_date",
+        "assn_seq_no",
+        "dept_date",
+        "force_by_user_yn",
+        "ind_group_code",
+        "old_room_no",
+        "property_no",
+        "room_no",
+        "room_type_code",
+        "rsvn_no",
+        "rsvn_seq_no",
+        "rsvn_status_code",
+        "value_of_cursor"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg"
+      ],
+      "response_row_keys": []
+    },
+    {
+      "capability": "booking_engine_send",
+      "group": "reservation",
+      "read_only": false,
+      "paths": [
+        "/pms/biz/comn/sendBookingEngineAPI.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "bsns_code",
+        "company_id",
+        "excutor_name",
+        "global_rsvn_no",
+        "lang_type_code",
+        "property_no",
+        "rsvn_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "resultcode",
+        "resultmsg"
+      ]
+    },
+    {
+      "capability": "market_catalog",
+      "group": "catalog",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir04/searchListMarket.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "property_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "valuelist"
+      ],
+      "response_row_keys": [
+        "active_yn",
+        "category_code",
+        "category_name",
+        "ind_group_code",
+        "ind_group_code_name",
+        "market_code",
+        "market_code_name",
+        "row_num",
+        "total_row_count",
+        "use_yn"
+      ]
+    },
+    {
+      "capability": "online_booking_widget",
+      "group": "reservation",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/widget_onlinebookinglist/searchOnlineBookingList.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "arrv_date",
+        "chk_rsvn",
+        "custm_name",
+        "dept_date",
+        "font_color",
+        "global_rsvn_no",
+        "ind_group_code",
+        "inhs_gest_name",
+        "last_upd_dt",
+        "room_type_code",
+        "rsvn_cnfm_yn",
+        "rsvn_no",
+        "rsvn_room_cnt",
+        "rsvn_status_code",
+        "stay_date",
+        "updated_dt"
+      ]
+    },
+    {
+      "capability": "rate_catalog",
+      "group": "catalog",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir04/selectListRate.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "property_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "valuelist"
+      ],
+      "response_row_keys": [
+        "active_yn",
+        "category_code",
+        "category_name",
+        "market_code",
+        "market_name",
+        "no_rate_print_yn",
+        "rate_code",
+        "rate_code_name",
+        "row_num",
+        "sell_end_date",
+        "sell_start_date",
+        "total_row_count",
+        "use_yn"
+      ]
+    },
+    {
+      "capability": "reservation_express_update",
+      "group": "reservation",
+      "read_only": false,
+      "paths": [
+        "/pms/biz/ir01_0300_V03/updateReservationProcessExpress.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "assignedroom_check_yn",
+        "auth_pass_yn",
+        "masterdetailmodel",
+        "page_id",
+        "pp_bsns_code",
+        "property_no",
+        "resultvalidationchk",
+        "roomratemodel",
+        "servicemodel",
+        "version"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rsvn_upd_info"
+      ],
+      "response_row_keys": []
+    },
+    {
+      "capability": "reservation_rate_lookup",
+      "group": "reservation",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir01_0111/searchRoomRateOnRsvn.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "adult_cnt",
+        "arrv_date",
+        "arrv_plan_time",
+        "assigned_room_cnt",
+        "birth",
+        "bsns_code",
+        "calc_pay_code",
+        "child_cnt",
+        "comt",
+        "conn_arrv_date",
+        "conn_dept_date",
+        "conn_ind_group_code",
+        "conn_rsvn_no",
+        "conn_rsvn_seq_no",
+        "cont_no",
+        "corp_custm_name",
+        "corp_custm_no",
+        "crdt_card_no",
+        "created_by",
+        "created_dt",
+        "custm_name",
+        "custm_no",
+        "dc_rate_desc",
+        "deposit_amt",
+        "deposit_no",
+        "dept_date",
+        "dept_plan_time",
+        "dm_rcvr",
+        "dm_yn",
+        "email"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "bsns_code",
+        "commision_rate",
+        "commission_amt",
+        "commission_type_code",
+        "dc_rate",
+        "dow",
+        "lodg_date",
+        "property_no",
+        "room_fee",
+        "room_type_code",
+        "room_type_name",
+        "rsvn_no",
+        "rsvn_seq_no",
+        "sale_date",
+        "sale_date_desc",
+        "std_room_fee"
+      ]
+    },
+    {
+      "capability": "room_type_catalog",
+      "group": "catalog",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir04/searchListRoomType.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "property_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "valuelist"
+      ],
+      "response_row_keys": [
+        "max_nop_cnt",
+        "room_category_name",
+        "room_cnt",
+        "room_type_code",
+        "room_type_name",
+        "row_num",
+        "status",
+        "std_nop_cnt",
+        "std_room_fee",
+        "total_row_count",
+        "use_yn"
+      ]
+    },
+    {
+      "capability": "sale_person_catalog",
+      "group": "catalog",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir04/selectListSalePerson.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "property_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "valuelist"
+      ],
+      "response_row_keys": [
+        "active_yn",
+        "bsns_code",
+        "dept_code",
+        "dept_name",
+        "emp_no",
+        "emp_type_name",
+        "grade_code",
+        "grade_name",
+        "offc_inter_no",
+        "row_num",
+        "total_row_count",
+        "use_yn",
+        "user_id",
+        "user_name"
+      ]
+    },
+    {
+      "capability": "special_service_lookup",
+      "group": "reservation",
+      "read_only": true,
+      "paths": [
+        "/pms/biz/ir01_0102/searchListSpecialService.do"
+      ],
+      "branches": [
+        {
+          "branch": "COEX",
+          "display_name": "더 코엑스",
+          "observed_in_har": true
+        },
+        {
+          "branch": "GANGNAM",
+          "display_name": "강남",
+          "observed_in_har": true
+        }
+      ],
+      "request_keys": [
+        "adult_cnt",
+        "arrv_date",
+        "arrv_plan_time",
+        "assigned_room_cnt",
+        "birth",
+        "bsns_code",
+        "calc_pay_code",
+        "child_cnt",
+        "comt",
+        "conn_arrv_date",
+        "conn_dept_date",
+        "conn_ind_group_code",
+        "conn_rsvn_no",
+        "conn_rsvn_seq_no",
+        "cont_no",
+        "corp_custm_name",
+        "corp_custm_no",
+        "crdt_card_no",
+        "created_by",
+        "created_dt",
+        "custm_name",
+        "custm_no",
+        "dc_rate_desc",
+        "deposit_amt",
+        "deposit_no",
+        "dept_date",
+        "dept_plan_time",
+        "dm_rcvr",
+        "dm_yn",
+        "email"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": []
+    }
+  ],
+  "unknown_endpoint_count": 12,
+  "notes": [
+    "Capabilities are generated from latest official COEX/GANGNAM HAR captures and exclude endpoints still classified as unknown.",
+    "Legacy reservation-list HAR alias is intentionally excluded from default capability paths.",
+    "This matrix is the input surface for phase-2 channel-aware live contracts and provider capability gating."
+  ]
+}

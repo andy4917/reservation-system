@@ -46,6 +46,13 @@
     });
   }
 
+  function knownReservationBranches(values) {
+    return toNormalizedSet(values, (value) => {
+      const text = normalizeText(value).toUpperCase();
+      return text && text !== "UNKNOWN" ? text : "";
+    });
+  }
+
   function reservationSummaryStatusBucket(summary) {
     const buckets = toNormalizedSet(summary?.statusBuckets || [], (value) => normalizeReservationStatusBucket(value));
     if (buckets.has("CANCELED")) return "CANCELED";
@@ -63,6 +70,7 @@
       roomNos: new Set(),
       roomNames: new Set(),
       channels: new Set(),
+      branches: new Set(),
       statuses: new Set(),
       statusBuckets: new Set(),
       dateSet: new Set(),
@@ -92,6 +100,10 @@
     return [...knownReservationChannels(summary?.channels || [])].sort();
   }
 
+  function summarizeReservationBranchList(summary) {
+    return [...knownReservationBranches(summary?.branches || [])].sort();
+  }
+
   function buildReservationSummaryHandle(summary) {
     const reservationNo = normalizeReservationNoFromText(summary?.reservationNo || "");
     if (reservationNo) return reservationNo;
@@ -104,10 +116,12 @@
 
   function buildReservationSummaryDetail(summary) {
     const channels = summarizeReservationChannelList(summary);
+    const branches = summarizeReservationBranchList(summary);
     const rooms = [...toNormalizedSet(summary?.roomNos || [], (value) => normalizeText(value))].sort();
     const guestNames = [...toNormalizedSet(summary?.guestNames || [], (value) => normalizeText(value))];
     return [
       `예약번호 ${normalizeReservationNoFromText(summary?.reservationNo || "") || "-"}`,
+      `지점 ${branches.join("/") || "-"}`,
       `체크인 ${normalizeText(summary?.checkin || "-")}`,
       `체크아웃 ${normalizeText(summary?.checkout || "-")}`,
       `객실 ${rooms.join(",") || "-"}`,
@@ -121,6 +135,7 @@
     if (reasons.includes("reservation_no")) labels.push("예약번호");
     if (reasons.includes("reservation_ref")) labels.push("예약참조번호");
     if (reasons.includes("soft_key")) labels.push("보조식별자");
+    if (reasons.includes("branch")) labels.push("지점");
     if (reasons.includes("channel")) labels.push("OTA");
     if (reasons.includes("checkin")) labels.push("체크인");
     if (reasons.includes("checkout")) labels.push("체크아웃");
@@ -145,6 +160,14 @@
     return normalizedIntersectionCount(
       leftSummary?.channels || [],
       rightSummary?.channels || [],
+      (value) => normalizeText(value)
+    ) > 0;
+  }
+
+  function hasReservationBranchOverlap(leftSummary, rightSummary) {
+    return normalizedIntersectionCount(
+      leftSummary?.branches || [],
+      rightSummary?.branches || [],
       (value) => normalizeText(value)
     ) > 0;
   }
@@ -322,6 +345,7 @@
       if (normalizeText(block?.roomType || "")) summary.roomNames.add(normalizeText(block.roomType));
       dateKeys.forEach((day) => summary.dateSet.add(day));
       if (blockChannel) summary.channels.add(blockChannel);
+      if (normalizeText(block?.branch || "")) summary.branches.add(normalizeText(block.branch).toUpperCase());
       summary.statusBuckets.add("ACTIVE");
       if (note) summary.noteHeads.add(note.slice(0, 120));
       collectReservationPrice(summary, block?.price);
@@ -378,6 +402,7 @@
       if (normalizeText(record?.roomName || "")) summary.roomNames.add(normalizeText(record.roomName));
       stayDates.forEach((day) => summary.dateSet.add(day));
       if (recordChannel) summary.channels.add(recordChannel);
+      if (normalizeText(record?.branch || "")) summary.branches.add(normalizeText(record.branch).toUpperCase());
       if (normalizeText(record?.status || "")) summary.statuses.add(normalizeText(record.status).toUpperCase());
       summary.statusBuckets.add(normalizeReservationStatusBucket(record?.statusBucket || record?.status || "ACTIVE"));
       summary.auditAnomaly = summary.auditAnomaly || record?.auditAnomaly === true;
@@ -412,6 +437,7 @@
 
   function evaluateReservationSoftMatch(sheet, pms) {
     const reasons = [];
+    const branchOverlap = hasReservationBranchOverlap(sheet, pms);
     const channelOverlap = hasReservationChannelOverlap(sheet, pms);
     const checkinSame = Boolean(sheet?.checkin && pms?.checkin && sheet.checkin === pms.checkin);
     const checkoutSame = Boolean(sheet?.checkout && pms?.checkout && sheet.checkout === pms.checkout);
@@ -427,6 +453,7 @@
         : 0;
     const remarkOverlap = tokenOverlap >= 0.35;
 
+    if (branchOverlap) reasons.push("branch");
     if (channelOverlap) reasons.push("channel");
     if (checkinSame) reasons.push("checkin");
     if (checkoutSame) reasons.push("checkout");
@@ -443,6 +470,7 @@
     const matched = reasons.length >= 3 && hasDateEvidence && hasOtaOrRoomEvidence;
     const score =
       reasons.length * 100 +
+      (branchOverlap ? 80 : 0) +
       (checkinSame ? 40 : 0) +
       (guestOverlap ? 30 : 0) +
       (phoneOverlap ? 20 : 0) +
@@ -462,6 +490,11 @@
   function passesReservationBlocking(sheet, pms) {
     const sheetChannels = summarizeReservationChannelList(sheet);
     const pmsChannels = summarizeReservationChannelList(pms);
+    const sheetBranches = summarizeReservationBranchList(sheet);
+    const pmsBranches = summarizeReservationBranchList(pms);
+    if (sheetBranches.length > 0 && pmsBranches.length > 0 && !hasReservationBranchOverlap(sheet, pms)) {
+      return false;
+    }
     if (sheetChannels.length > 0 && pmsChannels.length > 0 && !hasReservationChannelOverlap(sheet, pms)) {
       return false;
     }
@@ -475,7 +508,14 @@
   }
 
   function selectBestExactCandidate(sheet, candidates, reasonCode) {
-    const available = (Array.isArray(candidates) ? candidates : []).slice();
+    const rawCandidates = Array.isArray(candidates) ? candidates : [];
+    const blocked = rawCandidates.filter((candidate) => passesReservationBlocking(sheet, candidate));
+    const hasStrictBranchConflict =
+      blocked.length <= 0 &&
+      summarizeReservationBranchList(sheet).length > 0 &&
+      rawCandidates.some((candidate) => summarizeReservationBranchList(candidate).length > 0);
+    if (hasStrictBranchConflict) return null;
+    const available = (blocked.length > 0 ? blocked : rawCandidates).slice();
     available.sort((left, right) => {
       const rightEval = evaluateReservationSoftMatch(sheet, right);
       const leftEval = evaluateReservationSoftMatch(sheet, left);
@@ -885,16 +925,19 @@
     toNormalizedSet,
     normalizedIntersectionCount,
     knownReservationChannels,
+    knownReservationBranches,
     reservationSummaryStatusBucket,
     createReservationSummary,
     mergeReservationIdentity,
     summarizeReservationChannelList,
+    summarizeReservationBranchList,
     buildReservationSummaryHandle,
     buildReservationSummaryDetail,
     buildReservationMatchReasonText,
     hasReservationDateOverlap,
     hasReservationRoomOverlap,
     hasReservationChannelOverlap,
+    hasReservationBranchOverlap,
     summaryHasAuditAnomaly,
     isManualOtaSummary,
     firstKnownValue,

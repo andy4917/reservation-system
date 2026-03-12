@@ -27,9 +27,16 @@ export function getProviderCapabilityCards(): ProviderCapabilityCard[] {
     {
       provider: "wings-pms",
       label: "Wings PMS",
-      capabilities: ["reservation-read", "cookie-auth", "har-fallback"],
+      capabilities: [
+        "reservation-lookup",
+        "reservation-detail",
+        "source-catalog",
+        "nationality-lookup",
+        "assigned-room-lookup",
+        "har-readonly"
+      ],
       owner: "hybrid",
-      status: "hold"
+      status: "ready"
     }
   ];
 }

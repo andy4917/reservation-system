@@ -1,57 +1,116 @@
-# Wings PMS HAR 결론 및 권장 적용
+# Wings PMS Integration
 
-## 결론
+## Current Baseline
 
-- Wings PMS는 지점별로 별도 시스템을 두기보다 공통 화면/공통 API 위에 `PROPERTY_NO`, `BSNS_CODE`, 권한을 얹는 멀티 프로퍼티 구조에 가깝다.
-- HAR에서 확인된 조회 흐름은 대부분 `search`, `select`, `view` 계열이며, 현재 프로젝트의 예약 검증 목적과 직접 연결할 수 있다.
-- 실제 Wings 예약 목록은 `GET` 단일 URL보다 `POST + form body` 패턴이 핵심이다.
-- 현재 확장 UI는 `partner.booking.naver.com`, `admin.admin-stationbyuhc.com`에만 주입되므로, 이번 단계에서는 PMS 내부 화면용 별도 API 캡처기보다 HAR 1건을 변환하는 방식이 구현 대비 가장 효율적이다.
+- Source of truth for this document: official `2026-03-12` COEX/GANGNAM HAR captures.
+- Wings PMS is operating as a shared multi-property surface keyed by `PROPERTY_NO` and `BSNS_CODE`.
+- Reservation read flow is `POST + application/x-www-form-urlencoded` rather than simple `GET`.
+- The system must remain read-only. `update`, `insert`, `delete`, `send` endpoints are explicitly blocked.
 
-## 기능 범위
+## Observed Endpoints
 
-- 예약 목록 조회: `searchListGlobalRsvn_v03.do`, `searchListRsvn.do`
-- 예약 상세 조회: `searchFITReserv.do`
-- 객실 가용/블록차트: `searchListRoomAvaiable.do`, `searchListRoomBlockChart_V03.do`
-- 체크인/폴리오 보조 조회: `searchFITInHouse.do`, `searchListRateByWalkIn.do`, `searchListServiceByWalkIn.do`
-- 메모/배정/계약 조회: `searchListInterMemo.do`, `searchListAssignedRoom.do`, `searchListAccountContract.do`
+- Total business `.do` endpoints in the latest HAR pair: `38`
+- Read-only endpoints: `34`
+- Mutation endpoints: `4`
 
-## 현재 엔드포인트 수(2026-03-05 기준)
+Current read paths directly tied to this project:
 
-- 프리셋으로 고정 사용: **2개**
-  - `searchListGlobalRsvn_v03.do`
-  - `searchListRsvn.do`
-- 알려진 읽기 전용 카탈로그(어댑터 내): **11개**
-- 런타임 허용 규칙: `/pms/biz/.../(search|select|view)*.do` 패턴 전체(읽기 전용 제한)
-- 메뉴/권한 복원: `selectAllMenuList.do`, `selectUserInfo.do`
+- Reservation lookup: `/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do`
+- Reservation summary: `/pms/biz/ir04_0100X/searchListGlobalRsvn_v03_SUM.do`
+- Local reservation lookup: `/pms/biz/ir04_0200X_V03/searchListRsvn.do`
+- Reservation detail: `/pms/biz/ir01_0102/searchFITReserv.do`
+- Linked reservation lookup: `/pms/biz/fd01_0101/searchListLinkedReservation.do`
+- Room block chart: `/pms/biz/ir01_0300/searchListRoomBlockChart_V03.do`
+- Room availability: `/pms/biz/ir01_0300/searchListRoomAvaiable.do`
+- Source catalog: `/pms/biz/ir04/searchListSource.do`
+- Nationality to language lookup: `/pms/biz/comn/searchLangByNatCode.do`
+- Gangnam assigned-room lookup: `/pms/biz/ir01_0124/searchGuestInfo.do`, `/pms/biz/ir01_0124/searchListAssignedRoom.do`, `/pms/biz/ir01_0124/searchListRoom.do`, `/pms/biz/ir01_0124/searchListRoomTypeByParam.do`
 
-## 권장 변경
+## Presets
 
-- PMS 예약 검증 입력값은 `URL 1개`만 받는 식으로 쓰지 말고, 요청 본문까지 저장 가능한 구조로 운영한다.
-- 프리셋 기반 생성기를 두고 `PROPERTY_NO`, `BSNS_CODE`, `PAGE_ID`만 입력하면 URL과 본문이 자동 생성되게 한다.
-- HAR 변환기는 읽기 전용 Wings 조회 요청만 골라 `PROPERTY_NO`, `BSNS_CODE`, `PAGE_ID`, URL, `requestBody`를 바로 복원하도록 둔다.
-- Wings는 조회 자체도 감사 로그가 남으므로 읽기 전용 화이트리스트 엔드포인트만 사용한다.
-- 날짜 범위는 `ARRV_DATE_F/T`, `STAY_DATE_F/T`, `DEPT_DATE_F/T`, `RSVN_DATE_F/T`처럼 실제 폼 키 기준으로 치환해야 한다.
-- 예약 진실원본 우선순위는 일반 OTA/직판 예약은 Wings 우선, `STATION`/`NAVER` 수기 예약 블록은 시트 예외 허용으로 고정한다.
-- 상태 모델은 `ACTIVE`, `CANCELED`만 사용한다. `NOSHOW`는 운영상 별도 종결 상태가 아니라 `ACTIVE + audit anomaly`로만 집계한다.
-- remark와 시트 note는 exact-match보다 조건식 기반 비교가 안전하다.
-  - exact ID
-  - 날짜/OTA/객실 blocking
-  - 이름/전화 끝자리/remark-note token overlap soft-match
-  - soft-match 성립 기준: `3조건 이상 + 날짜 근거 1개 + OTA/객실 근거 1개`
-- raw remark/payload는 저장하지 않고 이름 정규화, 전화 끝자리, token hash, soft key만 런타임 메타로 유지한다.
+- `wings-global-guest-list`
+  - default path: `/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do`
+  - current branches: `COEX`, `GANGNAM`
+- `wings-reservation-list`
+  - default path: `/pms/biz/ir04_0200X_V03/searchListRsvn.do`
+  - current observed branch: `COEX`
+  - legacy HAR alias retained: `/pms/biz/ir04_0100X/searchListRsvn.do`
 
-## 활용
+The legacy reservation-list path is kept only so older HAR bundles still parse. It is not the default execution path anymore.
 
-- 시트 예약 블록과 Wings 예약 목록을 교차 검증해 누락, 취소 잔존, 날짜 차이, 객실 차이, OTA 차이, 박수 차이를 빠르게 찾을 수 있다.
-- 지점 추가 시에도 엔드포인트 구조를 유지한 채 `PROPERTY_NO`, `BSNS_CODE`, 계정 권한만 교체해서 재사용할 수 있다.
-- 메뉴 트리와 화면별 JS 파일 구조를 이용해 기능 맵 문서화와 추적 자동화의 기반 데이터로 쓸 수 있다.
+## Read-Only Contract
 
-## 추가 구현 포인트
+- Allow only `/pms/biz/.../(search|select|view)*.do`
+- Reject all `/pms/biz/.../(update|insert|delete|send)*.do`
+- Clamp query range to `31` days
+- Preserve request method, `contentType`, and `requestBody`
+- Capability requests now reuse the HAR-derived form body as a base and override only the fields needed per endpoint, so hidden branch-specific fields are less likely to be dropped.
+- Preserve only minimal verification fields from reservation rows:
+  - `reservationNo`, `reservationRef`, `checkin`, `checkout`, `nights`
+  - `account`, `sourceCode`, `branch`, `status`, `statusBucket`
+  - `guestName`, `phoneTail`, `remarkHead`
+  - `nationalityCode`, `languageCode`, `languageName`
 
-- 현재 반영됨: `POST + form body` 기반 Wings 예약 조회 지원
-- 현재 반영됨: PMS 인증 번들에 요청 방식(`method`, `contentType`, `requestBody`) 저장 가능
-- 현재 반영됨: `Global Guest List`, `Reservation List` 프리셋 생성기와 `PROPERTY_NO/BSNS_CODE/PAGE_ID` 입력 UI
-- 현재 반영됨: HAR JSON에서 읽기 전용 Wings 조회 요청을 자동 추출해 PMS 설정 필드를 채우는 변환 도구
-- 다음 우선순위:
-  - 읽기 전용 PMS 엔드포인트 카탈로그를 UI에서 선택형으로 제공
-  - PMS 페이지 전용 content script 또는 네트워크 캡처 자동화를 붙일지 검토
+## Session Strategy
+
+- HAR remains a structure source, not the long-term auth source.
+- If the official browser session is live, runtime uses the browser-assisted auth path and does not enter managed recovery mode.
+- Managed recovery runs only when the browser session is offline or unavailable.
+- UI surfaces keep this silent and expose only generic live availability, not recovery logs or session state strings.
+
+## Mutation Endpoints Seen In HAR
+
+- `/pms/biz/ir01_0124/insertAssignedRoom.do`
+- `/pms/biz/ir01_0124/deleteAssignedRoom.do`
+- `/pms/biz/ir01_0300_V03/updateReservationProcessExpress.do`
+- `/pms/biz/comn/sendBookingEngineAPI.do`
+
+These are evidence that operator actions happened in the recorded sessions. They are useful for capability mapping, but they must not be wired into runtime apply paths.
+
+## Legacy And Stale Findings
+
+- Stale documentation previously listed `searchFITInHouse.do`, `searchListInterMemo.do`, `searchListRateByWalkIn.do`, `searchListServiceByWalkIn.do`, `selectAllMenuList.do`, `selectUserInfo.do` as active assumptions.
+- Those endpoints were not observed in the latest official HAR pair, so they are no longer documented as current integration targets.
+- No dead runtime execution path was found for the old reservation-list URL. It remains only as backward-compatible HAR parsing alias in [`normalize.js`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/src/scan/normalize.js).
+
+## Next Phase Inputs
+
+- Sanitized endpoint inventory: [`wings_har_endpoint_catalog.json`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/reports/wings_har_endpoint_catalog.json)
+- Human-readable catalog: [`wings_har_endpoint_catalog.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/reports/wings_har_endpoint_catalog.md)
+- Capability matrix: [`wings_capability_matrix_v1.json`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/wings_capability_matrix_v1.json)
+
+Recommended next step:
+
+- Promote `reservation_lookup`, `reservation_detail`, `source_catalog`, `nationality_language_lookup`, and `assigned_room_lookup` into explicit channel-aware live contracts for phase 2.
+
+## Implemented Live Contracts
+
+The phase-2 entrypoint is now:
+
+- `App.io.pmsFetch.fetchWingsLiveContract(providerType, request, syncConfig)`
+
+Implemented capabilities:
+
+- `reservation_summary`
+- `reservation_lookup`
+- `reservation_lookup_local`
+- `reservation_detail`
+- `linked_reservation_lookup`
+- `room_block_chart`
+- `room_availability_chart`
+- `room_availability_summary`
+- `source_catalog`
+- `room_type_catalog`
+- `market_catalog`
+- `rate_catalog`
+- `sale_person_catalog`
+- `nationality_language_lookup`
+- `account_contract_lookup`
+- `special_service_lookup`
+- `reservation_rate_lookup`
+- `assigned_room_guest_info`
+- `assigned_room_lookup`
+- `assignable_room_lookup`
+- `assignable_room_type_lookup`
+
+Structured request/response summary is captured in [`wings_live_contract_v2.json`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/wings_live_contract_v2.json).

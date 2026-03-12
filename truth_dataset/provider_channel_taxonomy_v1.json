@@ -1,0 +1,78 @@
+{
+  "taxonomy_version": "provider-channel-taxonomy-v1",
+  "providers": [
+    {
+      "provider": "naver-partner",
+      "kind": "OTA_API",
+      "live_read": true,
+      "channels": ["NAVER"]
+    },
+    {
+      "provider": "admin-station",
+      "kind": "OTA_API",
+      "live_read": true,
+      "channels": ["STATION"]
+    },
+    {
+      "provider": "wings-pms",
+      "kind": "PMS_READONLY",
+      "live_read": true,
+      "channels": [
+        "DIRECT",
+        "NAVER",
+        "STATION",
+        "AGODA",
+        "BOOKING",
+        "TRIP",
+        "AIRBNB",
+        "EXPEDIA",
+        "YANOLJA",
+        "HERE",
+        "DIDA_TRAVEL",
+        "TRAVELOKA",
+        "COUPANG_TRAVEL",
+        "UNKNOWN"
+      ]
+    },
+    {
+      "provider": "bridge",
+      "kind": "EVIDENCE_CAPTURE",
+      "live_read": true,
+      "channels": ["UNKNOWN"]
+    }
+  ],
+  "channels": [
+    { "channel": "DIRECT", "raw_aliases": ["walkin", "front", "direct"] },
+    { "channel": "NAVER", "raw_aliases": ["naver", "네이버"] },
+    { "channel": "STATION", "raw_aliases": ["station", "uh suite", "스테이션"] },
+    { "channel": "AGODA", "raw_aliases": ["agoda", "아고다"] },
+    { "channel": "BOOKING", "raw_aliases": ["booking", "booking.com", "부킹닷컴"] },
+    { "channel": "TRIP", "raw_aliases": ["trip", "trip.com", "트립닷컴"] },
+    { "channel": "AIRBNB", "raw_aliases": ["airbnb"] },
+    { "channel": "EXPEDIA", "raw_aliases": ["expedia"] },
+    { "channel": "YANOLJA", "raw_aliases": ["yanolja", "야놀자"] },
+    { "channel": "HERE", "raw_aliases": ["here", "여기어때"] },
+    { "channel": "DIDA_TRAVEL", "raw_aliases": ["dida", "dida travel", "디다트레블"] },
+    { "channel": "TRAVELOKA", "raw_aliases": ["traveloka"] },
+    { "channel": "COUPANG_TRAVEL", "raw_aliases": ["coupang", "coupang travel", "쿠팡트래블"] },
+    { "channel": "UNKNOWN", "raw_aliases": [] }
+  ],
+  "branches": [
+    {
+      "branch": "COEX",
+      "wings_profiles": [
+        { "property_no": "13", "bsns_code": "13" }
+      ]
+    },
+    {
+      "branch": "GANGNAM",
+      "wings_profiles": [
+        { "property_no": "91", "bsns_code": "91" }
+      ]
+    },
+    {
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "wings_profiles": []
+    }
+  ]
+}

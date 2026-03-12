@@ -1,46 +1,128 @@
-# 앱 구현 로드맵
+# 앱 재구현 로드맵
 
-## Phase 1
+기준 문서:
 
-- 앱/확장 책임 경계 문서화
-- 브리지 계약 타입 정의
+- [`APP_PRODUCT_OPERATING_MODEL.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/APP_PRODUCT_OPERATING_MODEL.md)
 
-## Phase 2
+이 로드맵은 기능 나열이 아니라 `실제 운영 경로가 성립되는 순서`로 정렬한다.
 
-- Electron 앱 골격 추가
-- Codex형 워크스페이스를 예약관리 도메인으로 재구성
-- mock 상태 기반 dry-run 셸 구현
+## Stage 0. 기준선 재정렬
 
-## Phase 3
+목표:
 
-- 앱 저장소/보안 저장소 구현
-- inventory compare 앱 이식
+- 앱을 왜 만드는지와 어디까지가 v1인지 고정한다.
 
-## Phase 4
+작업:
 
-- reservation audit 앱 이식
-- apply review 앱 이식
+- 제품 정의 문서 고정
+- README 우선순위 재정렬
+- 앱/확장/브리지/HAR/truth dataset 책임 정렬
 
-## Phase 5
+완료 기준:
 
-- extension bridge 구현
-- live read 연결
+- 구현 판단 기준이 하나의 문서로 수렴한다.
 
-## Phase 6
+## Stage 1. Live Read 최소 경로
 
-- live apply 연결
-- 확장 UI 축소
-- 앱 기준 E2E 검증
+목표:
 
-## Phase 7
+- 강남/코엑스 기준 live read가 실제로 성립한다.
 
-- 앱이 대체한 확장 기능 제거
-- dead listener, unused panel flow, obsolete setting path 정리
-- 문서와 산출물 경로를 앱 중심 기준으로 재정렬
+작업:
 
-## 각 단계 완료 기준
+- 브라우저 세션 우선 경로 고정
+- Wings live JSON 응답 성립
+- sheet/OTA/Wings 공통 run context 연결
 
-- 구현 결과가 dry-run 또는 live smoke로 검증되어야 한다.
-- 확장 빌드 경로는 전환 중에도 유지되어야 한다.
-- 앱 화면만으로 현재 작업 상태를 이해할 수 있어야 한다.
-- 제거 단계에서는 "대체 구현 존재 + 검증 완료 + 호출 경로 제거 확인"이 모두 필요하다.
+완료 기준:
+
+- 앱에서 실제 live inventory/audit rows가 보인다.
+- HAR fallback 없이 브라우저 세션 기준 조회가 성공한다.
+
+## Stage 2. Truth-Aligned Mapping Core
+
+목표:
+
+- 비교와 검증이 단순 문자열 비교가 아니라 canonical mapping 위에서 돌아간다.
+
+작업:
+
+- channel taxonomy 반영
+- room alias graph 실데이터 반영
+- reservation identity graph 반영
+- unresolved queue / confidence 계산
+
+완료 기준:
+
+- branch-aware join precision을 추적할 수 있다.
+- unresolved mapping이 명시적으로 분리된다.
+
+## Stage 3. Audit / Evidence E2E
+
+목표:
+
+- inventory compare와 reservation audit가 실데이터 기준으로 한 run 안에서 닫힌다.
+
+작업:
+
+- evidence lineage 연결
+- audit/anomaly/review 분리
+- export-ready evidence bundle 생성
+
+완료 기준:
+
+- 운영자가 앱 결과만으로 확인/후처리 대상을 식별할 수 있다.
+
+## Stage 4. Search / Recommendation 실제화
+
+목표:
+
+- search와 recommendation이 실제 triage를 줄이는 보조 기능이 된다.
+
+작업:
+
+- lexical + structured search 통합
+- embedding runtime 연결
+- recommendation acceptance 측정 가능화
+
+완료 기준:
+
+- 추천은 evidence 기반으로 설명 가능해야 한다.
+- 추천이 없어도 앱은 완결되며, 추천이 있으면 더 빨라진다.
+
+## Stage 5. Operator Export / Handoff
+
+목표:
+
+- 사람이 앱 결과를 외부 후처리로 자연스럽게 넘길 수 있다.
+
+작업:
+
+- copy/export format 고정
+- run manifest / branch / date / coverage 포함
+
+완료 기준:
+
+- 운영자가 앱 화면과 export만으로 업무를 마칠 수 있다.
+
+## Stage 6. Apply 판단
+
+목표:
+
+- apply를 v1에 넣을지 분리할지 결정한다.
+
+작업:
+
+- 쓰기 인증/감사 경계 문서화
+- read-only만으로 충분한 운영 가치 평가
+
+완료 기준:
+
+- apply가 범위 안인지 범위 밖인지 명시적으로 결정된다.
+
+## 검증 원칙
+
+- 검증은 배치형으로 수행한다.
+- 진행을 막는 오류만 즉시 확인한다.
+- fixture 통과를 운영 성공으로 해석하지 않는다.
+- live read 성공, mapping 품질, export 완결성이 더 높은 우선순위를 가진다.

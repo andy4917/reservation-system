@@ -1,9 +1,13 @@
 import { create } from "zustand";
 import { uiMockState } from "../../fixtures/uiMockState";
 import {
+  fetchSheetSnapshot as fetchSheetSnapshotBridge,
   fetchProviderRows,
+  fetchProviderReservations,
+  captureWingsSession,
   getBridgeContext,
   getBridgeRuntime,
+  openWingsLoginWindow,
   getRecommendationRuntime,
   getRecommendationRuntimeDiagnostics,
   sampleRecommendationEmbed as sampleRecommendationEmbedBridge,
@@ -23,7 +27,15 @@ import {
   saveRecommendationSettings
 } from "../../services/settingsStorage";
 import { resolveBridgeIssue } from "../../services/bridgeStatus";
-import type { AppTaskId, RightPanelTab, SummaryMetric, WorkspaceMockState } from "../types";
+import type {
+  AppRunContext,
+  AppTaskId,
+  BranchSelection,
+  RightPanelTab,
+  SheetReadSnapshot,
+  SummaryMetric,
+  WorkspaceMockState
+} from "../types";
 import type { RuntimeMode } from "../../contracts";
 import type { RecommendationSettings } from "../../contracts";
 
@@ -112,13 +124,29 @@ interface UiStore extends WorkspaceMockState {
   setActiveTask: (task: AppTaskId) => void;
   setActiveRightPanelTab: (tab: RightPanelTab) => void;
   setRuntimeMode: (mode: RuntimeMode) => void;
+  setSelectedBranch: (branch: BranchSelection) => void;
+  setSelectedRange: (range: { startDate: string; endDate: string }) => void;
   setSearchQuery: (query: string) => void;
   setRecommendationEnabled: (enabled: boolean) => void;
   updateRecommendationSettings: (patch: Partial<RecommendationSettings>) => void;
   warmRecommendationRuntime: () => Promise<void>;
   runRecommendationSampleEmbed: () => Promise<void>;
+  openWingsLogin: () => Promise<void>;
+  captureWingsSession: () => Promise<void>;
   refreshWorkspaceData: () => Promise<void>;
   refreshInventoryCompare: () => Promise<void>;
+}
+
+function buildRunContext(state: WorkspaceMockState, provider: string | null = null): AppRunContext {
+  return {
+    id: `${state.runtimeMode}:${state.selectedBranch}:${state.selectedRange.startDate}:${state.selectedRange.endDate}:${Date.now()}`,
+    branch: state.selectedBranch,
+    startDate: state.selectedRange.startDate,
+    endDate: state.selectedRange.endDate,
+    runtimeMode: state.runtimeMode,
+    requestedAt: new Date().toISOString(),
+    sourceProvider: provider
+  };
 }
 
 export const useUiStore = create<UiStore>((set, get) => ({
@@ -143,6 +171,17 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setActiveRightPanelTab: (tab) => set({ activeRightPanelTab: tab }),
   setRuntimeMode: (mode) => {
     set({ runtimeMode: mode });
+    void get().refreshInventoryCompare();
+  },
+  setSelectedBranch: (branch) => {
+    set({ selectedBranch: branch });
+    void get().refreshInventoryCompare();
+  },
+  setSelectedRange: (range) => {
+    const startDate = String(range.startDate || "").trim();
+    const endDate = String(range.endDate || "").trim();
+    if (!startDate || !endDate || startDate > endDate) return;
+    set({ selectedRange: { startDate, endDate } });
     void get().refreshInventoryCompare();
   },
   setSearchQuery: (query) =>
@@ -212,17 +251,43 @@ export const useUiStore = create<UiStore>((set, get) => ({
         : state.logs
     }));
   },
+  openWingsLogin: async () => {
+    const result = await openWingsLoginWindow().catch(() => null);
+    set((state) => ({
+      logs: result
+        ? [...state.logs, `Wings login window ${result.opened ? "opened" : "focused"}: ${result.url}`]
+        : [...state.logs, "Wings login window open failed."]
+    }));
+  },
+  captureWingsSession: async () => {
+    const result = await captureWingsSession().catch(() => null);
+    set((state) => ({
+      logs: result
+        ? [
+            ...state.logs,
+            `Wings session capture: ${result.sessionAvailable ? "available" : "missing"} / cookies ${result.authSummary.cookieCount} / ${result.url}`
+          ]
+        : [...state.logs, "Wings session capture failed."]
+    }));
+    await get().refreshWorkspaceData();
+  },
   refreshWorkspaceData: async () => {
     await get().refreshInventoryCompare();
   },
   refreshInventoryCompare: async () => {
     const currentState = get();
-    const { runtimeMode, selectedRange, recommendationSettings } = currentState;
-    set({ inventoryCompareLoading: true, reservationAuditLoading: true });
+    const { runtimeMode, selectedRange, selectedBranch, recommendationSettings } = currentState;
+    const initialRunContext = buildRunContext(currentState, currentState.bridgeStatus.provider || null);
+    set({
+      inventoryCompareLoading: true,
+      reservationAuditLoading: true,
+      activeRunContext: initialRunContext
+    });
 
     const [
       fixtureSnapshot,
       reservationAuditFixture,
+      liveSheetSnapshot,
       context,
       bridgeRuntime,
       bridgeSummary,
@@ -231,34 +296,75 @@ export const useUiStore = create<UiStore>((set, get) => ({
     ] = await Promise.all([
       loadInventoryCompareSnapshot(runtimeMode),
       loadReservationAuditSnapshot(runtimeMode),
+      runtimeMode === "live"
+        ? fetchSheetSnapshotBridge({
+            type: "provider.fetchSheetSnapshot",
+            query: selectedRange
+          }).catch(() => null)
+        : Promise.resolve(null),
       runtimeMode === "live" ? getBridgeContext().catch(() => null) : Promise.resolve(null),
       getBridgeRuntime().catch(() => null),
       runtimeMode === "live" ? getBridgeSummary().catch(() => null) : Promise.resolve(null),
       getRecommendationRuntime(recommendationSettings).catch(() => null),
       getRecommendationRuntimeDiagnostics(recommendationSettings).catch(() => null)
     ]);
-    const liveRowsResponse =
-      runtimeMode === "live" && context?.sessionAvailable && context.provider
-        ? await fetchProviderRows({
-            type: "provider.fetchRows",
-            provider: context.provider,
+    const providerRowResponses =
+      runtimeMode === "live"
+        ? await Promise.all([
+            fetchProviderRows({
+              type: "provider.fetchRows",
+              provider: "naver-partner",
+              query: selectedRange
+            }).catch(() => null),
+            fetchProviderRows({
+              type: "provider.fetchRows",
+              provider: "admin-station",
+              query: selectedRange
+            }).catch(() => null)
+          ])
+        : [];
+    const liveReservationResponse =
+      runtimeMode === "live"
+        ? await fetchProviderReservations({
+            type: "provider.fetchReservations",
+            provider: "wings-pms",
             query: selectedRange
           }).catch(() => null)
         : null;
+    const branchFilter = selectedBranch === "ALL" ? "" : selectedBranch;
+    const mergedLiveRows = providerRowResponses.flatMap((response) =>
+      Array.isArray(response?.payload)
+        ? response.payload.map((row) => ({
+            ...row,
+            provider: response.provider
+          }))
+        : []
+    );
+    const filteredLiveRows = Array.isArray(mergedLiveRows)
+      ? mergedLiveRows.filter((row) => !branchFilter || String(row?.branch || "").trim().toUpperCase() === branchFilter)
+      : mergedLiveRows;
+    const filteredLiveReservationRows = Array.isArray(liveReservationResponse?.payload)
+      ? liveReservationResponse.payload.filter((row) => !branchFilter || String(row?.branch || "").trim().toUpperCase() === branchFilter)
+      : liveReservationResponse?.payload;
     const snapshot =
       runtimeMode === "live"
         ? buildInventoryCompareSnapshot({
             mode: "live",
             sourceLabel:
-              liveRowsResponse?.payload?.length
+              filteredLiveRows?.length
                 ? "read-live"
-                : context?.sessionAvailable
+                : providerRowResponses.some((response) => Boolean(response?.source && response.source !== "unsupported-provider"))
+                  ? "partial-live"
+                  : context?.sessionAvailable
                   ? "partial-live"
                   : "fixture-fallback",
-            liveRows: liveRowsResponse?.payload,
-            liveProvider: context?.provider || "naver-partner",
-            usedDomFallback: liveRowsResponse?.usedDomFallback || false,
-            liveContextAvailable: context?.sessionAvailable || false
+            liveRows: filteredLiveRows,
+            liveProvider: "naver-partner",
+            usedDomFallback: providerRowResponses.some((response) => response?.usedDomFallback === true),
+            liveContextAvailable:
+              Boolean(context?.sessionAvailable) ||
+              providerRowResponses.some((response) => Boolean(response?.source && response.source !== "unsupported-provider")),
+            branch: selectedBranch
           })
         : fixtureSnapshot;
     const reservationAudit =
@@ -266,13 +372,49 @@ export const useUiStore = create<UiStore>((set, get) => ({
         ? buildReservationAuditSnapshot({
             mode: "live",
             sourceLabel:
-              context?.sessionAvailable && (bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer)
-                ? "partial-live"
-                : "fixture-fallback",
+              filteredLiveReservationRows?.length
+                ? "read-live"
+                : (liveReservationResponse?.source === "pms-api" || context?.sessionAvailable) &&
+                    (bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer)
+                  ? "partial-live"
+                  : "fixture-fallback",
+            liveReservationRows: filteredLiveReservationRows,
             bridgeSummary: bridgeSummary || currentState.bridgeSummary,
-            liveContextAvailable: context?.sessionAvailable || false
+            liveContextAvailable:
+              Boolean(context?.sessionAvailable) ||
+              (typeof liveReservationResponse?.source === "string" &&
+                !["pms-unconfigured", "unavailable", "bridge-unavailable"].includes(liveReservationResponse.source)),
+            branch: selectedBranch
           })
         : reservationAuditFixture;
+    const sheetRead: SheetReadSnapshot =
+      runtimeMode === "live"
+        ? {
+            supportLevel:
+              liveSheetSnapshot?.payload && liveSheetSnapshot.source === "sheet-api"
+                ? "read-live"
+                : liveSheetSnapshot?.source === "sheet-unconfigured"
+                  ? "fixture-fallback"
+                  : "partial-live",
+            sourceLabel:
+              liveSheetSnapshot?.payload && liveSheetSnapshot.source === "sheet-api"
+                ? "read-live"
+                : liveSheetSnapshot?.source || "sheet-unconfigured",
+            lastRunAt: new Date().toISOString(),
+            summary: liveSheetSnapshot?.payload || null,
+            logs: [
+              liveSheetSnapshot?.payload
+                ? `Sheet snapshot loaded: ${liveSheetSnapshot.payload.sheetName} ${liveSheetSnapshot.payload.startDate}..${liveSheetSnapshot.payload.endDate}`
+                : `Sheet snapshot unavailable: ${liveSheetSnapshot?.error || liveSheetSnapshot?.source || "unknown"}`
+            ]
+          }
+        : {
+            supportLevel: "dry-run-only" as const,
+            sourceLabel: runtimeMode === "replay" ? "Replay sheet fixture" : "Dry-run sheet fixture",
+            lastRunAt: new Date().toISOString(),
+            summary: null,
+            logs: [`Sheet snapshot skipped in ${runtimeMode} mode.`]
+          };
     const providerLabel =
       runtimeMode === "live"
         ? context?.provider || (context?.sessionAvailable ? "connected-live" : "Bridge Pending")
@@ -280,15 +422,14 @@ export const useUiStore = create<UiStore>((set, get) => ({
     const bridgeMessage =
       runtimeMode === "live"
         ? context?.sessionAvailable
-          ? liveRowsResponse?.payload?.length
-            ? `Live bridge context detected at ${context.host ?? "unknown host"}. provider rows are flowing into the app.`
-            : `Live bridge context detected at ${context.host ?? "unknown host"}. provider.fetchRows responded with no rows for the selected range.`
-          : "Live mode selected, but no active bridge context was reported. provider.fetchRows remains pending."
-        : `Fixture compare loaded for ${runtimeMode} mode.`;
+          ? "Live workspace available."
+          : "Live workspace unavailable."
+        : "Fixture workspace loaded.";
     const hasUpstreamAuth = Boolean(bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer);
     const bridgeIssue = resolveBridgeIssue({
       runtimeMode,
-      supportLevel: snapshot.supportLevel,
+      supportLevel: filteredLiveReservationRows?.length ? reservationAudit.supportLevel : snapshot.supportLevel,
+      provider: context?.provider || null,
       sessionAvailable: context?.sessionAvailable || false,
       hasUpstreamAuth,
       bridgeRuntimeCode: bridgeRuntime?.code || null,
@@ -302,19 +443,20 @@ export const useUiStore = create<UiStore>((set, get) => ({
       provider: providerLabel,
       sessionAvailable: context?.sessionAvailable ?? currentState.bridgeStatus.sessionAvailable,
       activeHost: context?.host || currentState.bridgeStatus.activeHost,
-      message: bridgeMessage
-        + (bridgeRuntime?.capability === "degraded" ? ` · ${bridgeRuntime.message}` : ""),
+      message: bridgeMessage,
       code: bridgeIssue.code,
       recoveryAction: bridgeIssue.recoveryAction,
       authConfigured: bridgeRuntime?.authConfigured ?? currentState.bridgeStatus.authConfigured,
       writeEnabled:
         runtimeMode === "live" &&
-        snapshot.supportLevel === "read-live" &&
+        reservationAudit.supportLevel === "read-live" &&
         hasUpstreamAuth
     };
     const nextWorkspaceState = {
       ...currentState,
+      activeRunContext: buildRunContext(currentState, context?.provider || null),
       inventoryCompare: snapshot,
+      sheetRead,
       bridgeStatus: nextBridgeStatus,
       bridgeSummary: {
         authSummary: bridgeSummary?.authSummary || currentState.bridgeSummary.authSummary,
@@ -339,7 +481,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
       recommendationSettings,
       recommendationRuntime,
       recommendationRuntimeDiagnostics,
-      reservationAudit
+      reservationAudit,
+      selectedBranch
     };
     const recommendationAssist = await buildRecommendationAssist(nextWorkspaceState, {
       enabled: recommendationSettings.enabled,
@@ -352,16 +495,19 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set({
       inventoryCompareLoading: false,
       reservationAuditLoading: false,
+      activeRunContext: nextWorkspaceState.activeRunContext,
       inventoryCompare: snapshot,
+      sheetRead,
       reservationAudit,
       metrics: projectedState.metrics,
       evidenceLines: projectedState.evidenceLines,
       opsLines: projectedState.opsLines,
       validationLines: projectedState.validationLines,
       logs: [
+        ...sheetRead.logs,
         ...projectedState.logs,
         recommendationRuntime
-          ? `Recommendation runtime: ${recommendationRuntime.activeRuntime} (${recommendationRuntime.reason})`
+          ? `Recommendation runtime: ${recommendationRuntime.activeRuntime}`
           : "Recommendation runtime: renderer fallback"
       ],
       bridgeStatus: nextBridgeStatus,

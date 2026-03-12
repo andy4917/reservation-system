@@ -52,6 +52,20 @@ export interface AuthSummary {
   hasRole: boolean;
 }
 
+export interface BridgeAuthBundle {
+  provider: ProviderType;
+  capturedAt: string;
+  sourceHost?: string;
+  sourceUrls?: string[];
+  cookies?: Array<Record<string, unknown>>;
+  material?: {
+    cookieHeader?: string;
+    csrfToken?: string;
+    role?: string;
+    bearerToken?: string;
+  };
+}
+
 export interface InfoSummary {
   count: number;
   channels: string[];
@@ -73,6 +87,7 @@ export interface BridgePayload {
   rows: ExtractedCandidateRow[];
   infoSummary: InfoSummary | null;
   authSummary: AuthSummary | null;
+  authBundle?: BridgeAuthBundle | null;
   updatedAt: string;
 }
 

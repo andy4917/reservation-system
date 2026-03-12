@@ -34,8 +34,38 @@ async function main() {
 
   const snapshot = reservationAudit.buildReservationAuditSnapshot({
     mode: "live",
-    sourceLabel: "partial-live",
+    sourceLabel: "read-live",
     liveContextAvailable: true,
+    liveReservationRows: [
+      {
+        reservationNo: "25170918",
+        guestName: "홍길동",
+        channel: "AGODA",
+        checkin: "2026-03-01",
+        checkout: "2026-03-03",
+        statusBucket: "ACTIVE",
+        auditAnomaly: false,
+        branch: "GANGNAM",
+        sourceCode: "AGODA",
+        nationalityCode: "USA",
+        languageCode: "ENG",
+        languageName: "English",
+        endpointCapability: "reservation_lookup"
+      },
+      {
+        reservationNo: "25170919",
+        guestName: "김다은",
+        channel: "DIRECT",
+        checkin: "2026-03-02",
+        checkout: "2026-03-04",
+        statusBucket: "ACTIVE",
+        auditAnomaly: false,
+        branch: "COEX",
+        sourceCode: "",
+        nationalityCode: "KOR",
+        endpointCapability: "reservation_lookup"
+      }
+    ],
     bridgeSummary: {
       authSummary: {
         cookieCount: 3,
@@ -52,13 +82,14 @@ async function main() {
     }
   });
 
-  assert.equal(snapshot.sourceLabel, "partial-live");
-  assert.equal(snapshot.supportLevel, "partial-live");
+  assert.equal(snapshot.sourceLabel, "read-live");
+  assert.equal(snapshot.supportLevel, "read-live");
   assert.equal(snapshot.reviewCount, 1);
   assert.equal(snapshot.anomalyCount, 0);
-  assert.equal(snapshot.rows.length, 1);
-  assert.match(snapshot.rows[0].reason, /bridge auth\/info summary/i);
-  assert.match(snapshot.validationLines[1], /fixture fallback/i);
+  assert.equal(snapshot.rows.length, 2);
+  assert.match(snapshot.rows[0].reason, /Live Wings reservation joined/i);
+  assert.match(snapshot.rows[1].reason, /evidence needs review/i);
+  assert.match(snapshot.validationLines[1], /provider\.fetchReservations/i);
 
   console.log("regression_app_reservation_audit_snapshot: OK");
 }

@@ -24,7 +24,13 @@ export function ReservationAuditSurface() {
           <button type="button" className="action-button" onClick={() => void refreshWorkspaceData()}>
             {reservationAuditLoading ? "Loading..." : `${runtimeMode} audit run`}
           </button>
-          <div className="action-hint">현재는 PMS reservation row hydration 전 단계라 fixture 또는 bridge summary 기준으로 표시합니다.</div>
+          <div className="action-hint">
+            {reservationAudit.supportLevel === "read-live"
+              ? "Wings reservation lookup이 live row를 공급 중입니다. anomaly만 우선 검토하면 됩니다."
+              : reservationAudit.supportLevel === "partial-live"
+                ? "bridge auth/info summary는 연결됐지만 reservation row는 아직 일부 fallback 상태입니다."
+                : "live row가 없으면 fixture 또는 bridge summary 기준으로 표시합니다."}
+          </div>
         </div>
       </div>
       <div className="inventory-summary-grid inventory-summary-grid-wide">
@@ -53,7 +59,7 @@ export function ReservationAuditSurface() {
         <PanelHeading
           kicker="Audit Readiness"
           title="Reservation Audit Inputs"
-          description="auth summary와 provider read 상태를 기준으로 감사 준비도를 표시합니다."
+          description="provider read 상태 기준으로 감사 준비도만 표시합니다."
         />
         <div className="process-grid">
           {jobStatusCards
@@ -67,9 +73,11 @@ export function ReservationAuditSurface() {
             ))}
           <article className="process-card tone-default">
             <span>bridge</span>
-            <strong>Auth Materials</strong>
+            <strong>Live Workspace</strong>
             <p>
-              bearer {bridgeSummary.authSummary?.hasBearer ? "ready" : "missing"} · csrf {bridgeSummary.authSummary?.hasCsrf ? "ready" : "missing"} · cookies {bridgeSummary.authSummary?.cookieCount ?? 0}
+              {bridgeSummary.authSummary?.cookieCount || bridgeSummary.authSummary?.hasBearer || bridgeSummary.authSummary?.hasCsrf
+                ? "Live provider materials available"
+                : "Live provider materials unavailable"}
             </p>
           </article>
         </div>

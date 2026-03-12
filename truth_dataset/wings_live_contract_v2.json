@@ -1,0 +1,170 @@
+{
+  "contract_version": "wings-live-contract-v2",
+  "implemented_at": "2026-03-12",
+  "entrypoint": "App.io.pmsFetch.fetchWingsLiveContract(providerType, request, syncConfig)",
+  "provider_type": "wings-pms",
+  "capabilities": [
+    {
+      "capability": "reservation_summary",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "startDate", "endDate", "branch?"],
+      "response_fields": ["items[]", "profilesFetched", "attempts", "endpointCapability"]
+    },
+    {
+      "capability": "reservation_lookup",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "startDate", "endDate", "branch?"],
+      "response_fields": ["items", "records", "profilesFetched", "attempts", "endpointCapability"]
+    },
+    {
+      "capability": "reservation_lookup_local",
+      "status": "implemented",
+      "branch_scope": "branch-scoped",
+      "request_fields": ["capability", "startDate", "endDate", "branch?"],
+      "response_fields": ["items", "records", "profilesFetched", "attempts", "endpointCapability"]
+    },
+    {
+      "capability": "reservation_detail",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "reservationNo", "reservationSeqNo?=1", "branch?"],
+      "response_fields": ["items[].reservationNo", "items[].roomTypeCode", "items[].languageName", "items[].nationalityCode"]
+    },
+    {
+      "capability": "linked_reservation_lookup",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "reservationNo|reservationRef", "branch?"],
+      "response_fields": ["items[].reservationNo", "items[].linkedReservationNo", "items[].relationshipType", "items[].branch"]
+    },
+    {
+      "capability": "room_block_chart",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "startDate", "endDate", "branch?"],
+      "response_fields": ["items[].roomTypeCode", "items[].businessDate", "items[].availableRooms", "items[].branch"]
+    },
+    {
+      "capability": "room_availability_chart",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "startDate", "endDate", "branch?"],
+      "response_fields": ["items[].roomTypeCode", "items[].businessDate", "items[].availableRooms", "items[].branch"]
+    },
+    {
+      "capability": "room_availability_summary",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "startDate", "endDate", "branch?"],
+      "response_fields": ["items[].roomTypeCode", "items[].businessDate", "items[].availableRooms", "items[].branch"]
+    },
+    {
+      "capability": "source_catalog",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "branch?"],
+      "response_fields": ["items[].sourceCode", "items[].sourceName", "items[].categoryCode", "items[].branch"]
+    },
+    {
+      "capability": "room_type_catalog",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "branch?"],
+      "response_fields": ["items[]", "profilesFetched", "attempts", "endpointCapability"]
+    },
+    {
+      "capability": "market_catalog",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "branch?"],
+      "response_fields": ["items[]", "profilesFetched", "attempts", "endpointCapability"]
+    },
+    {
+      "capability": "rate_catalog",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "branch?"],
+      "response_fields": ["items[]", "profilesFetched", "attempts", "endpointCapability"]
+    },
+    {
+      "capability": "sale_person_catalog",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "branch?"],
+      "response_fields": ["items[]", "profilesFetched", "attempts", "endpointCapability"]
+    },
+    {
+      "capability": "nationality_language_lookup",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "natCode", "branch?"],
+      "response_fields": ["items[].natCode", "items[].langCode", "items[].langName", "items[].branch"]
+    },
+    {
+      "capability": "account_contract_lookup",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "branch?"],
+      "response_fields": ["items[]", "profilesFetched", "attempts", "endpointCapability"]
+    },
+    {
+      "capability": "special_service_lookup",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "reservationNo", "reservationSeqNo?=1", "branch?"],
+      "response_fields": ["items[]", "profilesFetched", "attempts", "endpointCapability"]
+    },
+    {
+      "capability": "reservation_rate_lookup",
+      "status": "implemented",
+      "branch_scope": "profile-driven",
+      "request_fields": ["capability", "reservationNo", "reservationSeqNo?=1", "branch?"],
+      "response_fields": ["items[]", "profilesFetched", "attempts", "endpointCapability"]
+    },
+    {
+      "capability": "assigned_room_guest_info",
+      "status": "implemented",
+      "branch_scope": "gangnam-only-observed",
+      "request_fields": ["capability", "reservationNo", "reservationSeqNo?=1", "branch?"],
+      "response_fields": ["items[].reservationNo", "items[].guestName", "items[].roomNo", "items[].branch"]
+    },
+    {
+      "capability": "assigned_room_lookup",
+      "status": "implemented",
+      "branch_scope": "gangnam-only-observed",
+      "request_fields": [
+        "capability",
+        "reservationNo",
+        "reservationSeqNo?=1",
+        "arrvDate",
+        "deptDate",
+        "roomTypeCode",
+        "branch?"
+      ],
+      "response_fields": ["items[].reservationNo", "items[].roomNo", "items[].roomTypeCode", "items[].branch"]
+    },
+    {
+      "capability": "assignable_room_lookup",
+      "status": "implemented",
+      "branch_scope": "gangnam-only-observed",
+      "request_fields": ["capability", "arrvDate", "deptDate", "roomTypeCode", "branch?"],
+      "response_fields": ["items[]", "profilesFetched", "attempts", "endpointCapability"]
+    },
+    {
+      "capability": "assignable_room_type_lookup",
+      "status": "implemented",
+      "branch_scope": "gangnam-only-observed",
+      "request_fields": ["capability", "arrvDate?", "deptDate?", "branch?"],
+      "response_fields": ["items[]", "profilesFetched", "attempts", "endpointCapability"]
+    }
+  ],
+  "notes": [
+    "All capability fetches remain read-only and still inherit the 31-day clamp on reservation range queries.",
+    "assigned_room_lookup is exposed as a live contract, but current official HAR evidence exists only for GANGNAM.",
+    "Legacy reservation-list HAR alias is not a default contract path.",
+    "Capability requests reuse the HAR-derived form body as a base and override only endpoint-specific fields.",
+    "Managed session recovery is bypassed while an official browser session is currently attached."
+  ]
+}

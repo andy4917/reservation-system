@@ -1,0 +1,54 @@
+[
+  {
+    "source_system": "BRIDGE",
+    "provider": "admin-station",
+    "branch": "COEX",
+    "rawLine": "A701 2026-03-01 site=1 sheet=1",
+    "sourceLineIndex": 12,
+    "candidateBasis": ["room_alias", "date", "stock_match"],
+    "signals": [
+      { "kind": "room_alias", "value": "A701", "source": "line" },
+      { "kind": "date", "value": "2026-03-01", "source": "line" }
+    ],
+    "tags": [
+      { "kind": "coverage", "value": "read-live" },
+      { "kind": "confidence", "value": "0.92" }
+    ],
+    "auth_summary": {
+      "provider": "admin-station",
+      "material": "bearer:fingerprint",
+      "session_available": true
+    },
+    "info_summary": {
+      "host": "admin.admin-stationbyuhc.com",
+      "used_dom_fallback": false,
+      "candidate_count": 1
+    }
+  },
+  {
+    "source_system": "BRIDGE",
+    "provider": "naver-partner",
+    "branch": "GANGNAM",
+    "rawLine": "501 2026-03-02 reservation matched by note+phone",
+    "sourceLineIndex": 7,
+    "candidateBasis": ["reservation_no", "phone_tail", "note_soft_key"],
+    "signals": [
+      { "kind": "reservation_no", "value": "25180001", "source": "derived" },
+      { "kind": "phone_tail", "value": "1234", "source": "context" }
+    ],
+    "tags": [
+      { "kind": "coverage", "value": "partial-live" },
+      { "kind": "confidence", "value": "0.88" }
+    ],
+    "auth_summary": {
+      "provider": "naver-partner",
+      "material": "cookie+csrf:fingerprint",
+      "session_available": true
+    },
+    "info_summary": {
+      "host": "partner.booking.naver.com",
+      "used_dom_fallback": false,
+      "candidate_count": 1
+    }
+  }
+]

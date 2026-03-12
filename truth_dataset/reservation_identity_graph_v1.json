@@ -1,0 +1,78 @@
+{
+  "graph_version": "reservation-identity-graph-v1",
+  "node_types": [
+    "canonical_reservation",
+    "sheet_note",
+    "wings_reservation",
+    "ota_reservation",
+    "guest_name",
+    "phone_tail",
+    "reservation_no",
+    "reservation_ref",
+    "room_alias",
+    "channel"
+  ],
+  "edge_types": [
+    "observed_in",
+    "matched_by_exact_id",
+    "matched_by_reservation_ref",
+    "matched_by_soft_key",
+    "matched_by_phone_tail",
+    "matched_by_guest_name",
+    "matched_by_room_alias",
+    "matched_by_channel"
+  ],
+  "scoring": {
+    "exact_id": 1.0,
+    "reservation_ref": 0.95,
+    "soft_key": 0.75,
+    "phone_tail": 0.55,
+    "guest_name": 0.55,
+    "room_alias": 0.35,
+    "channel": 0.25
+  },
+  "blocking_rules": [
+    "branch must match when both sides have branch evidence",
+    "date overlap or checkin distance <= 1 day",
+    "channel mismatch blocks join when both sides have known channel",
+    "room alias conflict blocks join when both sides have room evidence"
+  ],
+  "sample_nodes": [
+    {
+      "id": "canonical:coex:25170918",
+      "type": "canonical_reservation",
+      "branch": "COEX"
+    },
+    {
+      "id": "wings:25170918",
+      "type": "wings_reservation",
+      "branch": "COEX"
+    },
+    {
+      "id": "sheet:block:2026-03-01:701",
+      "type": "sheet_note",
+      "branch": "COEX"
+    },
+    {
+      "id": "phone:5678",
+      "type": "phone_tail"
+    }
+  ],
+  "sample_edges": [
+    {
+      "from": "canonical:coex:25170918",
+      "to": "wings:25170918",
+      "type": "matched_by_exact_id"
+    },
+    {
+      "from": "canonical:coex:25170918",
+      "to": "sheet:block:2026-03-01:701",
+      "type": "matched_by_soft_key"
+    },
+    {
+      "from": "sheet:block:2026-03-01:701",
+      "to": "phone:5678",
+      "type": "matched_by_phone_tail"
+    }
+  ]
+}

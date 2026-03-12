@@ -133,6 +133,7 @@ function normalizeLiveRow(
   index: number,
   provider: ProviderType
 ): InventoryCompareRow | null {
+  const rowProvider = row.provider || provider;
   const branch = String(row.branch || "").trim() || undefined;
   const date = String(row.date || "").trim();
   const roomType = String(row.roomType || "").trim();
@@ -142,7 +143,7 @@ function normalizeLiveRow(
   if (!date || !roomType || !channel || !siteRaw || !sheetRaw) return null;
   const status: InventoryCompareRow["status"] = row.status || (siteRaw === sheetRaw ? "match" : "mismatch");
   return {
-    id: `${provider}-${date}-${roomType}-${index}`,
+    id: `${rowProvider}-${date}-${roomType}-${channel}-${index}`,
     branch,
     date,
     roomType,
@@ -159,15 +160,17 @@ function normalizeLiveRow(
 function buildLines(
   mode: RuntimeMode,
   rows: InventoryCompareRow[],
-  options?: { usedDomFallback?: boolean; sourceLabel?: string; liveContextAvailable?: boolean }
+  options?: { usedDomFallback?: boolean; sourceLabel?: string; liveContextAvailable?: boolean; branch?: string }
 ) {
   const mismatches = rows.filter((row) => row.status === "mismatch");
   const warnings = rows.filter((row) => row.status === "warning");
   const source = options?.sourceLabel || mode;
+  const branch = String(options?.branch || "ALL").trim() || "ALL";
 
   return {
     evidenceLines: [
       `Compare source: ${source}`,
+      `Branch scope: ${branch}`,
       `Mismatch rows: ${mismatches.length}`,
       ...mismatches.slice(0, 3).map((row) => `${row.date} ${row.roomType} ${row.channel} ${row.siteRaw} vs ${row.sheetRaw}`)
     ],
@@ -237,8 +240,17 @@ export function buildInventoryCompareSnapshot(params: {
   liveProvider?: ProviderType;
   usedDomFallback?: boolean;
   liveContextAvailable?: boolean;
+  branch?: string;
 }): InventoryCompareSnapshot {
-  const { mode, sourceLabel, liveRows = [], liveProvider = "naver-partner", usedDomFallback = false, liveContextAvailable = false } = params;
+  const {
+    mode,
+    sourceLabel,
+    liveRows = [],
+    liveProvider = "naver-partner",
+    usedDomFallback = false,
+    liveContextAvailable = false,
+    branch = "ALL"
+  } = params;
 
   if (mode !== "live") {
     const rows = FIXTURE_ROWS[mode];
@@ -254,7 +266,7 @@ export function buildInventoryCompareSnapshot(params: {
       mismatchCount,
       warningCount,
       matchedCount,
-      ...buildLines(mode, rows, { sourceLabel })
+      ...buildLines(mode, rows, { sourceLabel, branch })
     };
   }
 
@@ -301,6 +313,6 @@ export function buildInventoryCompareSnapshot(params: {
     mismatchCount,
     warningCount,
     matchedCount,
-    ...buildLines(mode, rows, { sourceLabel: normalizedSourceLabel, usedDomFallback, liveContextAvailable })
+    ...buildLines(mode, rows, { sourceLabel: normalizedSourceLabel, usedDomFallback, liveContextAvailable, branch })
   };
 }

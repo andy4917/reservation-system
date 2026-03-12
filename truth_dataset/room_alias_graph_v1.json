@@ -1,0 +1,2254 @@
+{
+  "graph_version": "room-alias-graph-v1",
+  "source": "room_registry_baseline.json",
+  "node_count": 63,
+  "edge_count": 185,
+  "nodes": [
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-1001",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "1001",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1001"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1001"
+        }
+      ],
+      "derived_aliases": [
+        "1001",
+        "B1001"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-1002",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "1002",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1002"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1002"
+        }
+      ],
+      "derived_aliases": [
+        "1002",
+        "B1002"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-1101",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "1101",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1101"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1101"
+        }
+      ],
+      "derived_aliases": [
+        "1101",
+        "B1101"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-1102",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "1102",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1102"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1102"
+        }
+      ],
+      "derived_aliases": [
+        "1102",
+        "B1102"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-1201",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "1201",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1201"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1201"
+        }
+      ],
+      "derived_aliases": [
+        "1201",
+        "B1201"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-1202",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "1202",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1202"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1202"
+        }
+      ],
+      "derived_aliases": [
+        "1202",
+        "B1202"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-1301",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "1301",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1301"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1301"
+        }
+      ],
+      "derived_aliases": [
+        "1301",
+        "A301",
+        "B1301"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-1302",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "1302",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1302"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1302"
+        }
+      ],
+      "derived_aliases": [
+        "1302",
+        "A302",
+        "B1302"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-701",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "701",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "701"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "701"
+        }
+      ],
+      "derived_aliases": [
+        "701",
+        "B701"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-801",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "801",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "801"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "801"
+        }
+      ],
+      "derived_aliases": [
+        "801",
+        "B801"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-802",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "802",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "802"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "802"
+        }
+      ],
+      "derived_aliases": [
+        "802",
+        "B802"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-901",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "901",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "901"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "901"
+        }
+      ],
+      "derived_aliases": [
+        "901",
+        "B901"
+      ]
+    },
+    {
+      "canonical_room_id": "BRANCH_THE_SEOLLEUNG-B-902",
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "building": "B",
+      "room_number": "902",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "902"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "902"
+        }
+      ],
+      "derived_aliases": [
+        "902",
+        "B902"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-1001",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "1001",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A1001"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "2001"
+        }
+      ],
+      "derived_aliases": [
+        "1001",
+        "2001",
+        "A1001",
+        "B1001",
+        "B2001"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-1002",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "1002",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A1002"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "2002"
+        }
+      ],
+      "derived_aliases": [
+        "1002",
+        "2002",
+        "A1002",
+        "B1002",
+        "B2002"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-1101",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "1101",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A1101"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "2101"
+        }
+      ],
+      "derived_aliases": [
+        "1101",
+        "2101",
+        "A1101",
+        "B1101",
+        "B2101"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-1102",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "1102",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A1102"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "2102"
+        }
+      ],
+      "derived_aliases": [
+        "1102",
+        "2102",
+        "A1102",
+        "B1102",
+        "B2102"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-1201",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "1201",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A1201"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "2201"
+        }
+      ],
+      "derived_aliases": [
+        "1201",
+        "2201",
+        "A1201",
+        "B1201",
+        "B2201"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-301",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "301",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A301"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1301"
+        }
+      ],
+      "derived_aliases": [
+        "1301",
+        "301",
+        "A301",
+        "B1301",
+        "B301"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-302",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "302",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A302"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1302"
+        }
+      ],
+      "derived_aliases": [
+        "1302",
+        "302",
+        "A302",
+        "B1302",
+        "B302"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-401",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "401",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A401"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1401"
+        }
+      ],
+      "derived_aliases": [
+        "1401",
+        "401",
+        "A401",
+        "B1401",
+        "B401"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-402",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "402",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A402"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1402"
+        }
+      ],
+      "derived_aliases": [
+        "1402",
+        "402",
+        "A402",
+        "B1402",
+        "B402"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-501",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "501",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A501"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1501"
+        }
+      ],
+      "derived_aliases": [
+        "1501",
+        "501",
+        "A501",
+        "B1501",
+        "B501"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-502",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "502",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A502"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1502"
+        }
+      ],
+      "derived_aliases": [
+        "1502",
+        "502",
+        "A502",
+        "B1502",
+        "B502"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-601",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "601",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A601"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1601"
+        }
+      ],
+      "derived_aliases": [
+        "1601",
+        "601",
+        "A601",
+        "B1601",
+        "B601"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-602",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "602",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A602"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1602"
+        }
+      ],
+      "derived_aliases": [
+        "1602",
+        "602",
+        "A602",
+        "B1602",
+        "B602"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-701",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "701",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A701"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1701"
+        }
+      ],
+      "derived_aliases": [
+        "1701",
+        "701",
+        "A701",
+        "B1701",
+        "B701"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-702",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "702",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A702"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1702"
+        }
+      ],
+      "derived_aliases": [
+        "1702",
+        "702",
+        "A702",
+        "B1702",
+        "B702"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-801",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "801",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A801"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1801"
+        }
+      ],
+      "derived_aliases": [
+        "1801",
+        "801",
+        "A801",
+        "B1801",
+        "B801"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-802",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "802",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A802"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1802"
+        }
+      ],
+      "derived_aliases": [
+        "1802",
+        "802",
+        "A802",
+        "B1802",
+        "B802"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-901",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "901",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A901"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1901"
+        }
+      ],
+      "derived_aliases": [
+        "1901",
+        "901",
+        "A901",
+        "B1901",
+        "B901"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-A-902",
+      "branch": "COEX",
+      "building": "A",
+      "room_number": "902",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "A902"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1902"
+        }
+      ],
+      "derived_aliases": [
+        "1902",
+        "902",
+        "A902",
+        "B1902",
+        "B902"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-1001",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "1001",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1001"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1001"
+        }
+      ],
+      "derived_aliases": [
+        "1001",
+        "B1001"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-1002",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "1002",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1002"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1002"
+        }
+      ],
+      "derived_aliases": [
+        "1002",
+        "B1002"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-1101",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "1101",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1101"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1101"
+        }
+      ],
+      "derived_aliases": [
+        "1101",
+        "B1101"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-1102",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "1102",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1102"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1102"
+        }
+      ],
+      "derived_aliases": [
+        "1102",
+        "B1102"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-1201",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "1201",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1201"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1201"
+        }
+      ],
+      "derived_aliases": [
+        "1201",
+        "B1201"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-1202",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "1202",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1202"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1202"
+        }
+      ],
+      "derived_aliases": [
+        "1202",
+        "B1202"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-201",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "201",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "201"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "201"
+        }
+      ],
+      "derived_aliases": [
+        "201",
+        "B201"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-202",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "202",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "202"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "202"
+        }
+      ],
+      "derived_aliases": [
+        "202",
+        "B202"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-301",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "301",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "301"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "301"
+        }
+      ],
+      "derived_aliases": [
+        "301",
+        "B301"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-302",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "302",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "302"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "302"
+        }
+      ],
+      "derived_aliases": [
+        "302",
+        "B302"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-401",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "401",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "401"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "401"
+        }
+      ],
+      "derived_aliases": [
+        "401",
+        "B401"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-402",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "402",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "402"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "402"
+        }
+      ],
+      "derived_aliases": [
+        "402",
+        "B402"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-501",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "501",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "501"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "501"
+        }
+      ],
+      "derived_aliases": [
+        "501",
+        "B501"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-502",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "502",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "502"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "502"
+        }
+      ],
+      "derived_aliases": [
+        "502",
+        "B502"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-601",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "601",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "601"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "601"
+        }
+      ],
+      "derived_aliases": [
+        "601",
+        "B601"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-602",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "602",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "602"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "602"
+        }
+      ],
+      "derived_aliases": [
+        "602",
+        "B602"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-701",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "701",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "701"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "701"
+        }
+      ],
+      "derived_aliases": [
+        "701",
+        "B701"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-702",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "702",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "702"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "702"
+        }
+      ],
+      "derived_aliases": [
+        "702",
+        "B702"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-801",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "801",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "801"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "801"
+        }
+      ],
+      "derived_aliases": [
+        "801",
+        "B801"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-802",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "802",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "802"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "802"
+        }
+      ],
+      "derived_aliases": [
+        "802",
+        "B802"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-901",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "901",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "901"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "901"
+        }
+      ],
+      "derived_aliases": [
+        "901",
+        "B901"
+      ]
+    },
+    {
+      "canonical_room_id": "COEX-B-902",
+      "branch": "COEX",
+      "building": "B",
+      "room_number": "902",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "902"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "902"
+        }
+      ],
+      "derived_aliases": [
+        "902",
+        "B902"
+      ]
+    },
+    {
+      "canonical_room_id": "GANGNAM-B-1001",
+      "branch": "GANGNAM",
+      "building": "B",
+      "room_number": "1001",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1001"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1001"
+        }
+      ],
+      "derived_aliases": [
+        "1001",
+        "B1001"
+      ]
+    },
+    {
+      "canonical_room_id": "GANGNAM-B-1101",
+      "branch": "GANGNAM",
+      "building": "B",
+      "room_number": "1101",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1101"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1101"
+        }
+      ],
+      "derived_aliases": [
+        "1101",
+        "B1101"
+      ]
+    },
+    {
+      "canonical_room_id": "GANGNAM-B-1102",
+      "branch": "GANGNAM",
+      "building": "B",
+      "room_number": "1102",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "1102"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "1102"
+        }
+      ],
+      "derived_aliases": [
+        "1102",
+        "B1102"
+      ]
+    },
+    {
+      "canonical_room_id": "GANGNAM-B-401",
+      "branch": "GANGNAM",
+      "building": "B",
+      "room_number": "401",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "401"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "401"
+        }
+      ],
+      "derived_aliases": [
+        "401",
+        "B401"
+      ]
+    },
+    {
+      "canonical_room_id": "GANGNAM-B-501",
+      "branch": "GANGNAM",
+      "building": "B",
+      "room_number": "501",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "501"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "501"
+        }
+      ],
+      "derived_aliases": [
+        "501",
+        "B501"
+      ]
+    },
+    {
+      "canonical_room_id": "GANGNAM-B-601",
+      "branch": "GANGNAM",
+      "building": "B",
+      "room_number": "601",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "601"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "601"
+        }
+      ],
+      "derived_aliases": [
+        "601",
+        "B601"
+      ]
+    },
+    {
+      "canonical_room_id": "GANGNAM-B-701",
+      "branch": "GANGNAM",
+      "building": "B",
+      "room_number": "701",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "701"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "701"
+        }
+      ],
+      "derived_aliases": [
+        "701",
+        "B701"
+      ]
+    },
+    {
+      "canonical_room_id": "GANGNAM-B-801",
+      "branch": "GANGNAM",
+      "building": "B",
+      "room_number": "801",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "801"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "801"
+        }
+      ],
+      "derived_aliases": [
+        "801",
+        "B801"
+      ]
+    },
+    {
+      "canonical_room_id": "GANGNAM-B-901",
+      "branch": "GANGNAM",
+      "building": "B",
+      "room_number": "901",
+      "aliases": [
+        {
+          "source_system": "SHEET",
+          "raw_value": "901"
+        },
+        {
+          "source_system": "WINGS",
+          "raw_value": "901"
+        }
+      ],
+      "derived_aliases": [
+        "901",
+        "B901"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1001",
+      "to": "1001",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1001",
+      "to": "B1001",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1002",
+      "to": "1002",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1002",
+      "to": "B1002",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1101",
+      "to": "1101",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1101",
+      "to": "B1101",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1102",
+      "to": "1102",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1102",
+      "to": "B1102",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1201",
+      "to": "1201",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1201",
+      "to": "B1201",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1202",
+      "to": "1202",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1202",
+      "to": "B1202",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1301",
+      "to": "1301",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1301",
+      "to": "A301",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1301",
+      "to": "B1301",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1302",
+      "to": "1302",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1302",
+      "to": "A302",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-1302",
+      "to": "B1302",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-701",
+      "to": "701",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-701",
+      "to": "B701",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-801",
+      "to": "801",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-801",
+      "to": "B801",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-802",
+      "to": "802",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-802",
+      "to": "B802",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-901",
+      "to": "901",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-901",
+      "to": "B901",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-902",
+      "to": "902",
+      "type": "room_alias"
+    },
+    {
+      "from": "BRANCH_THE_SEOLLEUNG-B-902",
+      "to": "B902",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1001",
+      "to": "1001",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1001",
+      "to": "2001",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1001",
+      "to": "A1001",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1001",
+      "to": "B1001",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1001",
+      "to": "B2001",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1002",
+      "to": "1002",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1002",
+      "to": "2002",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1002",
+      "to": "A1002",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1002",
+      "to": "B1002",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1002",
+      "to": "B2002",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1101",
+      "to": "1101",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1101",
+      "to": "2101",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1101",
+      "to": "A1101",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1101",
+      "to": "B1101",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1101",
+      "to": "B2101",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1102",
+      "to": "1102",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1102",
+      "to": "2102",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1102",
+      "to": "A1102",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1102",
+      "to": "B1102",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1102",
+      "to": "B2102",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1201",
+      "to": "1201",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1201",
+      "to": "2201",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1201",
+      "to": "A1201",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1201",
+      "to": "B1201",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-1201",
+      "to": "B2201",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-301",
+      "to": "1301",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-301",
+      "to": "301",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-301",
+      "to": "A301",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-301",
+      "to": "B1301",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-301",
+      "to": "B301",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-302",
+      "to": "1302",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-302",
+      "to": "302",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-302",
+      "to": "A302",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-302",
+      "to": "B1302",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-302",
+      "to": "B302",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-401",
+      "to": "1401",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-401",
+      "to": "401",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-401",
+      "to": "A401",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-401",
+      "to": "B1401",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-401",
+      "to": "B401",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-402",
+      "to": "1402",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-402",
+      "to": "402",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-402",
+      "to": "A402",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-402",
+      "to": "B1402",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-402",
+      "to": "B402",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-501",
+      "to": "1501",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-501",
+      "to": "501",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-501",
+      "to": "A501",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-501",
+      "to": "B1501",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-501",
+      "to": "B501",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-502",
+      "to": "1502",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-502",
+      "to": "502",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-502",
+      "to": "A502",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-502",
+      "to": "B1502",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-502",
+      "to": "B502",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-601",
+      "to": "1601",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-601",
+      "to": "601",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-601",
+      "to": "A601",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-601",
+      "to": "B1601",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-601",
+      "to": "B601",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-602",
+      "to": "1602",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-602",
+      "to": "602",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-602",
+      "to": "A602",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-602",
+      "to": "B1602",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-602",
+      "to": "B602",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-701",
+      "to": "1701",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-701",
+      "to": "701",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-701",
+      "to": "A701",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-701",
+      "to": "B1701",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-701",
+      "to": "B701",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-702",
+      "to": "1702",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-702",
+      "to": "702",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-702",
+      "to": "A702",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-702",
+      "to": "B1702",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-702",
+      "to": "B702",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-801",
+      "to": "1801",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-801",
+      "to": "801",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-801",
+      "to": "A801",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-801",
+      "to": "B1801",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-801",
+      "to": "B801",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-802",
+      "to": "1802",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-802",
+      "to": "802",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-802",
+      "to": "A802",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-802",
+      "to": "B1802",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-802",
+      "to": "B802",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-901",
+      "to": "1901",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-901",
+      "to": "901",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-901",
+      "to": "A901",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-901",
+      "to": "B1901",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-901",
+      "to": "B901",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-902",
+      "to": "1902",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-902",
+      "to": "902",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-902",
+      "to": "A902",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-902",
+      "to": "B1902",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-A-902",
+      "to": "B902",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1001",
+      "to": "1001",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1001",
+      "to": "B1001",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1002",
+      "to": "1002",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1002",
+      "to": "B1002",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1101",
+      "to": "1101",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1101",
+      "to": "B1101",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1102",
+      "to": "1102",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1102",
+      "to": "B1102",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1201",
+      "to": "1201",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1201",
+      "to": "B1201",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1202",
+      "to": "1202",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-1202",
+      "to": "B1202",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-201",
+      "to": "201",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-201",
+      "to": "B201",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-202",
+      "to": "202",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-202",
+      "to": "B202",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-301",
+      "to": "301",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-301",
+      "to": "B301",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-302",
+      "to": "302",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-302",
+      "to": "B302",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-401",
+      "to": "401",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-401",
+      "to": "B401",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-402",
+      "to": "402",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-402",
+      "to": "B402",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-501",
+      "to": "501",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-501",
+      "to": "B501",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-502",
+      "to": "502",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-502",
+      "to": "B502",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-601",
+      "to": "601",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-601",
+      "to": "B601",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-602",
+      "to": "602",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-602",
+      "to": "B602",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-701",
+      "to": "701",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-701",
+      "to": "B701",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-702",
+      "to": "702",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-702",
+      "to": "B702",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-801",
+      "to": "801",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-801",
+      "to": "B801",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-802",
+      "to": "802",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-802",
+      "to": "B802",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-901",
+      "to": "901",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-901",
+      "to": "B901",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-902",
+      "to": "902",
+      "type": "room_alias"
+    },
+    {
+      "from": "COEX-B-902",
+      "to": "B902",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-1001",
+      "to": "1001",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-1001",
+      "to": "B1001",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-1101",
+      "to": "1101",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-1101",
+      "to": "B1101",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-1102",
+      "to": "1102",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-1102",
+      "to": "B1102",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-401",
+      "to": "401",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-401",
+      "to": "B401",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-501",
+      "to": "501",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-501",
+      "to": "B501",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-601",
+      "to": "601",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-601",
+      "to": "B601",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-701",
+      "to": "701",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-701",
+      "to": "B701",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-801",
+      "to": "801",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-801",
+      "to": "B801",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-901",
+      "to": "901",
+      "type": "room_alias"
+    },
+    {
+      "from": "GANGNAM-B-901",
+      "to": "B901",
+      "type": "room_alias"
+    }
+  ]
+}

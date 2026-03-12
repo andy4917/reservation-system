@@ -86,20 +86,218 @@
     "rsvnDateT"
   ];
 
-  // Current known read-only Wings endpoints used for reservation/ops extraction.
-  const WINGS_ENDPOINT_CATALOG = [
-    "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do",
-    "/pms/biz/ir04_0100X/searchListRsvn.do",
-    "/pms/biz/ir04_0100X/searchFITReserv.do",
-    "/pms/biz/ir04_0100X/searchListRoomAvaiable.do",
-    "/pms/biz/ir04_0100X/searchListRoomBlockChart_V03.do",
-    "/pms/biz/ir04_0100X/searchFITInHouse.do",
-    "/pms/biz/ir04_0100X/searchListRateByWalkIn.do",
-    "/pms/biz/ir04_0100X/searchListServiceByWalkIn.do",
-    "/pms/biz/ir04_0100X/searchListInterMemo.do",
-    "/pms/biz/ir04_0100X/searchListAssignedRoom.do",
-    "/pms/biz/ir04_0100X/searchListAccountContract.do"
-  ];
+  const WINGS_ENDPOINT_DETAILS = Object.freeze([
+    Object.freeze({
+      path: "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do",
+      capability: "reservation_lookup",
+      group: "reservation",
+      readOnly: true,
+      tags: Object.freeze(["lookup", "verification", "ota", "remark", "nationality"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03_SUM.do",
+      capability: "reservation_summary",
+      group: "reservation",
+      readOnly: true,
+      tags: Object.freeze(["summary", "coverage"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir04_0200X_V03/searchListRsvn.do",
+      capability: "reservation_lookup_local",
+      group: "reservation",
+      readOnly: true,
+      tags: Object.freeze(["lookup", "reservation-list"]),
+      branches: Object.freeze(["COEX"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0102/searchFITReserv.do",
+      capability: "reservation_detail",
+      group: "reservation",
+      readOnly: true,
+      tags: Object.freeze(["detail", "guest", "nationality", "remark", "phone"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/fd01_0101/searchListLinkedReservation.do",
+      capability: "linked_reservation_lookup",
+      group: "reservation",
+      readOnly: true,
+      tags: Object.freeze(["link", "reservation-graph"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0300/searchListRoomBlockChart_V03.do",
+      capability: "room_block_chart",
+      group: "inventory",
+      readOnly: true,
+      tags: Object.freeze(["room-state", "block-chart", "status"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0300/searchListRoomAvaiable.do",
+      capability: "room_availability_chart",
+      group: "inventory",
+      readOnly: true,
+      tags: Object.freeze(["room-availability", "daily-status"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir02_0100/searchListRoomAvailable.do",
+      capability: "room_availability_summary",
+      group: "inventory",
+      readOnly: true,
+      tags: Object.freeze(["room-availability", "summary"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/widget_onlinebookinglist/searchOnlineBookingList.do",
+      capability: "online_booking_widget",
+      group: "reservation",
+      readOnly: true,
+      tags: Object.freeze(["widget", "recent-bookings", "ota"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/comn/searchLangByNatCode.do",
+      capability: "nationality_language_lookup",
+      group: "guest",
+      readOnly: true,
+      tags: Object.freeze(["nationality", "language"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir04/searchListSource.do",
+      capability: "source_catalog",
+      group: "catalog",
+      readOnly: true,
+      tags: Object.freeze(["ota", "source-code"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir04/searchListRoomType.do",
+      capability: "room_type_catalog",
+      group: "catalog",
+      readOnly: true,
+      tags: Object.freeze(["room-type"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir04/searchListMarket.do",
+      capability: "market_catalog",
+      group: "catalog",
+      readOnly: true,
+      tags: Object.freeze(["market"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir04/selectListRate.do",
+      capability: "rate_catalog",
+      group: "catalog",
+      readOnly: true,
+      tags: Object.freeze(["rate"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir04/selectListSalePerson.do",
+      capability: "sale_person_catalog",
+      group: "catalog",
+      readOnly: true,
+      tags: Object.freeze(["sales"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/comn02_0301/searchListAccountContract.do",
+      capability: "account_contract_lookup",
+      group: "account",
+      readOnly: true,
+      tags: Object.freeze(["account", "contract"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0102/searchListSpecialService.do",
+      capability: "special_service_lookup",
+      group: "reservation",
+      readOnly: true,
+      tags: Object.freeze(["service", "upsell"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0111/searchRoomRateOnRsvn.do",
+      capability: "reservation_rate_lookup",
+      group: "reservation",
+      readOnly: true,
+      tags: Object.freeze(["rate", "reservation"]),
+      branches: Object.freeze(["COEX", "GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0124/searchGuestInfo.do",
+      capability: "assigned_room_guest_info",
+      group: "room_assignment",
+      readOnly: true,
+      tags: Object.freeze(["guest", "assignment"]),
+      branches: Object.freeze(["GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0124/searchListAssignedRoom.do",
+      capability: "assigned_room_lookup",
+      group: "room_assignment",
+      readOnly: true,
+      tags: Object.freeze(["assigned-room", "vacancy"]),
+      branches: Object.freeze(["GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0124/searchListRoom.do",
+      capability: "assignable_room_lookup",
+      group: "room_assignment",
+      readOnly: true,
+      tags: Object.freeze(["room-list", "vacancy"]),
+      branches: Object.freeze(["GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0124/searchListRoomTypeByParam.do",
+      capability: "assignable_room_type_lookup",
+      group: "room_assignment",
+      readOnly: true,
+      tags: Object.freeze(["room-type", "assignment"]),
+      branches: Object.freeze(["GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0124/insertAssignedRoom.do",
+      capability: "assigned_room_insert",
+      group: "room_assignment",
+      readOnly: false,
+      tags: Object.freeze(["mutation", "assigned-room"]),
+      branches: Object.freeze(["GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0124/deleteAssignedRoom.do",
+      capability: "assigned_room_delete",
+      group: "room_assignment",
+      readOnly: false,
+      tags: Object.freeze(["mutation", "assigned-room"]),
+      branches: Object.freeze(["GANGNAM"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/ir01_0300_V03/updateReservationProcessExpress.do",
+      capability: "reservation_express_update",
+      group: "reservation",
+      readOnly: false,
+      tags: Object.freeze(["mutation", "reservation", "express"]),
+      branches: Object.freeze(["COEX"])
+    }),
+    Object.freeze({
+      path: "/pms/biz/comn/sendBookingEngineAPI.do",
+      capability: "booking_engine_send",
+      group: "reservation",
+      readOnly: false,
+      tags: Object.freeze(["mutation", "booking-engine"]),
+      branches: Object.freeze(["COEX"])
+    })
+  ]);
+  const WINGS_ENDPOINT_CATALOG = Object.freeze(WINGS_ENDPOINT_DETAILS.map((entry) => entry.path));
+  const WINGS_ENDPOINT_DETAIL_BY_PATH = new Map(WINGS_ENDPOINT_DETAILS.map((entry) => [entry.path, entry]));
 
   function normalizeParamKey(value) {
     return normalizeText(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -182,7 +380,11 @@
     if (!pathname) {
       throw new Error("PMS 요청 URL 경로를 확인할 수 없습니다.");
     }
-    if (WINGS_MUTATION_PATH_RE.test(pathname) || !WINGS_READONLY_PATH_RE.test(pathname)) {
+    const endpointMeta = lookupEndpointMeta(pathname);
+    if (endpointMeta && endpointMeta.readOnly === false) {
+      throw new Error(`PMS 읽기 전용 엔드포인트만 허용됩니다: ${pathname} (${endpointMeta.capability})`);
+    }
+    if (!endpointMeta && (WINGS_MUTATION_PATH_RE.test(pathname) || !WINGS_READONLY_PATH_RE.test(pathname))) {
       throw new Error(`PMS 읽기 전용 엔드포인트만 허용됩니다: ${pathname}`);
     }
   }
@@ -312,10 +514,42 @@
     return [...WINGS_ENDPOINT_CATALOG];
   }
 
+  function cloneEndpointMeta(meta) {
+    if (!meta || typeof meta !== "object") return null;
+    return {
+      path: normalizeText(meta.path || ""),
+      capability: normalizeText(meta.capability || ""),
+      group: normalizeText(meta.group || ""),
+      readOnly: meta.readOnly !== false,
+      tags: [...(Array.isArray(meta.tags) ? meta.tags : [])],
+      branches: [...(Array.isArray(meta.branches) ? meta.branches : [])]
+    };
+  }
+
+  function getEndpointDetails() {
+    return WINGS_ENDPOINT_DETAILS.map((entry) => cloneEndpointMeta(entry));
+  }
+
+  function lookupEndpointMeta(pathname) {
+    const normalizedPath = normalizeText(pathname || "");
+    const direct = WINGS_ENDPOINT_DETAIL_BY_PATH.get(normalizedPath);
+    if (direct) return cloneEndpointMeta(direct);
+    return null;
+  }
+
+  function getReadonlyEndpointCatalog() {
+    return getEndpointDetails().filter((entry) => entry.readOnly);
+  }
+
+  function getMutationEndpointCatalog() {
+    return getEndpointDetails().filter((entry) => !entry.readOnly);
+  }
+
   function getKnownEndpointCount() {
     return WINGS_ENDPOINT_CATALOG.length;
   }
 
+  ns.WINGS_ENDPOINT_DETAILS = WINGS_ENDPOINT_DETAILS;
   ns.WINGS_ENDPOINT_CATALOG = WINGS_ENDPOINT_CATALOG;
   ns.WINGS_READONLY_PATH_RE = WINGS_READONLY_PATH_RE;
   ns.WINGS_MUTATION_PATH_RE = WINGS_MUTATION_PATH_RE;
@@ -328,5 +562,9 @@
   ns.getRoomState = getRoomState;
   ns.getInventory = getInventory;
   ns.getEndpointCatalog = getEndpointCatalog;
+  ns.getEndpointDetails = getEndpointDetails;
+  ns.getReadonlyEndpointCatalog = getReadonlyEndpointCatalog;
+  ns.getMutationEndpointCatalog = getMutationEndpointCatalog;
+  ns.lookupEndpointMeta = lookupEndpointMeta;
   ns.getKnownEndpointCount = getKnownEndpointCount;
 })();

@@ -13,10 +13,12 @@ import json
 import re
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import requests
+from requests.adapters import HTTPAdapter
 
 from src.domain.sync_policy import (
     APPLY_BLOCKING_STATION_WARNING_CODES,
@@ -69,9 +71,10 @@ from reservation_sheet_audit import (
     find_inventory_rows,
     get_access_token,
     infer_year_from_sheet_name,
-    normalize_text,
     parse_source_reservations_from_har,
+    normalize_text,
 )
+from src.io.har_cache import load_har_entries as load_cached_har_entries
 
 DEFAULT_HAR_HEADER_NAMES = {
     "cookie",
@@ -303,6 +306,14 @@ def parse_json_text(text: Any) -> Optional[Any]:
         return None
 
 
+def create_http_session(*, pool_size: int = 8) -> requests.Session:
+    session = requests.Session()
+    adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size, max_retries=2)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
 def load_har_entries(har_path: Optional[str]) -> List[Dict[str, Any]]:
     path_text = str(har_path or "").strip()
     if not path_text:
@@ -311,14 +322,9 @@ def load_har_entries(har_path: Optional[str]) -> List[Dict[str, Any]]:
     if not path.exists():
         raise AuditError(f"HAR file not found: {path}")
     try:
-        with path.open("r", encoding="utf-8") as f:
-            payload = json.load(f)
+        return load_cached_har_entries(path)
     except Exception as exc:  # noqa: BLE001
         raise AuditError(f"Failed to read HAR: {path}") from exc
-    entries = payload.get("log", {}).get("entries", [])
-    if not isinstance(entries, list):
-        return []
-    return [entry for entry in entries if isinstance(entry, dict)]
 
 
 def get_entry_time(entry: Dict[str, Any]) -> str:
@@ -642,12 +648,18 @@ def request_json(
             f"HTTP {response.status_code} {method.upper()} {url} failed: {body[:500]}"
         )
 
-    text = response.text.strip()
-    if not text:
+    if not response.content:
         return {}
-    parsed = parse_json_text(text)
+    try:
+        parsed = response.json()
+    except ValueError:
+        text = response.text.strip()
+        if not text:
+            return {}
+        parsed = parse_json_text(text)
     if parsed is not None:
         return parsed
+    text = response.text.strip()
     return {"raw": text}
 
 
@@ -656,7 +668,7 @@ def load_sheet_snapshot(args: argparse.Namespace) -> Dict[str, Any]:
     if not spreadsheet_id:
         raise AuditError(f"Invalid spreadsheet ID/URL: {args.spreadsheet}")
     access_token = get_access_token(args)
-    client = GoogleSheetsReadonlyClient(access_token=access_token)
+    client = GoogleSheetsReadonlyClient(access_token=access_token, session=create_http_session())
 
     sheet_name = args.sheet_name
     if not sheet_name:
@@ -1045,6 +1057,82 @@ def refresh_reconciliation_counts(summary: Dict[str, Any]) -> None:
         "action_dates": action_dates,
     }
     reconciliation["fingerprint"] = compute_reconciliation_fingerprint(summary)
+
+
+def _prepare_provider_syncs(
+    args: argparse.Namespace,
+    auth_bundle_payload: Dict[str, Any],
+    provider: str,
+    station_room_ids: List[str],
+    naver_room_ids: List[str],
+    range_start: str,
+    range_end: str,
+    station_targets: Dict[str, int],
+    naver_targets: Dict[str, int],
+) -> Dict[str, Tuple[Dict[str, Any], Optional[Tuple[Dict[str, str], List[Dict[str, Any]]]], Optional[Exception]]]:
+    tasks: Dict[str, Any] = {}
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        if provider in ("station", "both"):
+            tasks["station"] = executor.submit(
+                _run_provider_prepare,
+                "station",
+                args,
+                auth_bundle_payload,
+                station_room_ids,
+                range_start,
+                range_end,
+                station_targets,
+            )
+        if provider in ("naver", "both"):
+            tasks["naver"] = executor.submit(
+                _run_provider_prepare,
+                "naver",
+                args,
+                auth_bundle_payload,
+                naver_room_ids,
+                range_start,
+                range_end,
+                naver_targets,
+            )
+        return {name: future.result() for name, future in tasks.items()}
+
+
+def _run_provider_prepare(
+    provider_key: str,
+    args: argparse.Namespace,
+    auth_bundle_payload: Dict[str, Any],
+    room_ids: List[str],
+    range_start: str,
+    range_end: str,
+    targets: Dict[str, int],
+) -> Tuple[Dict[str, Any], Optional[Tuple[Dict[str, str], List[Dict[str, Any]]]], Optional[Exception]]:
+    session = create_http_session()
+    try:
+        if provider_key == "station":
+            summary, apply_context = prepare_station_sync(
+                session=session,
+                args=args,
+                auth_bundle_payload=auth_bundle_payload,
+                room_ids=room_ids,
+                range_start=range_start,
+                range_end=range_end,
+                station_targets=targets,
+            )
+        else:
+            summary, apply_context = prepare_naver_sync(
+                session=session,
+                args=args,
+                auth_bundle_payload=auth_bundle_payload,
+                room_ids=room_ids,
+                range_start=range_start,
+                range_end=range_end,
+                naver_targets=targets,
+            )
+        return summary, apply_context, None
+    except Exception as exc:  # noqa: BLE001
+        return {}, None, exc
+    finally:
+        session.close()
 
 
 def prepare_station_sync(
@@ -1905,7 +1993,7 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
 
     station_apply_context: Optional[Tuple[Dict[str, str], List[Dict[str, Any]]]] = None
     naver_apply_context: Optional[Tuple[Dict[str, str], List[Dict[str, Any]]]] = None
-    with requests.Session() as session:
+    with create_http_session() as session:
         if wings_har_paths:
             summary["ota_sources"] = build_ota_har_source_summary(
                 session=session,
@@ -1925,65 +2013,58 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
                 summary.get("pms_sources", {}),
             )
 
-        if provider in ("station", "both"):
-            try:
-                station_summary, station_apply_context = prepare_station_sync(
-                    session=session,
-                    args=args,
-                    auth_bundle_payload=auth_bundle_payload,
-                    room_ids=station_room_ids,
-                    range_start=range_start,
-                    range_end=range_end,
-                    station_targets=station_targets,
-                )
-            except (AuditError, requests.RequestException) as exc:
+        provider_results = _prepare_provider_syncs(
+            args=args,
+            auth_bundle_payload=auth_bundle_payload,
+            provider=provider,
+            station_room_ids=station_room_ids,
+            naver_room_ids=naver_room_ids,
+            range_start=range_start,
+            range_end=range_end,
+            station_targets=station_targets,
+            naver_targets=naver_targets,
+        )
+        if "station" in provider_results:
+            station_summary, station_apply_context, station_exc = provider_results["station"]
+            if station_exc is not None:
                 if provider != "both":
-                    raise
+                    raise station_exc
                 station_summary = build_provider_fetch_error_summary(
                     "station",
                     station_room_ids,
                     station_targets,
-                    exc,
+                    station_exc,
                 )
                 station_apply_context = None
                 summary["provider_errors"].append(
                     {
                         "provider": "station",
                         "stage": "prepare",
-                        "type": exc.__class__.__name__,
-                        "message": str(exc).strip() or exc.__class__.__name__,
+                        "type": station_exc.__class__.__name__,
+                        "message": str(station_exc).strip() or station_exc.__class__.__name__,
                     }
                 )
             summary["station"] = station_summary
             summary["reconciliation"]["providers"]["station"] = station_summary.get("reconciliation", {})
 
-        if provider in ("naver", "both"):
-            try:
-                naver_summary, naver_apply_context = prepare_naver_sync(
-                    session=session,
-                    args=args,
-                    auth_bundle_payload=auth_bundle_payload,
-                    room_ids=naver_room_ids,
-                    range_start=range_start,
-                    range_end=range_end,
-                    naver_targets=naver_targets,
-                )
-            except (AuditError, requests.RequestException) as exc:
+        if "naver" in provider_results:
+            naver_summary, naver_apply_context, naver_exc = provider_results["naver"]
+            if naver_exc is not None:
                 if provider != "both":
-                    raise
+                    raise naver_exc
                 naver_summary = build_provider_fetch_error_summary(
                     "naver",
                     naver_room_ids,
                     naver_targets,
-                    exc,
+                    naver_exc,
                 )
                 naver_apply_context = None
                 summary["provider_errors"].append(
                     {
                         "provider": "naver",
                         "stage": "prepare",
-                        "type": exc.__class__.__name__,
-                        "message": str(exc).strip() or exc.__class__.__name__,
+                        "type": naver_exc.__class__.__name__,
+                        "message": str(naver_exc).strip() or naver_exc.__class__.__name__,
                     }
                 )
             summary["naver"] = naver_summary

@@ -1,0 +1,91 @@
+{
+  "mapping_version": "branch-provider-mapping-v1",
+  "branches": [
+    {
+      "branch": "COEX",
+      "display_name": "더 코엑스",
+      "sheet_tabs": ["코엑스", "코엑스2"],
+      "sheet_scope": {
+        "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
+        "sheet_name": "2026"
+      },
+      "ota_profiles": {
+        "naver-partner": {
+          "business_id": "1356779",
+          "status": "shared-default"
+        },
+        "admin-station": {
+          "branch_id": "18",
+          "status": "shared-default"
+        }
+      },
+      "wings_profiles": [
+        {
+          "property_no": "13",
+          "bsns_code": "13",
+          "preset_key": "wings-global-guest-list",
+          "endpoint_path": "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do",
+          "status": "verified-by-har"
+        },
+        {
+          "property_no": "13",
+          "bsns_code": "13",
+          "preset_key": "wings-reservation-list",
+          "endpoint_path": "/pms/biz/ir04_0200X_V03/searchListRsvn.do",
+          "status": "verified-by-har"
+        }
+      ]
+    },
+    {
+      "branch": "GANGNAM",
+      "display_name": "강남",
+      "sheet_tabs": ["강남"],
+      "sheet_scope": {
+        "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
+        "sheet_name": "2026"
+      },
+      "ota_profiles": {
+        "naver-partner": {
+          "business_id": "1356779",
+          "status": "shared-default"
+        },
+        "admin-station": {
+          "branch_id": "18",
+          "status": "shared-default"
+        }
+      },
+      "wings_profiles": [
+        {
+          "property_no": "91",
+          "bsns_code": "91",
+          "preset_key": "wings-global-guest-list",
+          "endpoint_path": "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do",
+          "status": "verified-by-har"
+        },
+        {
+          "property_no": "91",
+          "bsns_code": "91",
+          "preset_key": "wings-reservation-list",
+          "endpoint_path": "/pms/biz/ir04_0200X_V03/searchListRsvn.do",
+          "status": "verified-by-har"
+        }
+      ]
+    },
+    {
+      "branch": "BRANCH_THE_SEOLLEUNG",
+      "display_name": "선릉",
+      "sheet_tabs": [],
+      "sheet_scope": {
+        "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
+        "sheet_name": "2026"
+      },
+      "ota_profiles": {},
+      "wings_profiles": []
+    }
+  ],
+  "notes": [
+    "Naver/Station IDs are current shared defaults from repo constants and must be replaced with branch-specific verified IDs when sampled live capture starts.",
+    "Wings property/bsns codes and current reservation endpoints were validated against 2026-03-12 official COEX/GANGNAM HAR captures.",
+    "Legacy `/pms/biz/ir04_0100X/searchListRsvn.do` is retained only as backward-compatible HAR alias and is not the current default reservation-list path."
+  ]
+}

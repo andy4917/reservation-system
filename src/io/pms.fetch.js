@@ -71,7 +71,10 @@
     buildCookieHeaderFromCookies,
     importCookiesForBundle,
     isDate,
-    buildDateRange
+    buildDateRange,
+    normalizeBranchLabel,
+    normalizeReadonlyDateRange,
+    buildWingsPmsPresetRequest
   } = N;
   const { buildReservationIdentity } = K;
   const { roomNameKey } = R;
@@ -124,12 +127,19 @@
         };
   let naverBizItemsCache = { ts: 0, items: [] };
   const pmsReservationCache = App.runtime.pmsReservationCache || (App.runtime.pmsReservationCache = new Map());
+  const pmsReservationInflightCache =
+    App.runtime.pmsReservationInflightCache || (App.runtime.pmsReservationInflightCache = new Map());
+  const pmsCapabilityCache = App.runtime.pmsCapabilityCache || (App.runtime.pmsCapabilityCache = new Map());
+  const pmsCapabilityInflightCache =
+    App.runtime.pmsCapabilityInflightCache || (App.runtime.pmsCapabilityInflightCache = new Map());
   const providerFetchInstrumentation =
     App.runtime.providerFetchInstrumentation ||
     (App.runtime.providerFetchInstrumentation = { byProvider: {} });
   const PMS_RESERVATION_CACHE_TTL_MS = 15000;
   const PMS_FETCH_TIMEOUT_MS = 15000;
   const PMS_FETCH_RETRY_LIMIT = 2;
+  const PMS_FETCH_MAX_QUERY_DAYS = 31;
+  const PMS_CAPABILITY_CACHE_TTL_MS = 15000;
   const PMS_READONLY_PATH_RE = /\/pms\/biz\/[^/]+\/(?:search|select|view)[^/]*\.do$/i;
   const PMS_MUTATION_PATH_RE = /\/pms\/biz\/[^/]+\/(?:update|insert|delete|send)[^/]*\.do$/i;
   const PMS_SENSITIVE_HEADER_NAMES = new Set([
@@ -261,6 +271,32 @@
   ];
   const PRICE_FIELD_ALIASES = ["price", "amount", "cost", "room_amt", "rate", "totalPrice", "paymentAmount"];
   const ACCOUNT_FIELD_ALIASES = ["account", "acct", "accountName", "sellerAccount"];
+  const NATIONALITY_FIELD_ALIASES = [
+    "nationality",
+    "guest_nationality",
+    "guestNation",
+    "guest_country",
+    "nat_code",
+    "natCode",
+    "countryCode",
+    "nationality_nights"
+  ];
+  const LANGUAGE_CODE_FIELD_ALIASES = [
+    "lang_code",
+    "langCode",
+    "language_code",
+    "languageCode",
+    "guest_lang_code"
+  ];
+  const LANGUAGE_NAME_FIELD_ALIASES = [
+    "lang_name",
+    "langName",
+    "language",
+    "language_name",
+    "languageName",
+    "preferred_language"
+  ];
+  const SOURCE_CODE_FIELD_ALIASES = ["source_code", "sourceCode", "raw_channel", "rawChannel"];
   const STATUS_FIELD_ALIASES = [
     "status",
     "reservation_status",
@@ -340,6 +376,283 @@
     "price-set",
     "biz-items"
   ];
+  const WINGS_LIVE_CONTRACT_DEFS = Object.freeze({
+    reservation_summary: Object.freeze({
+      path: "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03_SUM.do",
+      buildBody(request, context, profile) {
+        return buildMergedCapabilityRequestBody(
+          profile,
+          buildReadonlyRangeOverrideMap(request, context)
+        );
+      }
+    }),
+    reservation_detail: Object.freeze({
+      path: "/pms/biz/ir01_0102/searchFITReserv.do",
+      defaultPageId: "IR01_0310_V03",
+      buildBody(request, context, profile) {
+        const reservationNo = coerceReservationNo(
+          request?.reservationNo || request?.rsvnNo || request?.reservation_id || request?.reservationId || ""
+        );
+        const reservationSeqNo = normalizeText(request?.reservationSeqNo || request?.rsvnSeqNo || "1") || "1";
+        if (!reservationNo) throw new Error("reservation_detail requires reservationNo.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: normalizeText(request?.propertyNo || context?.propertyNo || ""),
+          BSNS_CODE: normalizeText(request?.bsnsCode || context?.bsnsCode || ""),
+          RSVN_NO: reservationNo,
+          RSVN_SEQ_NO: reservationSeqNo,
+          PAGE_ID: normalizeText(request?.pageId || "IR01_0310_V03") || "IR01_0310_V03",
+          AUTH_PASS_YN: normalizeText(request?.authPassYn || "N") || "N"
+        });
+      }
+    }),
+    linked_reservation_lookup: Object.freeze({
+      path: "/pms/biz/fd01_0101/searchListLinkedReservation.do",
+      buildBody(request, context, profile) {
+        const reservationNo = coerceReservationNo(
+          request?.reservationNo || request?.rsvnNo || request?.reservation_id || request?.reservationId || ""
+        );
+        const reservationRef = coerceReservationNo(
+          request?.reservationRef || request?.globalReservationNo || request?.globalRsvnNo || ""
+        );
+        if (!reservationNo && !reservationRef) {
+          throw new Error("linked_reservation_lookup requires reservationNo or reservationRef.");
+        }
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: normalizeText(request?.propertyNo || context?.propertyNo || ""),
+          BSNS_CODE: normalizeText(request?.bsnsCode || context?.bsnsCode || ""),
+          RSVN_NO: reservationNo,
+          GLOBAL_RSVN_NO: reservationRef
+        });
+      }
+    }),
+    room_block_chart: Object.freeze({
+      path: "/pms/biz/ir01_0300/searchListRoomBlockChart_V03.do",
+      buildBody(request, context, profile) {
+        const { startDate, endDate } = normalizePmsReadonlyQuery(request || {});
+        return buildMergedCapabilityRequestBody(
+          profile,
+          buildReadonlyRangeOverrideMap({ startDate, endDate }, context)
+        );
+      }
+    }),
+    room_availability_chart: Object.freeze({
+      path: "/pms/biz/ir01_0300/searchListRoomAvaiable.do",
+      buildBody(request, context, profile) {
+        const { startDate, endDate } = normalizePmsReadonlyQuery(request || {});
+        return buildMergedCapabilityRequestBody(
+          profile,
+          buildReadonlyRangeOverrideMap({ startDate, endDate }, context)
+        );
+      }
+    }),
+    room_availability_summary: Object.freeze({
+      path: "/pms/biz/ir02_0100/searchListRoomAvailable.do",
+      buildBody(request, context, profile) {
+        const { startDate, endDate } = normalizePmsReadonlyQuery(request || {});
+        return buildMergedCapabilityRequestBody(
+          profile,
+          buildReadonlyRangeOverrideMap({ startDate, endDate }, context)
+        );
+      }
+    }),
+    source_catalog: Object.freeze({
+      path: "/pms/biz/ir04/searchListSource.do",
+      buildBody(request, context, profile) {
+        const propertyNo = normalizeText(request?.propertyNo || context?.propertyNo || "");
+        if (!propertyNo) throw new Error("source_catalog requires propertyNo.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: propertyNo
+        });
+      }
+    }),
+    room_type_catalog: Object.freeze({
+      path: "/pms/biz/ir04/searchListRoomType.do",
+      buildBody(request, context, profile) {
+        const propertyNo = normalizeText(request?.propertyNo || context?.propertyNo || "");
+        if (!propertyNo) throw new Error("room_type_catalog requires propertyNo.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: propertyNo
+        });
+      }
+    }),
+    market_catalog: Object.freeze({
+      path: "/pms/biz/ir04/searchListMarket.do",
+      buildBody(request, context, profile) {
+        const propertyNo = normalizeText(request?.propertyNo || context?.propertyNo || "");
+        if (!propertyNo) throw new Error("market_catalog requires propertyNo.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: propertyNo
+        });
+      }
+    }),
+    rate_catalog: Object.freeze({
+      path: "/pms/biz/ir04/selectListRate.do",
+      buildBody(request, context, profile) {
+        const propertyNo = normalizeText(request?.propertyNo || context?.propertyNo || "");
+        if (!propertyNo) throw new Error("rate_catalog requires propertyNo.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: propertyNo
+        });
+      }
+    }),
+    sale_person_catalog: Object.freeze({
+      path: "/pms/biz/ir04/selectListSalePerson.do",
+      buildBody(request, context, profile) {
+        const propertyNo = normalizeText(request?.propertyNo || context?.propertyNo || "");
+        if (!propertyNo) throw new Error("sale_person_catalog requires propertyNo.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: propertyNo
+        });
+      }
+    }),
+    nationality_language_lookup: Object.freeze({
+      path: "/pms/biz/comn/searchLangByNatCode.do",
+      buildBody(request, context, profile) {
+        const propertyNo = normalizeText(request?.propertyNo || context?.propertyNo || "");
+        const natCode = normalizeText(request?.natCode || request?.nationalityCode || request?.countryCode || "");
+        if (!propertyNo) throw new Error("nationality_language_lookup requires propertyNo.");
+        if (!natCode) throw new Error("nationality_language_lookup requires natCode.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: propertyNo,
+          NAT_CODE: natCode
+        });
+      }
+    }),
+    account_contract_lookup: Object.freeze({
+      path: "/pms/biz/comn02_0301/searchListAccountContract.do",
+      buildBody(request, context, profile) {
+        const propertyNo = normalizeText(request?.propertyNo || context?.propertyNo || "");
+        if (!propertyNo) throw new Error("account_contract_lookup requires propertyNo.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: propertyNo
+        });
+      }
+    }),
+    special_service_lookup: Object.freeze({
+      path: "/pms/biz/ir01_0102/searchListSpecialService.do",
+      buildBody(request, context, profile) {
+        const reservationNo = coerceReservationNo(request?.reservationNo || request?.rsvnNo || "");
+        if (!reservationNo) throw new Error("special_service_lookup requires reservationNo.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: normalizeText(request?.propertyNo || context?.propertyNo || ""),
+          BSNS_CODE: normalizeText(request?.bsnsCode || context?.bsnsCode || ""),
+          RSVN_NO: reservationNo,
+          RSVN_SEQ_NO: normalizeText(request?.reservationSeqNo || request?.rsvnSeqNo || "1") || "1"
+        });
+      }
+    }),
+    reservation_rate_lookup: Object.freeze({
+      path: "/pms/biz/ir01_0111/searchRoomRateOnRsvn.do",
+      buildBody(request, context, profile) {
+        const reservationNo = coerceReservationNo(request?.reservationNo || request?.rsvnNo || "");
+        if (!reservationNo) throw new Error("reservation_rate_lookup requires reservationNo.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: normalizeText(request?.propertyNo || context?.propertyNo || ""),
+          BSNS_CODE: normalizeText(request?.bsnsCode || context?.bsnsCode || ""),
+          RSVN_NO: reservationNo,
+          RSVN_SEQ_NO: normalizeText(request?.reservationSeqNo || request?.rsvnSeqNo || "1") || "1"
+        });
+      }
+    }),
+    assigned_room_guest_info: Object.freeze({
+      path: "/pms/biz/ir01_0124/searchGuestInfo.do",
+      buildBody(request, context, profile) {
+        const reservationNo = coerceReservationNo(request?.reservationNo || request?.rsvnNo || "");
+        if (!reservationNo) throw new Error("assigned_room_guest_info requires reservationNo.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: normalizeText(request?.propertyNo || context?.propertyNo || ""),
+          BSNS_CODE: normalizeText(request?.bsnsCode || context?.bsnsCode || ""),
+          RSVN_NO: reservationNo,
+          RSVN_SEQ_NO: normalizeText(request?.reservationSeqNo || request?.rsvnSeqNo || "1") || "1"
+        });
+      }
+    }),
+    assigned_room_lookup: Object.freeze({
+      path: "/pms/biz/ir01_0124/searchListAssignedRoom.do",
+      buildBody(request, context, profile) {
+        const propertyNo = normalizeText(request?.propertyNo || context?.propertyNo || "");
+        const bsnsCode = normalizeText(request?.bsnsCode || context?.bsnsCode || propertyNo);
+        const reservationNo = coerceReservationNo(request?.reservationNo || request?.rsvnNo || "");
+        const reservationSeqNo = normalizeText(request?.reservationSeqNo || request?.rsvnSeqNo || "1") || "1";
+        const roomTypeCode = normalizeText(request?.roomTypeCode || request?.room_type_code || "");
+        const arrvDate = parseAnyDate(request?.arrvDate || request?.arrivalDate || request?.checkin || "");
+        const deptDate = parseAnyDate(request?.deptDate || request?.departureDate || request?.checkout || "");
+        const rsvnStatusCode = normalizeText(request?.rsvnStatusCode || request?.reservationStatusCode || "RR") || "RR";
+        const indGroupCode = normalizeText(request?.indGroupCode || "F") || "F";
+        if (!propertyNo || !bsnsCode) throw new Error("assigned_room_lookup requires propertyNo and bsnsCode.");
+        if (!reservationNo) throw new Error("assigned_room_lookup requires reservationNo.");
+        if (!roomTypeCode) throw new Error("assigned_room_lookup requires roomTypeCode.");
+        if (!arrvDate || !deptDate) throw new Error("assigned_room_lookup requires arrvDate and deptDate.");
+        const compactArrv = arrvDate.replace(/-/g, "");
+        const compactDept = deptDate.replace(/-/g, "");
+        return buildMergedCapabilityRequestBody(
+          profile,
+          {
+            FLOOR_CODE: normalizeText(request?.floorCode || ""),
+            ROOM_TYPE_CODE: roomTypeCode,
+            ROOM_NO_F: normalizeText(request?.roomNoFrom || ""),
+            ROOM_NO_T: normalizeText(request?.roomNoTo || ""),
+            VIEW_CODE: normalizeText(request?.viewCode || ""),
+            ROOM_STATUS_CODE: normalizeText(request?.roomStatusCode || "VAC") || "VAC",
+            ROOM_CLEAN_STATUS_CODE: normalizeText(request?.roomCleanStatusCode || ""),
+            SMOKE_YN: normalizeText(request?.smokeYn || ""),
+            FORCE_BY_USER_YN: normalizeText(request?.forceByUserYn || ""),
+            VALUE_OF_CURSOR: normalizeText(request?.valueOfCursor || ""),
+            BSNS_CODE: bsnsCode,
+            PROPERTY_NO: propertyNo,
+            IND_GROUP_CODE: indGroupCode,
+            RSVN_NO: reservationNo,
+            RSVN_SEQ_NO: reservationSeqNo,
+            ARRV_DATE: compactArrv,
+            DEPT_DATE: compactDept,
+            ROOM_TYPE_NAME: normalizeText(request?.roomTypeName || ""),
+            RSVN_NAME_RES: normalizeText(request?.reservationName || request?.guestName || ""),
+            RSVN_STATUS_CODE: rsvnStatusCode,
+            RSVN_ROOM_CNT: normalizeText(request?.reservationRoomCount || "1") || "1"
+          },
+          [
+            ["ROOM_TYPE_CODE_ARRAY[]", roomTypeCode],
+            ["ROOM_STATUS_CODE_ARRAY[]", normalizeText(request?.roomStatusCode || "VAC") || "VAC"]
+          ]
+        );
+      }
+    }),
+    assignable_room_lookup: Object.freeze({
+      path: "/pms/biz/ir01_0124/searchListRoom.do",
+      buildBody(request, context, profile) {
+        const propertyNo = normalizeText(request?.propertyNo || context?.propertyNo || "");
+        const bsnsCode = normalizeText(request?.bsnsCode || context?.bsnsCode || propertyNo);
+        const roomTypeCode = normalizeText(request?.roomTypeCode || request?.room_type_code || "");
+        const arrvDate = parseAnyDate(request?.arrvDate || request?.arrivalDate || request?.checkin || "");
+        const deptDate = parseAnyDate(request?.deptDate || request?.departureDate || request?.checkout || "");
+        if (!propertyNo || !bsnsCode) throw new Error("assignable_room_lookup requires propertyNo and bsnsCode.");
+        if (!roomTypeCode) throw new Error("assignable_room_lookup requires roomTypeCode.");
+        if (!arrvDate || !deptDate) throw new Error("assignable_room_lookup requires arrvDate and deptDate.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: propertyNo,
+          BSNS_CODE: bsnsCode,
+          ROOM_TYPE_CODE: roomTypeCode,
+          ARRV_DATE: arrvDate.replace(/-/g, ""),
+          DEPT_DATE: deptDate.replace(/-/g, ""),
+          ROOM_STATUS_CODE: normalizeText(request?.roomStatusCode || "VAC") || "VAC"
+        });
+      }
+    }),
+    assignable_room_type_lookup: Object.freeze({
+      path: "/pms/biz/ir01_0124/searchListRoomTypeByParam.do",
+      buildBody(request, context, profile) {
+        const propertyNo = normalizeText(request?.propertyNo || context?.propertyNo || "");
+        const bsnsCode = normalizeText(request?.bsnsCode || context?.bsnsCode || propertyNo);
+        if (!propertyNo || !bsnsCode) throw new Error("assignable_room_type_lookup requires propertyNo and bsnsCode.");
+        return buildMergedCapabilityRequestBody(profile, {
+          PROPERTY_NO: propertyNo,
+          BSNS_CODE: bsnsCode,
+          ARRV_DATE: parseAnyDate(request?.arrvDate || request?.arrivalDate || request?.checkin || "").replace(/-/g, ""),
+          DEPT_DATE: parseAnyDate(request?.deptDate || request?.departureDate || request?.checkout || "").replace(/-/g, "")
+        });
+      }
+    })
+  });
 
   function flattenAdminPayload(payload) {
     if (!payload) return [];
@@ -369,6 +682,13 @@
     } catch (_) {
       return null;
     }
+  }
+
+  function createTaggedError(code, message, detail = "") {
+    const error = new Error(message);
+    error.code = code;
+    error.detail = detail;
+    return error;
   }
 
   function summarizeProviderRowSources(rows) {
@@ -597,6 +917,44 @@
     return out;
   }
 
+  function normalizePmsReadonlyQuery(query) {
+    if (typeof normalizeReadonlyDateRange === "function") {
+      return normalizeReadonlyDateRange(query || {}, 7, PMS_FETCH_MAX_QUERY_DAYS);
+    }
+    const startDate = parseAnyDate(query?.startDate || "");
+    const endDate = parseAnyDate(query?.endDate || "");
+    if (!startDate || !endDate) {
+      throw new Error("PMS read-only query requires startDate/endDate.");
+    }
+    const start = fromDateKey(startDate);
+    const end = fromDateKey(endDate);
+    const rawDayCount =
+      start && end ? Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1) : 1;
+    const limitedEndDate =
+      start && rawDayCount > PMS_FETCH_MAX_QUERY_DAYS
+        ? toDateKey(addDays(start, PMS_FETCH_MAX_QUERY_DAYS - 1))
+        : endDate;
+    return {
+      startDate,
+      endDate: limitedEndDate,
+      requestedStartDate: startDate,
+      requestedEndDate: endDate,
+      dayCount: Math.min(rawDayCount, PMS_FETCH_MAX_QUERY_DAYS),
+      requestedDayCount: rawDayCount,
+      limited: rawDayCount > PMS_FETCH_MAX_QUERY_DAYS
+    };
+  }
+
+  function normalizeRecordBranch(value) {
+    if (typeof normalizeBranchLabel === "function") return normalizeBranchLabel(value);
+    const text = normalizeText(value || "").toUpperCase();
+    return text.replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  }
+
+  function isGenericPropertyBranch(branch) {
+    return /^PROPERTY_\d+$/.test(normalizeText(branch || "").toUpperCase());
+  }
+
   function inferBranchFromReservationRow(row, channelRaw, account) {
     const branchRaw = normalizeText(getFirstValueByAlias(row, BRANCH_FIELD_ALIASES) || "");
     const candidates = [branchRaw, normalizeText(channelRaw || ""), normalizeText(account || "")].join(" ").toLowerCase();
@@ -604,6 +962,244 @@
     if (candidates.includes("gangnam") || candidates.includes("강남")) return "GANGNAM";
     if (/^\d+$/.test(branchRaw)) return `PROPERTY_${Number(branchRaw)}`;
     return "";
+  }
+
+  function applyBranchToReservationRecords(records, branch) {
+    const normalizedBranch = normalizeRecordBranch(branch);
+    if (!normalizedBranch) return Array.isArray(records) ? records : [];
+    return (Array.isArray(records) ? records : []).map((record) => {
+      const currentBranch = normalizeRecordBranch(record?.branch || "");
+      if (currentBranch && !isGenericPropertyBranch(currentBranch)) {
+        return { ...record, branch: currentBranch };
+      }
+      return { ...record, branch: normalizedBranch };
+    });
+  }
+
+  function resolvePmsFetchProfiles(syncConfig = null) {
+    const directUrl = normalizeText(
+      syncConfig?.pmsReservationUrl || syncConfig?.pmsApiUrl || syncConfig?.pmsReservationApiUrl || ""
+    );
+    const directBundle =
+      syncConfig?.pmsAuthBundle && typeof syncConfig.pmsAuthBundle === "object" ? syncConfig.pmsAuthBundle : null;
+    const directPreset = syncConfig?.pmsPreset && typeof syncConfig.pmsPreset === "object" ? syncConfig.pmsPreset : null;
+    const rawProfiles = Array.isArray(syncConfig?.pmsBranchProfiles) ? syncConfig.pmsBranchProfiles : [];
+    const profiles = rawProfiles
+      .map((profile, index) => {
+        const branch = normalizeRecordBranch(profile?.branch || profile?.branchKey || `PROFILE_${index + 1}`);
+        const pmsReservationUrl = normalizeText(
+          profile?.pmsReservationUrl || profile?.pmsApiUrl || profile?.pmsReservationApiUrl || profile?.url || ""
+        );
+        const pmsAuthBundle =
+          profile?.pmsAuthBundle && typeof profile.pmsAuthBundle === "object"
+            ? profile.pmsAuthBundle
+            : profile?.bundle && typeof profile.bundle === "object"
+              ? profile.bundle
+              : null;
+        const pmsPreset = profile?.pmsPreset && typeof profile.pmsPreset === "object" ? profile.pmsPreset : null;
+        if (!pmsReservationUrl && !normalizeText(pmsPreset?.presetKey || "")) return null;
+        return {
+          branch,
+          pmsReservationUrl,
+          pmsAuthBundle,
+          pmsPreset
+        };
+      })
+      .filter(Boolean);
+    if (profiles.length > 0) return profiles;
+    if (!directUrl && !normalizeText(directPreset?.presetKey || "")) return [];
+    return [{
+      branch: "",
+      pmsReservationUrl: directUrl,
+      pmsAuthBundle: directBundle,
+      pmsPreset: directPreset
+    }];
+  }
+
+  function parseBundleRequestBodyParams(bundle) {
+    const params = new URLSearchParams();
+    const requestBody = normalizeText(bundle?.requestBody || "");
+    if (!requestBody) return params;
+    try {
+      const parsed = new URLSearchParams(requestBody);
+      parsed.forEach((value, key) => params.append(key, value));
+    } catch (_) {
+      // Keep empty params on malformed body.
+    }
+    return params;
+  }
+
+  function getParamValueIgnoreCase(params, wantedKeys) {
+    const normalizedWanted = new Set((Array.isArray(wantedKeys) ? wantedKeys : [wantedKeys]).map((key) => normalizeReservationParamKey(key)));
+    for (const [key, value] of params.entries()) {
+      if (normalizedWanted.has(normalizeReservationParamKey(key))) return normalizeText(value);
+    }
+    return "";
+  }
+
+  function extractProfilePmsContext(profile) {
+    const preset = profile?.pmsPreset && typeof profile.pmsPreset === "object" ? profile.pmsPreset : {};
+    const bundle = profile?.pmsAuthBundle && typeof profile.pmsAuthBundle === "object" ? profile.pmsAuthBundle : {};
+    const params = parseBundleRequestBodyParams(bundle);
+    const propertyNo = normalizeText(
+      preset.propertyNo || getParamValueIgnoreCase(params, ["PROPERTY_NO", "propertyNo", "property_no"]) || ""
+    );
+    const bsnsCode = normalizeText(
+      preset.bsnsCode || getParamValueIgnoreCase(params, ["BSNS_CODE", "bsnsCode", "bsns_code"]) || propertyNo
+    );
+    const pageId = normalizeText(
+      preset.pageId || getParamValueIgnoreCase(params, ["PAGE_ID", "pageId", "page_id", "filter[PAGE_ID]"]) || ""
+    );
+    const urlText = normalizeText(profile?.pmsReservationUrl || "");
+    let origin = "https://pms.sanhait.com";
+    try {
+      if (urlText) origin = new URL(urlText).origin || origin;
+    } catch (_) {
+      // Keep default origin.
+    }
+    return {
+      propertyNo,
+      bsnsCode,
+      pageId,
+      origin,
+      branch: normalizeRecordBranch(profile?.branch || ""),
+      params
+    };
+  }
+
+  function normalizeCapabilityName(value) {
+    return normalizeText(value || "").toLowerCase();
+  }
+
+  function normalizeWingsCapabilityRequest(raw) {
+    const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const capability = normalizeCapabilityName(source.capability || source.name || source.type || "");
+    return {
+      ...source,
+      capability,
+      branch: normalizeRecordBranch(source.branch || source.branchName || ""),
+      reservationNo: coerceReservationNo(source.reservationNo || source.rsvnNo || source.reservation_id || source.reservationId || ""),
+      reservationSeqNo: normalizeText(source.reservationSeqNo || source.rsvnSeqNo || "1") || "1",
+      propertyNo: normalizeText(source.propertyNo || source.PROPERTY_NO || ""),
+      bsnsCode: normalizeText(source.bsnsCode || source.BSNS_CODE || ""),
+      pageId: normalizeText(source.pageId || source.PAGE_ID || ""),
+      natCode: normalizeText(source.natCode || source.nationalityCode || source.NAT_CODE || ""),
+      startDate: parseAnyDate(source.startDate || source.fromDate || source.arrivalDateFrom || ""),
+      endDate: parseAnyDate(source.endDate || source.toDate || source.arrivalDateTo || ""),
+      arrvDate: parseAnyDate(source.arrvDate || source.arrivalDate || source.checkin || ""),
+      deptDate: parseAnyDate(source.deptDate || source.departureDate || source.checkout || ""),
+      roomTypeCode: normalizeText(source.roomTypeCode || source.ROOM_TYPE_CODE || ""),
+      roomTypeName: normalizeText(source.roomTypeName || source.ROOM_TYPE_NAME || ""),
+      rsvnStatusCode: normalizeText(source.rsvnStatusCode || source.RSVN_STATUS_CODE || ""),
+      indGroupCode: normalizeText(source.indGroupCode || source.IND_GROUP_CODE || ""),
+      requestBody: normalizeText(source.requestBody || "")
+    };
+  }
+
+  function resolveCapabilityProfiles(syncConfig, request) {
+    const branchFilter = normalizeRecordBranch(request?.branch || "");
+    return resolvePmsFetchProfiles(syncConfig).filter((profile) => {
+      const profileBranch = normalizeRecordBranch(profile?.branch || "");
+      if (branchFilter && profileBranch && profileBranch !== branchFilter) return false;
+      return true;
+    });
+  }
+
+  function capabilitySupportsProfile(capabilityDef, profile) {
+    const endpointMeta =
+      typeof W.lookupEndpointMeta === "function" ? W.lookupEndpointMeta(capabilityDef?.path || "") : null;
+    const branches = Array.isArray(endpointMeta?.branches) ? endpointMeta.branches : [];
+    const profileBranch = normalizeRecordBranch(profile?.branch || "");
+    if (!profileBranch || branches.length <= 0) return true;
+    return branches.includes(profileBranch);
+  }
+
+  function buildCapabilityRequestPlanForProfile(profile, rawRequest) {
+    const request = normalizeWingsCapabilityRequest(rawRequest);
+    const capability = normalizeCapabilityName(request.capability);
+    const contract = WINGS_LIVE_CONTRACT_DEFS[capability] || null;
+    if (!contract) return null;
+    if (!capabilitySupportsProfile(contract, profile)) return null;
+    const context = extractProfilePmsContext(profile);
+    const url = new URL(contract.path, context.origin);
+    const bodyText =
+      request.requestBody ||
+      (typeof contract.buildBody === "function" ? contract.buildBody(request, context, profile) : "");
+    const bundle = {
+      ...(profile?.pmsAuthBundle && typeof profile.pmsAuthBundle === "object" ? profile.pmsAuthBundle : {}),
+      method: "POST",
+      contentType: "form",
+      requestBody: bodyText,
+      headers: {
+        ...toPlainHeaders((profile?.pmsAuthBundle && profile.pmsAuthBundle.headers) || {}),
+        "X-Requested-With": "XMLHttpRequest"
+      }
+    };
+    const options = {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      body: bodyText
+    };
+    assertReadonlyPmsRequest(url, options);
+    const requestPlan = {
+      url,
+      options,
+      endpointPath: normalizeText(url.pathname || ""),
+      requestSchemaIssues: []
+    };
+    return {
+      capability,
+      branch: context.branch,
+      bundle,
+      requestPlan,
+      profileContext: context
+    };
+  }
+
+  function buildPmsRequestPlanForProfile(profile, query) {
+    const profileUrl = normalizeText(profile?.pmsReservationUrl || "");
+    const profileBundle =
+      profile?.pmsAuthBundle && typeof profile.pmsAuthBundle === "object" ? profile.pmsAuthBundle : null;
+    let urlRaw = profileUrl;
+    let bundle = profileBundle;
+    if (!urlRaw && normalizeText(profile?.pmsPreset?.presetKey || "")) {
+      const generated =
+        typeof buildWingsPmsPresetRequest === "function"
+          ? buildWingsPmsPresetRequest({
+              ...(profile.pmsPreset || {}),
+              startDate: query.startDate,
+              endDate: query.endDate
+            })
+          : null;
+      if (generated?.url) {
+        urlRaw = normalizeText(generated.url || "");
+        bundle = {
+          ...(generated.bundle && typeof generated.bundle === "object" ? generated.bundle : {}),
+          ...(profileBundle && typeof profileBundle === "object" ? profileBundle : {})
+        };
+      }
+    }
+    if (!urlRaw) return null;
+    const requestPlan =
+      typeof W.buildRequest === "function"
+        ? W.buildRequest({ urlRaw, bundle, query })
+        : (() => {
+            const fallbackRequest = buildReservationRequestOptions(urlRaw, bundle, query);
+            assertReadonlyPmsRequest(fallbackRequest.url, fallbackRequest.options);
+            return {
+              ...fallbackRequest,
+              endpointPath: normalizeText(fallbackRequest.url?.pathname || ""),
+              requestSchemaIssues: []
+            };
+          })();
+    return {
+      branch: normalizeRecordBranch(profile?.branch || ""),
+      bundle,
+      requestPlan
+    };
   }
 
   function reservationOverlapsQuery(record, query) {
@@ -643,6 +1239,10 @@
     const status = normalizeReservationStatus(getFirstValueByAlias(row, STATUS_FIELD_ALIASES) || "");
     const roomNos = splitRoomTokens(getFirstValueByAlias(row, ROOM_FIELD_ALIASES));
     const price = parseMoneyToInt(getFirstValueByAlias(row, PRICE_FIELD_ALIASES) || "");
+    const nationalityCode = normalizeText(getFirstValueByAlias(row, NATIONALITY_FIELD_ALIASES) || "");
+    const languageCode = normalizeText(getFirstValueByAlias(row, LANGUAGE_CODE_FIELD_ALIASES) || "");
+    const languageName = normalizeText(getFirstValueByAlias(row, LANGUAGE_NAME_FIELD_ALIASES) || "");
+    const sourceCode = normalizeText(getFirstValueByAlias(row, SOURCE_CODE_FIELD_ALIASES) || "");
     const branch = inferBranchFromReservationRow(row, channelRaw, account);
     const effectiveChannel = normalizeReservationChannel(channelRaw, sourceSystem, account || defaultChannel);
     const remarkText = normalizeText(getFirstValueByAlias(row, REMARK_FIELD_ALIASES) || "");
@@ -681,10 +1281,14 @@
       roomNos,
       price,
       account,
+      sourceCode,
       status,
       statusBucket,
       auditAnomaly,
       branch,
+      nationalityCode,
+      languageCode,
+      languageName,
       guestName: normalizeText(identity?.guestName || guestNameRaw),
       phoneTail: normalizeText(identity?.phoneTail || ""),
       remarkHead: normalizeText(identity?.rawTextHead || ""),
@@ -713,7 +1317,8 @@
         record?.checkout || "",
         record?.roomNo || "",
         record?.channel || "",
-        record?.statusBucket || ""
+        record?.statusBucket || "",
+        record?.branch || ""
       ].join("::");
       if (!key.replace(/:/g, "")) return;
       deduped.set(key, record);
@@ -728,6 +1333,248 @@
       .filter(Boolean)
       .filter((row) => reservationOverlapsQuery(row, query));
     return dedupeReservationRecords(parsed);
+  }
+
+  function extractCapabilityPayloadRows(payload) {
+    if (!payload || typeof payload !== "object") return [];
+    if (Array.isArray(payload.rows)) return payload.rows.filter((row) => row && typeof row === "object");
+    if (payload.rows && typeof payload.rows === "object") return [payload.rows];
+    if (Array.isArray(payload.valueList)) return payload.valueList.filter((row) => row && typeof row === "object");
+    if (Array.isArray(payload.items)) return payload.items.filter((row) => row && typeof row === "object");
+    if (Array.isArray(payload.data?.rows)) return payload.data.rows.filter((row) => row && typeof row === "object");
+    if (Array.isArray(payload.data)) return payload.data.filter((row) => row && typeof row === "object");
+    if (payload.data && typeof payload.data === "object") return [payload.data];
+    return [];
+  }
+
+  function parseFormBodyEntries(value) {
+    const body = normalizeText(value || "");
+    if (!body) return [];
+    return [...new URLSearchParams(body).entries()];
+  }
+
+  function buildMergedCapabilityRequestBody(profile, overrides = {}, appendPairs = []) {
+    const params = new URLSearchParams();
+    parseFormBodyEntries(profile?.pmsAuthBundle?.requestBody).forEach(([key, value]) => {
+      if (!normalizeText(key)) return;
+      params.append(key, value);
+    });
+    Object.entries(overrides || {}).forEach(([key, value]) => {
+      if (!normalizeText(key)) return;
+      const text = normalizeText(value || "");
+      if (!text && params.has(key)) {
+        params.set(key, "");
+        return;
+      }
+      params.set(key, text);
+    });
+    (Array.isArray(appendPairs) ? appendPairs : []).forEach((entry) => {
+      if (!Array.isArray(entry) || entry.length < 2) return;
+      const key = normalizeText(entry[0] || "");
+      const value = normalizeText(entry[1] || "");
+      if (!key || !value) return;
+      params.append(key, value);
+    });
+    return params.toString();
+  }
+
+  function buildReadonlyRangeOverrideMap(query, context) {
+    const normalized = normalizePmsReadonlyQuery(query || {});
+    const propertyNo = normalizeText(query?.propertyNo || context?.propertyNo || "");
+    const bsnsCode = normalizeText(query?.bsnsCode || context?.bsnsCode || propertyNo);
+    const pageId = normalizeText(query?.pageId || context?.pageId || "");
+    const compactStart = normalized.startDate.replace(/-/g, "");
+    const compactEnd = normalized.endDate.replace(/-/g, "");
+    return {
+      PROPERTY_NO: propertyNo,
+      BSNS_CODE: bsnsCode,
+      PAGE_ID: pageId,
+      START_DATE: normalized.startDate,
+      END_DATE: normalized.endDate,
+      FROM_DATE: normalized.startDate,
+      TO_DATE: normalized.endDate,
+      ARRV_DATE_F: compactStart,
+      ARRV_DATE_T: compactEnd,
+      STAY_DATE_F: compactStart,
+      STAY_DATE_T: compactEnd,
+      DEPT_DATE_F: compactStart,
+      DEPT_DATE_T: compactEnd,
+      RSVN_DATE_F: compactStart,
+      RSVN_DATE_T: compactEnd
+    };
+  }
+
+  function sanitizeSourceCatalogRow(row, branch) {
+    if (!row || typeof row !== "object") return null;
+    const sourceCode = normalizeText(row.SOURCE_CODE || row.source_code || row.sourceCode || "");
+    if (!sourceCode) return null;
+    return {
+      sourceCode,
+      sourceName: normalizeText(row.SOURCE_CODE_NAME || row.source_name || row.sourceName || ""),
+      categoryCode: normalizeText(row.CATEGORY_CODE || row.category_code || row.categoryCode || ""),
+      categoryName: normalizeText(row.CATEGORY_NAME || row.category_name || row.categoryName || ""),
+      useYn: normalizeText(row.USE_YN || row.use_yn || row.useYn || ""),
+      activeYn: normalizeText(row.ACTIVE_YN || row.active_yn || row.activeYn || ""),
+      branch: normalizeRecordBranch(branch || "")
+    };
+  }
+
+  function sanitizeNationalityLanguageRow(row, branch) {
+    if (!row || typeof row !== "object") return null;
+    const natCode = normalizeText(row.NAT_CODE || row.nat_code || row.natCode || "");
+    if (!natCode) return null;
+    return {
+      natCode,
+      langCode: normalizeText(row.LANG_CODE || row.lang_code || row.langCode || ""),
+      langName: normalizeText(row.LANG_NAME || row.lang_name || row.langName || row.language || ""),
+      branch: normalizeRecordBranch(branch || "")
+    };
+  }
+
+  function sanitizeReservationDetailRow(row, request, branch) {
+    if (!row || typeof row !== "object") return null;
+    const merged = {
+      ...row,
+      RSVN_NO: row.RSVN_NO ?? request?.reservationNo ?? "",
+      RSVN_SEQ_NO: row.RSVN_SEQ_NO ?? request?.reservationSeqNo ?? "1"
+    };
+    const base = parseReservationRow(merged, "PMS", "");
+    const reservationNo = base?.reservationNo || coerceReservationNo(request?.reservationNo || "");
+    if (!reservationNo) return null;
+    return {
+      reservationNo,
+      reservationSeqNo: normalizeText(merged.RSVN_SEQ_NO || request?.reservationSeqNo || "1") || "1",
+      reservationRef: normalizeText(base?.reservationRef || ""),
+      branch: normalizeRecordBranch(branch || base?.branch || ""),
+      checkin: normalizeText(base?.checkin || parseAnyDate(merged.ARRV_DATE || "")),
+      checkout: normalizeText(base?.checkout || parseAnyDate(merged.DEPT_DATE || "")),
+      nights: Number(base?.nights || safeInt(merged.NIGHTS, 0) || 0),
+      status: normalizeText(base?.status || merged.RSVN_STATUS_CODE || ""),
+      statusBucket: normalizeText(base?.statusBucket || ""),
+      account: normalizeText(base?.account || merged.ACCOUNT || merged.CUSTM_NAME || ""),
+      sourceCode: normalizeText(base?.sourceCode || merged.SOURCE_CODE || ""),
+      guestName: normalizeText(base?.guestName || merged.GUEST_NAME || merged.INHS_GEST_NAME || ""),
+      phoneTail: normalizeText(base?.phoneTail || ""),
+      remarkHead: normalizeText(base?.remarkHead || normalizeText(merged.COMT || "").slice(0, 120)),
+      nationalityCode: normalizeText(base?.nationalityCode || merged.NAT_CODE || ""),
+      languageCode: normalizeText(base?.languageCode || merged.LANG_CODE || ""),
+      languageName: normalizeText(base?.languageName || merged.LANG_NAME || ""),
+      roomTypeCode: normalizeText(merged.ROOM_TYPE_CODE || ""),
+      roomTypeName: normalizeText(merged.ROOM_TYPE_NAME || ""),
+      roomNo: normalizeText(base?.roomNo || merged.ROOM_NO || ""),
+      roomNos: Array.isArray(base?.roomNos) ? [...base.roomNos] : splitRoomTokens(merged.ROOM_NO || ""),
+      rateName: normalizeText(merged.RATE_NAME || ""),
+      assignedRoomCount: normalizeText(merged.ASSIGNED_ROOM_CNT || ""),
+      auditAnomaly: base?.auditAnomaly === true
+    };
+  }
+
+  function sanitizeAssignedRoomRow(row, branch) {
+    if (!row || typeof row !== "object") return null;
+    const reservationNo = coerceReservationNo(row.RSVN_NO || row.rsvn_no || "");
+    if (!reservationNo) return null;
+    return {
+      reservationNo,
+      reservationSeqNo: normalizeText(row.RSVN_SEQ_NO || row.rsvn_seq_no || "1") || "1",
+      arrvDate: parseAnyDate(row.ARRV_DATE || row.arrv_date || ""),
+      deptDate: parseAnyDate(row.DEPT_DATE || row.dept_date || ""),
+      roomNo: normalizeText(row.ROOM_NO || row.room_no || ""),
+      roomTypeCode: normalizeText(row.ROOM_TYPE_CODE || row.room_type_code || ""),
+      roomStatusCode: normalizeText(row.ROOM_STATUS_CODE || row.room_status_code || ""),
+      roomCleanStatusCode: normalizeText(row.ROOM_CLEAN_STATUS_CODE || row.room_clean_status_code || ""),
+      guestName: normalizeText(row.INHS_GEST_NAME || row.inhs_gest_name || ""),
+      propertyNo: normalizeText(row.PROPERTY_NO || row.property_no || ""),
+      bsnsCode: normalizeText(row.BSNS_CODE || row.bsns_code || ""),
+      branch: normalizeRecordBranch(branch || "")
+    };
+  }
+
+  function sanitizeLinkedReservationRow(row, branch) {
+    if (!row || typeof row !== "object") return null;
+    return {
+      reservationNo: coerceReservationNo(row.RSVN_NO || row.rsvn_no || ""),
+      reservationRef: coerceReservationNo(row.GLOBAL_RSVN_NO || row.global_rsvn_no || ""),
+      linkedReservationNo: coerceReservationNo(row.LINK_RSVN_NO || row.link_rsvn_no || row.RELATED_RSVN_NO || ""),
+      linkedReservationRef: coerceReservationNo(row.LINK_GLOBAL_RSVN_NO || row.link_global_rsvn_no || ""),
+      branch: normalizeRecordBranch(branch || ""),
+      relationshipType: normalizeText(row.LINK_TYPE || row.link_type || row.REL_TYPE || "")
+    };
+  }
+
+  function sanitizeRoomAvailabilityRow(row, branch) {
+    if (!row || typeof row !== "object") return null;
+    const roomTypeCode = normalizeText(row.ROOM_TYPE_CODE || row.room_type_code || "");
+    const businessDate = parseAnyDate(row.BSNS_DATE || row.bsns_date || row.STAY_DATE || row.stay_date || row.ARRV_DATE || row.arrv_date || "");
+    if (!roomTypeCode && !businessDate) return clonePmsCapabilityItem(row);
+    return {
+      branch: normalizeRecordBranch(branch || ""),
+      roomTypeCode,
+      roomTypeName: normalizeText(row.ROOM_TYPE_NAME || row.room_type_name || ""),
+      businessDate,
+      availableRooms: safeInt(row.AVAILABLE_ROOM_CNT || row.available_room_cnt || row.AVAILABLE_CNT || "", 0),
+      totalRooms: safeInt(row.TOTAL_ROOM_CNT || row.total_room_cnt || row.ROOM_CNT || "", 0),
+      occupiedRooms: safeInt(row.OCCUPIED_ROOM_CNT || row.occupied_room_cnt || "", 0),
+      outOfOrderRooms: safeInt(row.OOO_ROOM_CNT || row.ooo_room_cnt || "", 0),
+      rawStatus: normalizeText(row.ROOM_STATUS_CODE || row.room_status_code || "")
+    };
+  }
+
+  function sanitizeAssignedRoomGuestInfoRow(row, branch) {
+    if (!row || typeof row !== "object") return null;
+    const reservationNo = coerceReservationNo(row.RSVN_NO || row.rsvn_no || "");
+    if (!reservationNo) return null;
+    return {
+      reservationNo,
+      reservationSeqNo: normalizeText(row.RSVN_SEQ_NO || row.rsvn_seq_no || "1") || "1",
+      guestName: normalizeText(row.INHS_GEST_NAME || row.GUEST_NAME || row.guest_name || ""),
+      roomNo: normalizeText(row.ROOM_NO || row.room_no || ""),
+      roomTypeCode: normalizeText(row.ROOM_TYPE_CODE || row.room_type_code || ""),
+      arrvDate: parseAnyDate(row.ARRV_DATE || row.arrv_date || ""),
+      deptDate: parseAnyDate(row.DEPT_DATE || row.dept_date || ""),
+      nationalityCode: normalizeText(row.NAT_CODE || row.nat_code || ""),
+      languageCode: normalizeText(row.LANG_CODE || row.lang_code || ""),
+      languageName: normalizeText(row.LANG_NAME || row.lang_name || ""),
+      branch: normalizeRecordBranch(branch || "")
+    };
+  }
+
+  function sanitizeGenericCapabilityRow(row, branch) {
+    const cloned = clonePmsCapabilityItem(row);
+    if (!cloned || typeof cloned !== "object") return null;
+    return {
+      ...cloned,
+      branch: normalizeRecordBranch(cloned.branch || branch || "")
+    };
+  }
+
+  function parseWingsCapabilityItems(capability, payload, request, branch) {
+    const rows = extractCapabilityPayloadRows(payload);
+    if (capability === "source_catalog") {
+      return rows.map((row) => sanitizeSourceCatalogRow(row, branch)).filter(Boolean);
+    }
+    if (capability === "nationality_language_lookup") {
+      return rows.map((row) => sanitizeNationalityLanguageRow(row, branch)).filter(Boolean);
+    }
+    if (capability === "reservation_detail") {
+      return rows.map((row) => sanitizeReservationDetailRow(row, request, branch)).filter(Boolean);
+    }
+    if (capability === "assigned_room_lookup") {
+      return rows.map((row) => sanitizeAssignedRoomRow(row, branch)).filter(Boolean);
+    }
+    if (capability === "linked_reservation_lookup") {
+      return rows.map((row) => sanitizeLinkedReservationRow(row, branch)).filter(Boolean);
+    }
+    if (
+      capability === "room_block_chart" ||
+      capability === "room_availability_chart" ||
+      capability === "room_availability_summary"
+    ) {
+      return rows.map((row) => sanitizeRoomAvailabilityRow(row, branch)).filter(Boolean);
+    }
+    if (capability === "assigned_room_guest_info") {
+      return rows.map((row) => sanitizeAssignedRoomGuestInfoRow(row, branch)).filter(Boolean);
+    }
+    return rows.map((row) => sanitizeGenericCapabilityRow(row, branch)).filter(Boolean);
   }
 
   function extractReservationRecordsFromDom(providerType, query) {
@@ -849,15 +1696,61 @@
     });
   }
 
+  function buildPmsCapabilityCacheKey(providerType, capability, url, options, bundle, request, branch) {
+    return JSON.stringify({
+      providerType: normalizeText(providerType),
+      capability: normalizeText(capability),
+      branch: normalizeText(branch || ""),
+      url: String(url || ""),
+      method: normalizeText(options?.method || ""),
+      body: normalizeText(options?.body || ""),
+      request: request && typeof request === "object" ? { ...request } : {},
+      authorizationRef: fingerprintText(bundle?.authorization || ""),
+      cookieHeaderRef: fingerprintText(bundle?.cookieHeader || ""),
+      csrfTokenRef: fingerprintText(bundle?.csrfToken || ""),
+      role: normalizeText(bundle?.role || ""),
+      headers: sanitizeSensitiveHeaderPairs(bundle?.headers || {})
+    });
+  }
+
   function clonePmsReservationResult(result) {
     if (!result || typeof result !== "object") return result;
     return {
       ...result,
       records: Array.isArray(result.records) ? result.records.map((row) => ({ ...row })) : [],
       attempts: Array.isArray(result.attempts) ? result.attempts.map((row) => ({ ...row })) : [],
+      profilesFetched: Array.isArray(result.profilesFetched)
+        ? result.profilesFetched.map((row) => ({ ...row }))
+        : [],
+      query: result.query && typeof result.query === "object" ? { ...result.query } : null,
       statusCounts: result.statusCounts && typeof result.statusCounts === "object"
         ? { ...result.statusCounts }
         : { active: 0, canceled: 0 }
+    };
+  }
+
+  function clonePmsCapabilityItem(value) {
+    if (Array.isArray(value)) return value.map((item) => clonePmsCapabilityItem(item));
+    if (!value || typeof value !== "object") return value;
+    const out = {};
+    Object.entries(value).forEach(([key, item]) => {
+      out[key] = clonePmsCapabilityItem(item);
+    });
+    return out;
+  }
+
+  function clonePmsCapabilityResult(result) {
+    if (!result || typeof result !== "object") return result;
+    return {
+      ...result,
+      items: Array.isArray(result.items) ? result.items.map((row) => clonePmsCapabilityItem(row)) : [],
+      records: Array.isArray(result.records) ? result.records.map((row) => clonePmsCapabilityItem(row)) : [],
+      attempts: Array.isArray(result.attempts) ? result.attempts.map((row) => ({ ...row })) : [],
+      profilesFetched: Array.isArray(result.profilesFetched)
+        ? result.profilesFetched.map((row) => ({ ...row }))
+        : [],
+      request: result.request && typeof result.request === "object" ? { ...result.request } : null,
+      adapter: result.adapter && typeof result.adapter === "object" ? clonePmsCapabilityItem(result.adapter) : null
     };
   }
 
@@ -876,6 +1769,51 @@
       ts: Date.now(),
       value: clonePmsReservationResult(value)
     });
+  }
+
+  function readCachedPmsCapability(key) {
+    const cached = pmsCapabilityCache.get(key);
+    if (!cached) return null;
+    if (Date.now() - cached.ts > PMS_CAPABILITY_CACHE_TTL_MS) {
+      pmsCapabilityCache.delete(key);
+      return null;
+    }
+    return clonePmsCapabilityResult(cached.value);
+  }
+
+  function writeCachedPmsCapability(key, value) {
+    pmsCapabilityCache.set(key, {
+      ts: Date.now(),
+      value: clonePmsCapabilityResult(value)
+    });
+  }
+
+  async function readOrRunInflightPmsReservation(key, factory) {
+    const active = pmsReservationInflightCache.get(key);
+    if (active) {
+      return clonePmsReservationResult(await active);
+    }
+    const nextPromise = (async () => clonePmsReservationResult(await factory()))();
+    pmsReservationInflightCache.set(key, nextPromise);
+    try {
+      return clonePmsReservationResult(await nextPromise);
+    } finally {
+      pmsReservationInflightCache.delete(key);
+    }
+  }
+
+  async function readOrRunInflightPmsCapability(key, factory) {
+    const active = pmsCapabilityInflightCache.get(key);
+    if (active) {
+      return clonePmsCapabilityResult(await active);
+    }
+    const nextPromise = (async () => clonePmsCapabilityResult(await factory()))();
+    pmsCapabilityInflightCache.set(key, nextPromise);
+    try {
+      return clonePmsCapabilityResult(await nextPromise);
+    } finally {
+      pmsCapabilityInflightCache.delete(key);
+    }
   }
 
   function buildPmsRequestHeaders(bundle, options) {
@@ -953,7 +1891,15 @@
     const text = await response.text();
     const payload = safeJsonParse(text);
     if (!payload || typeof payload !== "object") {
-      throw new Error("PMS reservation API did not return JSON");
+      const contentType = normalizeText(response?.headers?.get?.("content-type") || "").toLowerCase();
+      const snippet = String(text || "").slice(0, 240);
+      if (
+        contentType.includes("text/html") &&
+        /identity\/samlsso|you are now redirected back to/i.test(snippet)
+      ) {
+        throw createTaggedError("AUTH_EXPIRED_SSO_REDIRECT", "PMS session was redirected to SSO login.", snippet);
+      }
+      throw createTaggedError("NON_JSON_UPSTREAM_RESPONSE", "PMS reservation API did not return JSON", snippet);
     }
     return payload;
   }
@@ -1020,78 +1966,160 @@
     throw new Error("Reservation API did not return JSON");
   }
 
-  async function fetchProviderReservations(providerType, query, syncConfig = null) {
-    const pmsUrlRaw = normalizeText(
-      syncConfig?.pmsReservationUrl || syncConfig?.pmsApiUrl || syncConfig?.pmsReservationApiUrl || ""
-    );
-    if (!pmsUrlRaw) {
+  async function fetchSinglePmsProfileReservations(providerType, query, profile) {
+    const plan = buildPmsRequestPlanForProfile(profile, query);
+    if (!plan) {
       return {
         records: [],
         source: "pms-unconfigured",
         url: "",
         candidateCount: 0,
-        attempts: []
+        attempts: [],
+        profilesFetched: [],
+        query: { ...query }
+      };
+    }
+    const { requestPlan, branch, bundle } = plan;
+    const { url, options } = requestPlan;
+    const endpointMeta =
+      typeof W.lookupEndpointMeta === "function" ? W.lookupEndpointMeta(normalizeText(url?.pathname || "")) : null;
+    const cacheKey = buildPmsReservationCacheKey(providerType, url.toString(), options, bundle, query);
+    const cached = readCachedPmsReservation(cacheKey);
+    if (cached) return cached;
+
+    return readOrRunInflightPmsReservation(cacheKey, async () => {
+      const response = await fetchPmsReservationResponse(url, options, bundle);
+      const payload = await parsePmsReservationResponse(response);
+      const adapterParsed =
+        typeof W.getReservations === "function"
+          ? W.getReservations({
+              payload,
+              query,
+              parser: extractReservationRecordsFromPayload
+            })
+          : null;
+      const parsedRecords = Array.isArray(adapterParsed?.records)
+        ? adapterParsed.records
+        : extractReservationRecordsFromPayload(payload, "PMS", query, "");
+      const records = applyBranchToReservationRecords(parsedRecords, branch);
+      const roomStateRows =
+        typeof W.getRoomState === "function" ? W.getRoomState(records) : [];
+      const inventoryRows =
+        typeof W.getInventory === "function" ? W.getInventory(records) : [];
+      const result = {
+        records,
+        source: records.length > 0 ? "pms-api" : "pms-empty",
+        url: url.toString(),
+        endpointPath: normalizeText(url.pathname || ""),
+        endpointCapability: normalizeText(endpointMeta?.capability || ""),
+        candidateCount: 1,
+        attempts: [{
+          url: url.toString(),
+          branch,
+          endpointCapability: normalizeText(endpointMeta?.capability || ""),
+          ok: true,
+          recordCount: records.length
+        }],
+        profilesFetched: [{
+          branch,
+          url: url.toString(),
+          endpointCapability: normalizeText(endpointMeta?.capability || ""),
+          recordCount: records.length
+        }],
+        query: { ...query },
+        adapter: {
+          type: "wings",
+          endpointPath: normalizeText(requestPlan?.endpointPath || url?.pathname || ""),
+          knownEndpointCount:
+            typeof W.getKnownEndpointCount === "function" ? W.getKnownEndpointCount() : 0,
+          requestSchemaIssues: Array.isArray(requestPlan?.requestSchemaIssues)
+            ? [...requestPlan.requestSchemaIssues]
+            : [],
+          responseValidation: adapterParsed?.validation && typeof adapterParsed.validation === "object"
+            ? { ...adapterParsed.validation }
+            : null,
+          roomStateCount: Array.isArray(roomStateRows) ? roomStateRows.length : 0,
+          inventoryCount: Array.isArray(inventoryRows) ? inventoryRows.length : 0
+        },
+        statusCounts: records.reduce(
+          (acc, row) => {
+            if (normalizeText(row?.statusBucket || "") === "CANCELED") acc.canceled += 1;
+            else acc.active += 1;
+            if (row?.auditAnomaly === true) acc.auditAnomaly += 1;
+            return acc;
+          },
+          { active: 0, canceled: 0, auditAnomaly: 0 }
+        )
+      };
+      writeCachedPmsReservation(cacheKey, result);
+      return result;
+    });
+  }
+
+  async function fetchProviderReservations(providerType, query, syncConfig = null) {
+    const normalizedQuery = normalizePmsReadonlyQuery(query || {});
+    const profiles = resolvePmsFetchProfiles(syncConfig);
+    if (profiles.length <= 0) {
+      return {
+        records: [],
+        source: "pms-unconfigured",
+        url: "",
+        candidateCount: 0,
+        attempts: [],
+        profilesFetched: [],
+        query: { ...normalizedQuery }
       };
     }
 
-    const bundle = syncConfig?.pmsAuthBundle && typeof syncConfig.pmsAuthBundle === "object"
-      ? syncConfig.pmsAuthBundle
-      : null;
-    const requestPlan =
-      typeof W.buildRequest === "function"
-        ? W.buildRequest({ urlRaw: pmsUrlRaw, bundle, query })
-        : (() => {
-            const fallbackRequest = buildReservationRequestOptions(pmsUrlRaw, bundle, query);
-            assertReadonlyPmsRequest(fallbackRequest.url, fallbackRequest.options);
-            return {
-              ...fallbackRequest,
-              endpointPath: normalizeText(fallbackRequest.url?.pathname || ""),
-              requestSchemaIssues: []
-            };
-          })();
-    const { url, options } = requestPlan;
-    const cacheKey = buildPmsReservationCacheKey(providerType, url.toString(), options, bundle, query);
-    const cached = readCachedPmsReservation(cacheKey);
-    if (cached) {
-      return cached;
+    const results = [];
+    for (const profile of profiles) {
+      try {
+        results.push(await fetchSinglePmsProfileReservations(providerType, normalizedQuery, profile));
+      } catch (error) {
+        if (profiles.length === 1) throw error;
+        results.push({
+          records: [],
+          source: "pms-error",
+          url: normalizeText(profile?.pmsReservationUrl || ""),
+          candidateCount: 1,
+          attempts: [{
+            url: normalizeText(profile?.pmsReservationUrl || ""),
+            branch: normalizeRecordBranch(profile?.branch || ""),
+            ok: false,
+            error: String(error?.message || error)
+          }],
+          profilesFetched: [{
+            branch: normalizeRecordBranch(profile?.branch || ""),
+            url: normalizeText(profile?.pmsReservationUrl || ""),
+            recordCount: 0,
+            error: String(error?.message || error)
+          }],
+          query: { ...normalizedQuery },
+          error: String(error?.message || error)
+        });
+      }
     }
-    const response = await fetchPmsReservationResponse(url, options, bundle);
-    const payload = await parsePmsReservationResponse(response);
-    const adapterParsed =
-      typeof W.getReservations === "function"
-        ? W.getReservations({
-            payload,
-            query,
-            parser: extractReservationRecordsFromPayload
-          })
-        : null;
-    const records = Array.isArray(adapterParsed?.records)
-      ? adapterParsed.records
-      : extractReservationRecordsFromPayload(payload, "PMS", query, "");
-    const roomStateRows =
-      typeof W.getRoomState === "function" ? W.getRoomState(records) : [];
-    const inventoryRows =
-      typeof W.getInventory === "function" ? W.getInventory(records) : [];
-    const result = {
+
+    const records = dedupeReservationRecords(results.flatMap((item) => item?.records || []));
+    const attempts = results.flatMap((item) => item?.attempts || []);
+    const profilesFetched = results.flatMap((item) => item?.profilesFetched || []);
+    const successful = results.filter((item) => normalizeText(item?.source || "") === "pms-api");
+    const primary = successful[0] || results[0] || null;
+    const errors = results
+      .map((item) => normalizeText(item?.error || ""))
+      .filter(Boolean);
+    return {
       records,
-      source: records.length > 0 ? "pms-api" : "pms-empty",
-      url: url.toString(),
-      candidateCount: 1,
-      attempts: [{ url: url.toString(), ok: true, recordCount: records.length }],
-      adapter: {
-        type: "wings",
-        endpointPath: normalizeText(requestPlan?.endpointPath || url?.pathname || ""),
-        knownEndpointCount:
-          typeof W.getKnownEndpointCount === "function" ? W.getKnownEndpointCount() : 0,
-        requestSchemaIssues: Array.isArray(requestPlan?.requestSchemaIssues)
-          ? [...requestPlan.requestSchemaIssues]
-          : [],
-        responseValidation: adapterParsed?.validation && typeof adapterParsed.validation === "object"
-          ? { ...adapterParsed.validation }
-          : null,
-        roomStateCount: Array.isArray(roomStateRows) ? roomStateRows.length : 0,
-        inventoryCount: Array.isArray(inventoryRows) ? inventoryRows.length : 0
-      },
+      source: records.length > 0 ? "pms-api" : errors.length > 0 ? "unavailable" : "pms-empty",
+      url: primary?.url || "",
+      endpointPath: normalizeText(primary?.endpointPath || ""),
+      endpointCapability: normalizeText(primary?.endpointCapability || ""),
+      candidateCount: profiles.length,
+      attempts,
+      profilesFetched,
+      query: { ...normalizedQuery },
+      adapter: primary?.adapter ? { ...primary.adapter } : null,
+      error: errors.length > 0 ? errors.join(" | ") : "",
       statusCounts: records.reduce(
         (acc, row) => {
           if (normalizeText(row?.statusBucket || "") === "CANCELED") acc.canceled += 1;
@@ -1102,8 +2130,210 @@
         { active: 0, canceled: 0, auditAnomaly: 0 }
       )
     };
-    writeCachedPmsReservation(cacheKey, result);
-    return result;
+  }
+
+  function buildWingsCapabilityResultBase(capability, request) {
+    return {
+      capability,
+      items: [],
+      records: [],
+      source: "pms-unconfigured",
+      url: "",
+      endpointPath: "",
+      endpointCapability: capability,
+      candidateCount: 0,
+      attempts: [],
+      profilesFetched: [],
+      request: request && typeof request === "object" ? { ...request } : {},
+      adapter: {
+        type: "wings",
+        capability
+      }
+    };
+  }
+
+  function getSupportedWingsLiveContracts() {
+    return [
+      "assigned_room_lookup",
+      "assigned_room_guest_info",
+      "assignable_room_lookup",
+      "assignable_room_type_lookup",
+      "account_contract_lookup",
+      "linked_reservation_lookup",
+      "market_catalog",
+      "nationality_language_lookup",
+      "rate_catalog",
+      "reservation_rate_lookup",
+      "reservation_detail",
+      "reservation_lookup",
+      "reservation_lookup_local",
+      "reservation_summary",
+      "room_availability_chart",
+      "room_availability_summary",
+      "room_block_chart",
+      "room_type_catalog",
+      "sale_person_catalog",
+      "source_catalog",
+      "special_service_lookup"
+    ];
+  }
+
+  async function fetchSingleWingsCapabilityProfile(providerType, request, profile) {
+    const plan = buildCapabilityRequestPlanForProfile(profile, request);
+    if (!plan) {
+      return {
+        ...buildWingsCapabilityResultBase(normalizeCapabilityName(request?.capability || ""), request),
+        source: "pms-unconfigured"
+      };
+    }
+    const { capability, requestPlan, branch, bundle } = plan;
+    const { url, options } = requestPlan;
+    const endpointMeta =
+      typeof W.lookupEndpointMeta === "function" ? W.lookupEndpointMeta(normalizeText(url?.pathname || "")) : null;
+    const cacheKey = buildPmsCapabilityCacheKey(providerType, capability, url.toString(), options, bundle, request, branch);
+    const cached = readCachedPmsCapability(cacheKey);
+    if (cached) return cached;
+
+    return readOrRunInflightPmsCapability(cacheKey, async () => {
+      const response = await fetchPmsReservationResponse(url, options, bundle);
+      const payload = await parsePmsReservationResponse(response);
+      const items = parseWingsCapabilityItems(capability, payload, request, branch);
+      const records = capability.startsWith("reservation_") ? items.map((row) => ({ ...row })) : [];
+      const result = {
+        capability,
+        items,
+        records,
+        source: items.length > 0 ? "pms-api" : "pms-empty",
+        url: url.toString(),
+        endpointPath: normalizeText(url.pathname || ""),
+        endpointCapability: normalizeText(endpointMeta?.capability || capability),
+        candidateCount: 1,
+        attempts: [{
+          url: url.toString(),
+          branch,
+          endpointCapability: normalizeText(endpointMeta?.capability || capability),
+          ok: true,
+          itemCount: items.length
+        }],
+        profilesFetched: [{
+          branch,
+          url: url.toString(),
+          endpointCapability: normalizeText(endpointMeta?.capability || capability),
+          itemCount: items.length
+        }],
+        request: request && typeof request === "object" ? { ...request } : {},
+        adapter: {
+          type: "wings",
+          capability,
+          endpointPath: normalizeText(requestPlan?.endpointPath || url?.pathname || ""),
+          knownEndpointCount:
+            typeof W.getKnownEndpointCount === "function" ? W.getKnownEndpointCount() : 0,
+          requestSchemaIssues: Array.isArray(requestPlan?.requestSchemaIssues)
+            ? [...requestPlan.requestSchemaIssues]
+            : [],
+        }
+      };
+      writeCachedPmsCapability(cacheKey, result);
+      return result;
+    });
+  }
+
+  async function fetchWingsLiveContract(providerType, rawRequest, syncConfig = null) {
+    const request = normalizeWingsCapabilityRequest(rawRequest);
+    const capability = normalizeCapabilityName(request.capability);
+    if (!capability) throw new Error("Wings live contract requires capability.");
+    if (capability === "reservation_lookup" || capability === "reservation_lookup_local") {
+      const reservationQuery = normalizePmsReadonlyQuery(rawRequest || {});
+      const base = await fetchProviderReservations(providerType, reservationQuery, syncConfig);
+      const filteredProfiles = (base.profilesFetched || []).filter((row) => normalizeText(row?.endpointCapability || "") === capability);
+      const filteredAttempts = (base.attempts || []).filter((row) => normalizeText(row?.endpointCapability || "") === capability);
+      const filteredBranches = new Set(filteredProfiles.map((row) => normalizeRecordBranch(row?.branch || "")));
+      const filteredRecords = (base.records || []).filter((row) => {
+        if (request.branch && normalizeRecordBranch(row?.branch || "") !== request.branch) return false;
+        if (filteredBranches.size <= 0) return normalizeText(base.endpointCapability || "") === capability;
+        return filteredBranches.has(normalizeRecordBranch(row?.branch || ""));
+      });
+      return {
+        capability,
+        items: filteredRecords.map((row) => ({ ...row })),
+        records: filteredRecords.map((row) => ({ ...row })),
+        source: filteredRecords.length > 0 ? "pms-api" : filteredProfiles.length > 0 ? "pms-empty" : "pms-unconfigured",
+        url: filteredProfiles[0]?.url || "",
+        endpointPath: normalizeText(filteredProfiles[0]?.url ? new URL(filteredProfiles[0].url).pathname : ""),
+        endpointCapability: capability,
+        candidateCount: filteredProfiles.length,
+        attempts: filteredAttempts,
+        profilesFetched: filteredProfiles,
+        request: { ...request, ...reservationQuery },
+        adapter: base.adapter ? { ...base.adapter, capability } : { type: "wings", capability },
+        error: normalizeText(base?.error || "")
+      };
+    }
+    if (!WINGS_LIVE_CONTRACT_DEFS[capability]) {
+      throw new Error(`Unsupported Wings live contract capability: ${capability}`);
+    }
+    const profiles = resolveCapabilityProfiles(syncConfig, request);
+    if (profiles.length <= 0) {
+      return buildWingsCapabilityResultBase(capability, request);
+    }
+    const results = [];
+    for (const profile of profiles) {
+      try {
+        const result = await fetchSingleWingsCapabilityProfile(providerType, request, profile);
+        if (result.candidateCount > 0) results.push(result);
+      } catch (error) {
+        if (profiles.length === 1) throw error;
+        const failedPlan = buildCapabilityRequestPlanForProfile(profile, request);
+        const failedUrl = normalizeText(failedPlan?.requestPlan?.url?.toString() || profile?.pmsReservationUrl || "");
+        results.push({
+          ...buildWingsCapabilityResultBase(capability, request),
+          source: "pms-error",
+          url: failedUrl,
+          candidateCount: 1,
+          attempts: [{
+            url: failedUrl,
+            branch: normalizeRecordBranch(profile?.branch || ""),
+            ok: false,
+            error: String(error?.message || error)
+          }],
+          profilesFetched: [{
+            branch: normalizeRecordBranch(profile?.branch || ""),
+            url: failedUrl,
+            itemCount: 0,
+            error: String(error?.message || error)
+          }],
+          error: String(error?.message || error)
+        });
+      }
+    }
+    const items = [];
+    const seen = new Set();
+    results.forEach((result) => {
+      (result.items || []).forEach((item) => {
+        const key = JSON.stringify(item);
+        if (seen.has(key)) return;
+        seen.add(key);
+        items.push(item);
+      });
+    });
+    const successful = results.filter((item) => normalizeText(item?.source || "") === "pms-api");
+    const primary = successful[0] || results[0] || null;
+    const errors = results.map((item) => normalizeText(item?.error || "")).filter(Boolean);
+    return {
+      capability,
+      items,
+      records: capability.startsWith("reservation_") ? items.map((row) => ({ ...row })) : [],
+      source: items.length > 0 ? "pms-api" : errors.length > 0 ? "unavailable" : "pms-empty",
+      url: primary?.url || "",
+      endpointPath: normalizeText(primary?.endpointPath || ""),
+      endpointCapability: normalizeText(primary?.endpointCapability || capability),
+      candidateCount: results.length,
+      attempts: results.flatMap((row) => row?.attempts || []),
+      profilesFetched: results.flatMap((row) => row?.profilesFetched || []),
+      request: { ...request },
+      adapter: primary?.adapter ? { ...primary.adapter } : { type: "wings", capability },
+      error: errors.length > 0 ? errors.join(" | ") : ""
+    };
   }
 
   function collectDomJsonPayloads() {
@@ -1912,8 +3142,11 @@
     assessProviderRowsCoverage,
     summarizeProviderRowSources,
     fetchProviderReservations,
+    fetchWingsLiveContract,
+    getSupportedWingsLiveContracts,
     assertReadonlyPmsRequest,
     buildPmsReservationCacheKey,
+    buildPmsCapabilityCacheKey,
     getKnownWingsEndpointCount:
       typeof W.getKnownEndpointCount === "function"
         ? () => W.getKnownEndpointCount()
@@ -1921,6 +3154,10 @@
     getKnownWingsEndpoints:
       typeof W.getEndpointCatalog === "function"
         ? () => W.getEndpointCatalog()
+        : () => [],
+    getKnownWingsEndpointDetails:
+      typeof W.getEndpointDetails === "function"
+        ? () => W.getEndpointDetails()
         : () => [],
     resolveStationBranchId,
     resolveNaverBusinessId,

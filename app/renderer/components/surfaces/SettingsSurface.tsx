@@ -1,10 +1,13 @@
 import { useUiStore } from "../../state/uiStore";
+import { getOperatingStageProgress } from "../../../services/operatingProgress";
 import { PanelHeading, SectionCard } from "../SurfacePrimitives";
 
 export function SettingsSurface() {
   const providerCards = useUiStore((state) => state.providerCards);
   const bridgeStatus = useUiStore((state) => state.bridgeStatus);
   const bridgeSummary = useUiStore((state) => state.bridgeSummary);
+  const sheetRead = useUiStore((state) => state.sheetRead);
+  const activeRunContext = useUiStore((state) => state.activeRunContext);
   const inventoryCompare = useUiStore((state) => state.inventoryCompare);
   const reservationAudit = useUiStore((state) => state.reservationAudit);
   const jobStatusCards = useUiStore((state) => state.jobStatusCards);
@@ -14,9 +17,12 @@ export function SettingsSurface() {
   const recommendationRuntimeDiagnostics = useUiStore((state) => state.recommendationRuntimeDiagnostics);
   const recommendationSampleEmbedResult = useUiStore((state) => state.recommendationSampleEmbedResult);
   const setRecommendationEnabled = useUiStore((state) => state.setRecommendationEnabled);
+  const openWingsLogin = useUiStore((state) => state.openWingsLogin);
+  const captureWingsSession = useUiStore((state) => state.captureWingsSession);
   const updateRecommendationSettings = useUiStore((state) => state.updateRecommendationSettings);
   const warmRecommendationRuntime = useUiStore((state) => state.warmRecommendationRuntime);
   const runRecommendationSampleEmbed = useUiStore((state) => state.runRecommendationSampleEmbed);
+  const operatingProgress = getOperatingStageProgress();
 
   return (
     <div className="settings-surface">
@@ -38,16 +44,38 @@ export function SettingsSurface() {
       </SectionCard>
       <SectionCard>
         <PanelHeading
+          kicker="Operating Progress"
+          title="Stage Completion"
+          description="운영 전제 기준으로 현재 단계 진척도를 고정합니다. 테스트 통과율이 아니라 실제 운영 준비도를 봅니다."
+        />
+        <div className="placeholder-panel">
+          <h3>Overall Progress</h3>
+          <p>{operatingProgress.overallPercent}%</p>
+        </div>
+        <div className="process-grid">
+          {operatingProgress.stages.map((stage) => (
+            <article key={stage.id} className={`process-card tone-${stage.percent >= 80 ? "ok" : stage.percent >= 40 ? "warn" : "critical"}`}>
+              <span>{stage.percent}%</span>
+              <strong>{stage.title}</strong>
+              <p>{stage.summary}</p>
+            </article>
+          ))}
+        </div>
+      </SectionCard>
+      <SectionCard>
+        <PanelHeading
           kicker="Auth / Info"
           title="Bridge Summary"
-          description="확장에서 수집한 인증/정보 요약입니다. 민감한 원문은 여기 노출하지 않습니다."
+          description="확장 또는 앱 내 로그인 창에서 확보한 live workspace 요약만 표시합니다. 세부 인증 상태와 민감한 원문은 숨깁니다."
         />
         <div className="process-grid">
           <article className="process-card tone-ok">
-            <span>auth</span>
-            <strong>Auth Summary</strong>
+            <span>live</span>
+            <strong>Workspace Link</strong>
             <p>
-              cookies {bridgeSummary.authSummary?.cookieCount ?? 0} · bearer {bridgeSummary.authSummary?.hasBearer ? "yes" : "no"} · csrf {bridgeSummary.authSummary?.hasCsrf ? "yes" : "no"} · role {bridgeSummary.authSummary?.hasRole ? "yes" : "no"}
+              {bridgeSummary.authSummary?.cookieCount || bridgeSummary.authSummary?.hasBearer || bridgeSummary.authSummary?.hasCsrf
+                ? "Live provider materials available"
+                : "Live provider materials unavailable"}
             </p>
           </article>
           <article className="process-card tone-default">
@@ -59,20 +87,49 @@ export function SettingsSurface() {
           </article>
         </div>
         <div className="placeholder-panel">
-          <h3>Bridge Runtime Summary</h3>
+          <h3>App-Owned Run Context</h3>
           <p>
-            status={bridgeStatus.capability} · inventory={inventoryCompare.supportLevel} · audit={reservationAudit.supportLevel} · write=
+            {activeRunContext
+              ? `${activeRunContext.runtimeMode} / ${activeRunContext.branch} / ${activeRunContext.startDate}..${activeRunContext.endDate}`
+              : "No run context requested yet."}
+          </p>
+        </div>
+        <div className="placeholder-panel">
+          <h3>Live Availability</h3>
+          <p>
+            sheet={sheetRead.supportLevel} · inventory={inventoryCompare.supportLevel} · audit={reservationAudit.supportLevel} · write=
             {bridgeStatus.writeEnabled ? "enabled" : "blocked"}
           </p>
-          <p>{bridgeStatus.code ? `reason=${bridgeStatus.code}` : "reason=none"}</p>
-          <p>recovery={bridgeStatus.recoveryAction || "none"}</p>
+          <p>
+            Wings live 세션이 없거나 만료되면 앱 안에서 로그인 창을 열고 현재 세션 쿠키를 다시 캡처합니다.
+          </p>
+          <button type="button" className="action-button" onClick={() => void openWingsLogin()}>
+            Open Wings Login
+          </button>
+          <button type="button" className="action-button" onClick={() => void captureWingsSession()}>
+            Capture Wings Session
+          </button>
+        </div>
+        <div className="placeholder-panel">
+          <h3>Sheet Snapshot</h3>
+          <p>
+            {sheetRead.summary
+              ? `${sheetRead.summary.sheetName} · ${sheetRead.summary.startDate}..${sheetRead.summary.endDate} · blocks ${sheetRead.summary.reservationBlockCount}`
+              : "No app-owned sheet snapshot yet."}
+          </p>
+          {sheetRead.summary ? (
+            <p>
+              rows N={sheetRead.summary.inventoryRows.NAVER ?? "-"} / S={sheetRead.summary.inventoryRows.STATION ?? "-"} · value days N=
+              {sheetRead.summary.providerValueDays.NAVER} / S={sheetRead.summary.providerValueDays.STATION}
+            </p>
+          ) : null}
         </div>
         <div className="placeholder-panel">
           <h3>Settings Snapshot</h3>
           <p>
             {authBundleSettingsSnapshot
-              ? `${authBundleSettingsSnapshot.provider} @ ${authBundleSettingsSnapshot.host || "unknown host"} saved ${new Date(authBundleSettingsSnapshot.updatedAt).toLocaleString("ko-KR", { hour12: false })}`
-              : "No persisted auth bundle snapshot yet."}
+              ? `${authBundleSettingsSnapshot.provider} @ ${authBundleSettingsSnapshot.host || "unknown host"} updated ${new Date(authBundleSettingsSnapshot.updatedAt).toLocaleString("ko-KR", { hour12: false })}`
+              : "No persisted live workspace snapshot yet."}
           </p>
         </div>
         <div className="placeholder-panel">

@@ -1,6 +1,8 @@
 import type {
   BridgeContextResponse,
   BridgePingResponse,
+  FetchSheetSnapshotRequest,
+  FetchSheetSnapshotResponse,
   FetchProviderRowsRequest,
   FetchProviderRowsResponse,
   ProviderInventoryCompareRow,
@@ -8,9 +10,14 @@ import type {
   RecommendationScoreResponse,
   RecommendationSampleEmbedResult,
   BridgeRuntimeStatus,
+  FetchReservationsRequest,
+  FetchReservationsResponse,
   RecommendationRuntimeDiagnostics,
   RecommendationRuntimeStatus,
-  RecommendationSettings
+  RecommendationSettings,
+  FetchWingsLiveContractRequest,
+  FetchWingsLiveContractResponse,
+  ProviderReservationRow
 } from "../contracts/index.js";
 
 declare global {
@@ -18,9 +25,29 @@ declare global {
     desktopBridge?: {
       ping: () => Promise<{ ok: true; runtime: string; ts: string }>;
       getContext: () => Promise<BridgeContextResponse>;
+      fetchSheetSnapshot: (request: FetchSheetSnapshotRequest) => Promise<FetchSheetSnapshotResponse>;
       fetchProviderRows: (
         request: FetchProviderRowsRequest
       ) => Promise<FetchProviderRowsResponse<ProviderInventoryCompareRow>>;
+      fetchProviderReservations: (
+        request: FetchReservationsRequest
+      ) => Promise<FetchReservationsResponse<ProviderReservationRow>>;
+      fetchWingsLiveContract: (
+        request: FetchWingsLiveContractRequest
+      ) => Promise<FetchWingsLiveContractResponse>;
+      openWingsLogin: () => Promise<{ ok: true; opened: boolean; url: string }>;
+      captureWingsSession: () => Promise<{
+        ok: true;
+        sessionAvailable: boolean;
+        authSummary: {
+          cookieCount: number;
+          domains: string[];
+          hasBearer: boolean;
+          hasCsrf: boolean;
+          hasRole: boolean;
+        };
+        url: string;
+      }>;
       getBridgeMeta: () => Promise<{ ok: true; port: number }>;
       getBridgeRuntime: () => Promise<BridgeRuntimeStatus>;
       getBridgeSummary: (
@@ -90,6 +117,21 @@ export async function getBridgeContext(): Promise<BridgeContextResponse> {
   };
 }
 
+export async function fetchSheetSnapshot(
+  request: FetchSheetSnapshotRequest
+): Promise<FetchSheetSnapshotResponse> {
+  if (window.desktopBridge?.fetchSheetSnapshot) {
+    return window.desktopBridge.fetchSheetSnapshot(request);
+  }
+
+  return {
+    ok: true,
+    payload: null,
+    source: "bridge-unavailable",
+    error: "Sheet runtime unavailable"
+  };
+}
+
 export async function fetchProviderRows(
   request: FetchProviderRowsRequest
 ): Promise<FetchProviderRowsResponse<ProviderInventoryCompareRow>> {
@@ -108,6 +150,49 @@ export async function fetchProviderRows(
 export async function getBridgeMeta(): Promise<{ ok: true; port: number } | null> {
   if (!window.desktopBridge?.getBridgeMeta) return null;
   return window.desktopBridge.getBridgeMeta();
+}
+
+export async function openWingsLoginWindow() {
+  if (!window.desktopBridge?.openWingsLogin) return null;
+  return window.desktopBridge.openWingsLogin();
+}
+
+export async function captureWingsSession() {
+  if (!window.desktopBridge?.captureWingsSession) return null;
+  return window.desktopBridge.captureWingsSession();
+}
+
+export async function fetchProviderReservations(
+  request: FetchReservationsRequest
+): Promise<FetchReservationsResponse<ProviderReservationRow>> {
+  if (window.desktopBridge?.fetchProviderReservations) {
+    return window.desktopBridge.fetchProviderReservations(request);
+  }
+
+  return {
+    ok: true,
+    provider: request.provider,
+    payload: [],
+    usedDomFallback: false,
+    source: "bridge-unavailable"
+  };
+}
+
+export async function fetchWingsLiveContract(
+  request: FetchWingsLiveContractRequest
+): Promise<FetchWingsLiveContractResponse> {
+  if (window.desktopBridge?.fetchWingsLiveContract) {
+    return window.desktopBridge.fetchWingsLiveContract(request);
+  }
+
+  return {
+    ok: true,
+    provider: "wings-pms",
+    capability: request.capability,
+    payload: [],
+    usedDomFallback: false,
+    source: "bridge-unavailable"
+  };
 }
 
 export async function getBridgeRuntime(): Promise<BridgeRuntimeStatus | null> {

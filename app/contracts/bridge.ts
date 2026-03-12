@@ -3,8 +3,12 @@ import type { BridgeFailure } from "./errors";
 import type {
   DomSnapshotRequest,
   DomSnapshotResponse,
+  FetchSheetSnapshotRequest,
+  FetchSheetSnapshotResponse,
   FetchProviderRowsRequest,
   FetchProviderRowsResponse,
+  FetchWingsLiveContractRequest,
+  FetchWingsLiveContractResponse,
   FetchReservationsRequest,
   FetchReservationsResponse
 } from "./provider";
@@ -54,8 +58,10 @@ export type BridgeRequest =
   | BridgeContextRequest
   | AuthCaptureRequest
   | AuthRestoreRequest
+  | FetchSheetSnapshotRequest
   | FetchProviderRowsRequest
   | FetchReservationsRequest
+  | FetchWingsLiveContractRequest
   | DomSnapshotRequest;
 
 export type BridgeSuccessResponse =
@@ -63,8 +69,10 @@ export type BridgeSuccessResponse =
   | BridgeContextResponse
   | AuthCaptureResponse
   | AuthRestoreResponse
+  | FetchSheetSnapshotResponse
   | FetchProviderRowsResponse
   | FetchReservationsResponse
+  | FetchWingsLiveContractResponse
   | DomSnapshotResponse;
 
 export type BridgeResponse =

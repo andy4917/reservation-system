@@ -11,6 +11,7 @@ export function resolveBridgeIssue(params: {
   supportLevel: LiveSupportLevel;
   sessionAvailable: boolean;
   hasUpstreamAuth: boolean;
+  provider?: string | null;
   bridgeRuntimeCode?: BridgeErrorCode | null;
   bridgeRuntimeRecoveryAction?: string | null;
   fallbackRecoveryAction?: string | null;
@@ -20,10 +21,18 @@ export function resolveBridgeIssue(params: {
     supportLevel,
     sessionAvailable,
     hasUpstreamAuth,
+    provider = null,
     bridgeRuntimeCode = null,
     bridgeRuntimeRecoveryAction = null,
     fallbackRecoveryAction = null
   } = params;
+
+  if (provider === "wings-pms" && sessionAvailable && hasUpstreamAuth) {
+    return {
+      code: null,
+      recoveryAction: null
+    };
+  }
 
   if (bridgeRuntimeCode) {
     return {
@@ -35,14 +44,14 @@ export function resolveBridgeIssue(params: {
   if (sessionAvailable && !hasUpstreamAuth) {
     return {
       code: "UPSTREAM_AUTH_EXPIRED",
-      recoveryAction: "Re-authenticate the provider session in the extension. Read-only review can continue."
+      recoveryAction: "Re-authenticate the provider session in the extension or open the in-app Wings login window, then capture the current session."
     };
   }
 
   if (runtimeMode === "live" && supportLevel === "fixture-fallback") {
     return {
       code: "FIXTURE_FALLBACK_ACTIVE",
-      recoveryAction: "Attach the extension session and verify bridge authentication before retrying live mode."
+      recoveryAction: "Attach the extension session or use the in-app Wings login window, then capture provider authentication before retrying live mode."
     };
   }
 

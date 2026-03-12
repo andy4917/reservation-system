@@ -1,6 +1,13 @@
 import { ipcMain } from "electron";
 import type { ProviderType } from "../contracts";
-import type { FetchProviderRowsRequest, ProviderInventoryCompareRow } from "../contracts";
+import type {
+  FetchSheetSnapshotRequest,
+  FetchProviderRowsRequest,
+  FetchReservationsRequest,
+  FetchWingsLiveContractRequest,
+  ProviderInventoryCompareRow,
+  ProviderReservationRow
+} from "../contracts";
 import type { RecommendationScoreRequest, RecommendationSettings } from "../contracts";
 import { getBridgePort, getBridgeRuntimeStatus, getLatestBridgeContext, getLatestBridgeSummary, getProviderRowsFromBridge } from "./bridgeServer";
 import {
@@ -10,6 +17,10 @@ import {
   scoreRecommendationCandidates,
   warmRecommendationRuntime
 } from "./recommendationRuntime";
+import { fetchWingsLiveContract, fetchWingsReservations, getWingsRuntimeDiagnostics } from "./wingsRuntime";
+import { fetchSheetSnapshot } from "./sheetRuntime";
+import { fetchProviderRowsLive, getProviderRuntimeDiagnostics } from "./providerRuntime";
+import { captureWingsSession, openWingsLoginWindow } from "./wingsSession";
 
 function normalizeProviderType(value: string | undefined): ProviderType | null {
   if (value === "naver-partner" || value === "admin-station" || value === "wings-pms") {
@@ -38,7 +49,7 @@ function normalizeBridgeRow(
   const action = typeof row.action === "string" ? row.action.trim() : undefined;
   if (!date || !roomType || !channel || !siteRaw || !sheetRaw) return null;
   return {
-    provider,
+    provider: provider || undefined,
     branch,
     date,
     roomType,
@@ -88,7 +99,52 @@ export function registerAppIpc() {
     };
   });
 
+  ipcMain.handle("desktop:fetch-sheet-snapshot", async (_event, request: FetchSheetSnapshotRequest) => {
+    const result = await fetchSheetSnapshot(request.query);
+    return {
+      ok: true,
+      payload: result.summary,
+      source: result.source,
+      error: typeof result.error === "string" ? result.error : ""
+    };
+  });
+
   ipcMain.handle("desktop:fetch-provider-rows", async (_event, request: FetchProviderRowsRequest) => {
+    if (request.provider === "naver-partner" || request.provider === "admin-station") {
+      try {
+        const live = await fetchProviderRowsLive(request.provider, request.query);
+        const payload = live.rows.map((row) => ({
+          provider: request.provider,
+          ...row
+        })) as ProviderInventoryCompareRow[];
+        return {
+          ok: true,
+          provider: request.provider,
+          payload,
+          usedDomFallback: false,
+          source: live.source
+        };
+      } catch (_error) {
+        const diagnostics = getProviderRuntimeDiagnostics();
+        const bridgePayload = getProviderRowsFromBridge(request.provider, request.query);
+        const envPayload =
+          bridgePayload.length > 0
+            ? bridgePayload
+            : parseBridgeRowsEnv()
+                .filter((row) => !row.provider || row.provider === request.provider)
+                .filter((row) => (!request?.query?.startDate || row.date >= request.query.startDate) && (!request?.query?.endDate || row.date <= request.query.endDate))
+                .map(({ provider: _provider, ...row }) => row);
+
+        return {
+          ok: true,
+          provider: request.provider,
+          payload: envPayload,
+          usedDomFallback: bridgePayload.length > 0,
+          source: bridgePayload.length > 0 ? "bridge-dom-fallback" : diagnostics.source
+        };
+      }
+    }
+
     const bridgePayload = getProviderRowsFromBridge(request.provider, request.query);
     const envPayload =
       bridgePayload.length > 0
@@ -102,7 +158,72 @@ export function registerAppIpc() {
       ok: true,
       provider: request.provider,
       payload: envPayload,
-      usedDomFallback: false
+      usedDomFallback: bridgePayload.length > 0,
+      source: bridgePayload.length > 0 ? "bridge-dom-fallback" : "unsupported-provider"
+    };
+  });
+
+  ipcMain.handle("desktop:fetch-provider-reservations", async (_event, request: FetchReservationsRequest) => {
+    if (request.provider !== "wings-pms") {
+      return {
+        ok: true,
+        provider: request.provider,
+        payload: [] as ProviderReservationRow[],
+        usedDomFallback: false,
+        source: "unsupported-provider"
+      };
+    }
+
+    const result = await fetchWingsReservations(request.query);
+    return {
+      ok: true,
+      provider: request.provider,
+      payload: Array.isArray(result.records) ? (result.records as ProviderReservationRow[]) : [],
+      usedDomFallback: false,
+      source: typeof result.source === "string" ? result.source : "unknown",
+      endpointCapability: typeof result.endpointCapability === "string" ? result.endpointCapability : "",
+      profilesFetched: Array.isArray(result.profilesFetched) ? result.profilesFetched : []
+    };
+  });
+
+  ipcMain.handle("desktop:open-wings-login", async () => openWingsLoginWindow());
+  ipcMain.handle("desktop:capture-wings-session", async () => captureWingsSession());
+
+  ipcMain.handle("desktop:fetch-wings-live-contract", async (_event, request: FetchWingsLiveContractRequest) => {
+    const runtime = getWingsRuntimeDiagnostics();
+    if (request.provider !== "wings-pms") {
+      return {
+        ok: true,
+        provider: "wings-pms" as const,
+        capability: request.capability,
+        payload: [],
+        usedDomFallback: false,
+        source: "unsupported-provider"
+      };
+    }
+
+    const result = await fetchWingsLiveContract({
+      capability: request.capability,
+      ...(request.request || {})
+    });
+    const payload = Array.isArray(result.records) && result.records.length > 0
+      ? result.records
+      : Array.isArray(result.items)
+        ? result.items
+        : [];
+
+    return {
+      ok: true,
+      provider: "wings-pms" as const,
+      capability: request.capability,
+      payload,
+      usedDomFallback: false,
+      source: typeof result.source === "string" ? result.source : runtime.source,
+      endpointCapability:
+        typeof result.endpointCapability === "string" && result.endpointCapability
+          ? result.endpointCapability
+          : request.capability,
+      profilesFetched: Array.isArray(result.profilesFetched) ? result.profilesFetched : []
     };
   });
 

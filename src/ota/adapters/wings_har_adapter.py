@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from src.domain.sheet_domain import normalize_platform_name, normalize_text
+from src.io.har_cache import load_har_entries
 from src.ota.base import OTAAdapter, OTAAdapterError
 from src.ota.models import Inventory, Reservation
 
@@ -288,13 +289,9 @@ class WingsHarAdapter(OTAAdapter):
         if not har_path.exists():
             raise OTAAdapterError(f"HAR file not found: {har_path}")
         try:
-            payload = json.loads(har_path.read_text(encoding="utf-8"))
+            entries = load_har_entries(har_path)
         except Exception as exc:  # noqa: BLE001
             raise OTAAdapterError(f"Failed to read HAR: {har_path}") from exc
-
-        entries = payload.get("log", {}).get("entries", [])
-        if not isinstance(entries, list):
-            return []
 
         out: List[Any] = []
         for entry in entries:

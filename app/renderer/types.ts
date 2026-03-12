@@ -1,4 +1,5 @@
 import type {
+  FetchSheetSnapshotSummary,
   LiveSupportLevel,
   RecommendationSampleEmbedResult,
   RecommendationRuntimeDiagnostics,
@@ -15,6 +16,7 @@ export type AppTaskId =
   | "dry-run";
 
 export type RightPanelTab = "evidence" | "ops" | "validation" | "logs";
+export type BranchSelection = "ALL" | "GANGNAM" | "COEX";
 
 export interface BridgeStatus {
   connected: boolean;
@@ -27,6 +29,16 @@ export interface BridgeStatus {
   recoveryAction: string | null;
   authConfigured: boolean;
   writeEnabled: boolean;
+}
+
+export interface AppRunContext {
+  id: string;
+  branch: BranchSelection;
+  startDate: string;
+  endDate: string;
+  runtimeMode: RuntimeMode;
+  requestedAt: string;
+  sourceProvider: string | null;
 }
 
 export interface SummaryMetric {
@@ -180,6 +192,13 @@ export interface ReservationAuditRow {
   auditStatus: "ok" | "anomaly" | "review";
   reason: string;
   action: string;
+  branch?: string;
+  sourceCode?: string;
+  nationalityCode?: string;
+  languageCode?: string;
+  languageName?: string;
+  endpointCapability?: string;
+  roomNo?: string;
 }
 
 export interface ReservationAuditSnapshot {
@@ -198,13 +217,23 @@ export interface ReservationAuditSnapshot {
   logs: string[];
 }
 
+export interface SheetReadSnapshot {
+  supportLevel: LiveSupportLevel;
+  sourceLabel: string;
+  lastRunAt: string;
+  summary: FetchSheetSnapshotSummary | null;
+  logs: string[];
+}
+
 export interface WorkspaceMockState {
   runtimeMode: RuntimeMode;
   activeTask: AppTaskId;
+  selectedBranch: BranchSelection;
   selectedRange: {
     startDate: string;
     endDate: string;
   };
+  activeRunContext: AppRunContext | null;
   bridgeStatus: BridgeStatus;
   metrics: SummaryMetric[];
   logs: string[];
@@ -213,6 +242,7 @@ export interface WorkspaceMockState {
   validationLines: string[];
   inventoryCompare: InventoryCompareSnapshot;
   inventoryCompareLoading: boolean;
+  sheetRead: SheetReadSnapshot;
   reservationAudit: ReservationAuditSnapshot;
   reservationAuditLoading: boolean;
   searchQuery: string;

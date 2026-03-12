@@ -1,0 +1,26 @@
+[
+  {
+    "source_system": "OTA_RESERVATION",
+    "provider": "wings-pms",
+    "branch": "COEX",
+    "reservation_id": "OTA-AGODA-25170918",
+    "raw_status": "confirmed",
+    "canonical_status": "ACTIVE",
+    "raw_room_label": "A701",
+    "raw_channel": "agoda",
+    "canonical_channel": "AGODA",
+    "canonical_reservation_id": "COEX-25170918"
+  },
+  {
+    "source_system": "OTA_RESERVATION",
+    "provider": "naver-partner",
+    "branch": "GANGNAM",
+    "reservation_id": "OTA-NAVER-25180001",
+    "raw_status": "booked",
+    "canonical_status": "ACTIVE",
+    "raw_room_label": "501",
+    "raw_channel": "naver",
+    "canonical_channel": "NAVER",
+    "canonical_reservation_id": "GANGNAM-25180001"
+  }
+]

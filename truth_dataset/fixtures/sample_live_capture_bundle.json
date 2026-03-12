@@ -1,0 +1,193 @@
+{
+  "contract_version": "canonical-data-contract-v1",
+  "manifest": {
+    "bundle_id": "sample-live-capture-20260312",
+    "captured_at": "2026-03-12T07:10:00Z",
+    "branches": ["COEX", "GANGNAM"],
+    "query": {
+      "startDate": "2026-03-01",
+      "endDate": "2026-03-07"
+    },
+    "redaction": {
+      "guest_name": "partial-mask",
+      "phone": "tail-only",
+      "token": "fingerprint-only"
+    }
+  },
+  "entities": {
+    "sheet_rows": [
+      {
+        "source_system": "SHEET",
+        "branch": "COEX",
+        "sheet_tab": "코엑스",
+        "room_row": 41,
+        "inventory_row": 43,
+        "date": "2026-03-01",
+        "note_head": "예약자 홍*동 / 연락처 ***5678 / agoda",
+        "color_hex": "#D9EAD3",
+        "raw_channel": "아고다-코엑스",
+        "canonical_channel": "AGODA",
+        "canonical_room_id": "COEX-A-701",
+        "room_aliases": ["A701", "1701", "701"]
+      },
+      {
+        "source_system": "SHEET",
+        "branch": "GANGNAM",
+        "sheet_tab": "강남",
+        "room_row": 18,
+        "inventory_row": 20,
+        "date": "2026-03-02",
+        "note_head": "예약자 김*연 / 연락처 ***1234 / naver",
+        "color_hex": "#FFF2CC",
+        "raw_channel": "네이버",
+        "canonical_channel": "NAVER",
+        "canonical_room_id": "GANGNAM-501",
+        "room_aliases": ["501"]
+      }
+    ],
+    "wings_reservations": [
+      {
+        "source_system": "WINGS",
+        "branch": "COEX",
+        "reservation_no": "25170918",
+        "reservation_ref": "1964355080",
+        "guest_name_redacted": "홍*동",
+        "phone_tail": "5678",
+        "room_no": "0701",
+        "room_type": "Urban Spa Suite 6인",
+        "status": "RC",
+        "status_bucket": "ACTIVE",
+        "raw_channel": "아고다",
+        "canonical_channel": "AGODA",
+        "updated_at": "2026-03-01T09:00:00+09:00",
+        "canonical_reservation_id": "COEX-25170918",
+        "canonical_room_id": "COEX-A-701"
+      },
+      {
+        "source_system": "WINGS",
+        "branch": "GANGNAM",
+        "reservation_no": "25180001",
+        "reservation_ref": "1965000001",
+        "guest_name_redacted": "김*연",
+        "phone_tail": "1234",
+        "room_no": "0501",
+        "room_type": "Urban Suite",
+        "status": "RC",
+        "status_bucket": "ACTIVE",
+        "raw_channel": "네이버",
+        "canonical_channel": "NAVER",
+        "updated_at": "2026-03-02T10:00:00+09:00",
+        "canonical_reservation_id": "GANGNAM-25180001",
+        "canonical_room_id": "GANGNAM-501"
+      }
+    ],
+    "ota_inventory_rows": [
+      {
+        "source_system": "OTA_INVENTORY",
+        "provider": "admin-station",
+        "branch": "COEX",
+        "item_id": "station-coex-urban-701",
+        "date": "2026-03-01",
+        "stock": 1,
+        "sale_day": true,
+        "raw_room_label": "Urban Spa Suite 6인 A701",
+        "raw_channel": "station",
+        "canonical_channel": "STATION",
+        "canonical_room_id": "COEX-A-701"
+      },
+      {
+        "source_system": "OTA_INVENTORY",
+        "provider": "naver-partner",
+        "branch": "GANGNAM",
+        "item_id": "naver-gangnam-501",
+        "date": "2026-03-02",
+        "stock": 1,
+        "sale_day": true,
+        "raw_room_label": "UH Suite 강남 501",
+        "raw_channel": "naver",
+        "canonical_channel": "NAVER",
+        "canonical_room_id": "GANGNAM-501"
+      }
+    ],
+    "ota_reservations": [
+      {
+        "source_system": "OTA_RESERVATION",
+        "provider": "wings-pms",
+        "branch": "COEX",
+        "reservation_id": "OTA-AGODA-25170918",
+        "raw_status": "confirmed",
+        "canonical_status": "ACTIVE",
+        "raw_room_label": "A701",
+        "raw_channel": "agoda",
+        "canonical_channel": "AGODA",
+        "canonical_reservation_id": "COEX-25170918"
+      },
+      {
+        "source_system": "OTA_RESERVATION",
+        "provider": "naver-partner",
+        "branch": "GANGNAM",
+        "reservation_id": "OTA-NAVER-25180001",
+        "raw_status": "booked",
+        "canonical_status": "ACTIVE",
+        "raw_room_label": "501",
+        "raw_channel": "naver",
+        "canonical_channel": "NAVER",
+        "canonical_reservation_id": "GANGNAM-25180001"
+      }
+    ],
+    "bridge_events": [
+      {
+        "source_system": "BRIDGE",
+        "provider": "admin-station",
+        "branch": "COEX",
+        "rawLine": "A701 2026-03-01 site=1 sheet=1",
+        "sourceLineIndex": 12,
+        "candidateBasis": ["room_alias", "date", "stock_match"],
+        "signals": [
+          { "kind": "room_alias", "value": "A701", "source": "line" },
+          { "kind": "date", "value": "2026-03-01", "source": "line" }
+        ],
+        "tags": [
+          { "kind": "coverage", "value": "read-live" },
+          { "kind": "confidence", "value": "0.92" }
+        ],
+        "auth_summary": {
+          "provider": "admin-station",
+          "material": "bearer:fingerprint",
+          "session_available": true
+        },
+        "info_summary": {
+          "host": "admin.admin-stationbyuhc.com",
+          "used_dom_fallback": false,
+          "candidate_count": 1
+        }
+      },
+      {
+        "source_system": "BRIDGE",
+        "provider": "naver-partner",
+        "branch": "GANGNAM",
+        "rawLine": "501 2026-03-02 reservation matched by note+phone",
+        "sourceLineIndex": 7,
+        "candidateBasis": ["reservation_no", "phone_tail", "note_soft_key"],
+        "signals": [
+          { "kind": "reservation_no", "value": "25180001", "source": "derived" },
+          { "kind": "phone_tail", "value": "1234", "source": "context" }
+        ],
+        "tags": [
+          { "kind": "coverage", "value": "partial-live" },
+          { "kind": "confidence", "value": "0.88" }
+        ],
+        "auth_summary": {
+          "provider": "naver-partner",
+          "material": "cookie+csrf:fingerprint",
+          "session_available": true
+        },
+        "info_summary": {
+          "host": "partner.booking.naver.com",
+          "used_dom_fallback": false,
+          "candidate_count": 1
+        }
+      }
+    ]
+  }
+}

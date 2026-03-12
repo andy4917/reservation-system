@@ -1279,7 +1279,7 @@
         matrix,
         filteredDateCols,
         naverDerived.roomRows || stationDerived.roomRows || [],
-        blockDetailMode === "full"
+        plan.blockDetailMode === "full"
           ? { mode: "full", includeBlocked: true }
           : { mode: "provider", providerChannels: ["NAVER", "STATION"], includeBlocked: true }
       );

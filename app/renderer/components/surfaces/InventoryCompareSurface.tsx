@@ -9,6 +9,7 @@ export function InventoryCompareSurface() {
   const processModules = useUiStore((state) => state.processModules);
   const recommendationAssist = useUiStore((state) => state.recommendationAssist);
   const recommendationRuntime = useUiStore((state) => state.recommendationRuntime);
+  const sheetRead = useUiStore((state) => state.sheetRead);
 
   return (
     <>
@@ -25,7 +26,9 @@ export function InventoryCompareSurface() {
           <button type="button" className="action-button" onClick={() => void refreshWorkspaceData()}>
             {inventoryCompareLoading ? "Loading..." : `${runtimeMode} compare run`}
           </button>
-          <div className="action-hint">Live read는 다음 단계에서 `bridge.getContext`와 `provider.fetchRows`에 연결됩니다.</div>
+          <div className="action-hint">
+            sheet={sheetRead.supportLevel} · inventory={inventoryCompare.supportLevel} · app-owned run context로 실행됩니다.
+          </div>
         </div>
       </div>
       <div className="inventory-summary-grid">
@@ -102,7 +105,7 @@ export function InventoryCompareSurface() {
         <PanelHeading
           kicker="Mismatch Preview"
           title="Provider vs Sheet"
-          description="현재는 fixture 기준이며, 표 구조는 live read 연결을 전제로 유지됩니다."
+          description="앱이 소유한 run context 아래에서 provider read와 sheet snapshot을 같은 범위로 묶어 운영 표면을 유지합니다."
         />
         <div className="inventory-table-scroll">
           <table className="inventory-table">

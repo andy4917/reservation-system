@@ -2,6 +2,11 @@
 
 현재 저장소는 데스크톱 앱 중심 전환을 진행 중이며, Chrome MV3 확장은 인증/세션/DOM 브리지로 축소하는 중입니다.
 
+가장 먼저 읽을 문서:
+
+- 제품 정의 / 왜 만드는지 / v1 범위: [`docs/architecture/APP_PRODUCT_OPERATING_MODEL.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/APP_PRODUCT_OPERATING_MODEL.md)
+- 재구현 순서 / 운영 경로 중심 로드맵: [`docs/architecture/APP_IMPLEMENTATION_ROADMAP.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/APP_IMPLEMENTATION_ROADMAP.md)
+
 ## 문서 구조
 
 - 루트: `README.md`, `AGENTS.md`만 유지
@@ -11,7 +16,7 @@
 - 작업 인계/세션 메모: `tasks/handoffs/`
 
 아키텍처 참고:
-- 앱 중심 전환 분류 계획: `docs/architecture/APP_CENTRIC_TRANSITION_PLAN.md`
+- 제품/운영 기준선: `docs/architecture/APP_PRODUCT_OPERATING_MODEL.md`
 - OTA Adapter Layer: `docs/integrations/OTA_ADAPTER_LAYER.md`
   - 운영 모드: NAVER 직접 API, BOOKING/AGODA/TRIP/AIRBNB는 WINGS HAR 기반
 - Inventory Planner: `docs/integrations/INVENTORY_PLANNER.md`

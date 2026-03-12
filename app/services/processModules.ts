@@ -12,6 +12,7 @@ export function buildProcessModules(state: WorkspaceMockState): ProcessModule[] 
   const hasLiveBridge = state.bridgeStatus.sessionAvailable;
   const hasMismatch = state.inventoryCompare.mismatchCount > 0;
   const hasWarnings = state.inventoryCompare.warningCount > 0;
+  const hasSheetRuntime = state.sheetRead.supportLevel === "read-live" || state.sheetRead.supportLevel === "partial-live";
 
   return [
     {
@@ -29,18 +30,25 @@ export function buildProcessModules(state: WorkspaceMockState): ProcessModule[] 
       detail: "task별 실행 단계와 blocker를 앱에서 정리"
     },
     {
+      id: "sheet-read",
+      title: "Sheet Read Module",
+      owner: "app",
+      status: hasSheetRuntime ? "active" : "pending",
+      detail: hasSheetRuntime ? "app-owned sheet snapshot connected" : "sheet runtime unavailable"
+    },
+    {
       id: "session-auth",
       title: "Session/Auth Bridge",
       owner: "extension",
       status: hasLiveBridge ? "active" : "pending",
-      detail: hasLiveBridge ? "현재 탭 세션과 host 문맥이 앱에 연결됨" : "현재 탭 세션 heartbeat 대기 중"
+      detail: hasLiveBridge ? "live context connected" : "live context unavailable"
     },
     {
       id: "provider-read",
       title: "Provider Read Module",
       owner: "extension",
       status: hasLiveBridge ? "active" : "pending",
-      detail: hasLiveBridge ? "provider live row 추출이 브리지로 전달됨" : "provider별 실 row mapper 미연결"
+      detail: hasLiveBridge ? "provider live rows connected" : "provider live rows unavailable"
     },
     {
       id: "validation-gate",

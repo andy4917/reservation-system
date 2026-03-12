@@ -493,9 +493,12 @@
     return body.toString();
   }
 
+  const WINGS_READONLY_MAX_QUERY_DAYS = 31;
+
   const WINGS_PMS_PRESET_DEFS = {
     "wings-global-guest-list": {
       urlPath: "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do",
+      harPathAliases: ["/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do"],
       defaultPageId: "IR04_0100X_V03",
       defaultPageSize: 300,
       dateStartKey: "ARRV_DATE_F",
@@ -515,8 +518,12 @@
       }
     },
     "wings-reservation-list": {
-      urlPath: "/pms/biz/ir04_0100X/searchListRsvn.do",
-      defaultPageId: "",
+      urlPath: "/pms/biz/ir04_0200X_V03/searchListRsvn.do",
+      harPathAliases: [
+        "/pms/biz/ir04_0200X_V03/searchListRsvn.do",
+        "/pms/biz/ir04_0100X/searchListRsvn.do"
+      ],
+      defaultPageId: "IR04_0200X_V03",
       defaultPageSize: 300,
       dateStartKey: "ARRV_DATE_F",
       dateEndKey: "ARRV_DATE_T",
@@ -536,10 +543,13 @@
     }
   };
 
-  const WINGS_PMS_HAR_PRESET_PATHS = Object.entries(WINGS_PMS_PRESET_DEFS).map(([presetKey, presetDef]) => ({
-    presetKey,
-    path: normalizeText(presetDef?.urlPath || "")
-  }));
+  const WINGS_PMS_HAR_PRESET_PATHS = Object.entries(WINGS_PMS_PRESET_DEFS).flatMap(([presetKey, presetDef]) => {
+    const candidates = Array.isArray(presetDef?.harPathAliases) ? presetDef.harPathAliases : [presetDef?.urlPath || ""];
+    return candidates
+      .map((path) => normalizeText(path || ""))
+      .filter(Boolean)
+      .map((path) => ({ presetKey, path }));
+  });
   const WINGS_PMS_HAR_READONLY_PATH_RE = /\/pms\/biz\/[^/]+\/(?:search|select|view)[^/]*\.do$/i;
   const WINGS_PMS_HAR_MUTATION_PATH_RE = /\/pms\/biz\/[^/]+\/(?:update|insert|delete|send)[^/]*\.do$/i;
 
@@ -555,6 +565,16 @@
     return { presetKey, propertyNo, bsnsCode, pageId, pageSize };
   }
 
+  function normalizeBranchLabel(value) {
+    const raw = normalizeText(value || "");
+    const lowered = raw.toLowerCase();
+    if (!lowered) return "";
+    if (/(^|[^a-z])coex([^a-z]|$)|코엑스|삼성/.test(lowered)) return "COEX";
+    if (/(^|[^a-z])gangnam([^a-z]|$)|강남/.test(lowered)) return "GANGNAM";
+    if (/(^|[^a-z])seolleung([^a-z]|$)|선릉/.test(lowered)) return "BRANCH_THE_SEOLLEUNG";
+    return raw.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  }
+
   function parseWingsPresetDate(value) {
     const text = normalizeText(value || "");
     if (!text) return "";
@@ -566,23 +586,92 @@
     return "";
   }
 
-  function resolveWingsPresetDateRange(rawPreset) {
-    const source = rawPreset && typeof rawPreset === "object" && !Array.isArray(rawPreset) ? rawPreset : {};
-    const startDate = parseWingsPresetDate(
+  function normalizeReadonlyDateRange(rawRange, fallbackDays = 7, maxDays = WINGS_READONLY_MAX_QUERY_DAYS) {
+    const source = rawRange && typeof rawRange === "object" && !Array.isArray(rawRange) ? rawRange : {};
+    const requestedStartDate = parseWingsPresetDate(
       source.startDate || source.start_date || source.fromDate || source.from_date || ""
     );
-    const endDate = parseWingsPresetDate(
+    const requestedEndDate = parseWingsPresetDate(
       source.endDate || source.end_date || source.toDate || source.to_date || ""
     );
-    if (startDate && endDate && startDate <= endDate) {
-      return { startDate, endDate };
-    }
     const today = toDateKey(new Date());
-    const end = toDateKey(addDays(fromDateKey(today) || new Date(), 7));
+    const fallbackEnd = toDateKey(addDays(fromDateKey(today) || new Date(), Math.max(0, fallbackDays)));
+    const startDate = requestedStartDate || today;
+    let endDate = requestedEndDate || fallbackEnd;
+    if (startDate > endDate) {
+      endDate = startDate;
+    }
+    const start = fromDateKey(startDate);
+    const end = fromDateKey(endDate);
+    const rawDayCount =
+      start && end ? Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1) : 1;
+    const cappedDayCount = Math.max(1, Math.min(maxDays, rawDayCount));
+    const cappedEndDate = start ? toDateKey(addDays(start, cappedDayCount - 1)) : endDate;
     return {
-      startDate: today,
-      endDate: end
+      startDate,
+      endDate: cappedEndDate,
+      requestedStartDate: requestedStartDate || startDate,
+      requestedEndDate: requestedEndDate || endDate,
+      dayCount: cappedDayCount,
+      requestedDayCount: rawDayCount,
+      limited: rawDayCount > cappedDayCount
     };
+  }
+
+  function resolveWingsPresetDateRange(rawPreset) {
+    const source = rawPreset && typeof rawPreset === "object" && !Array.isArray(rawPreset) ? rawPreset : {};
+    return normalizeReadonlyDateRange(source, 7, WINGS_READONLY_MAX_QUERY_DAYS);
+  }
+
+  function sanitizeWingsPmsBranchProfile(raw, fallbackBranch = "") {
+    const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const branch = normalizeBranchLabel(
+      source.branch || source.branchKey || source.branchLabel || source.label || fallbackBranch || ""
+    );
+    const pmsReservationUrl = normalizeText(
+      source.pmsReservationUrl || source.pmsApiUrl || source.pmsReservationApiUrl || source.url || ""
+    );
+    const pmsAuthBundle = sanitizeGenericAuthBundle(
+      source.pmsAuthBundle || source.pmsReservationAuthBundle || source.pmsBundle || source.authBundle || source.bundle || {}
+    );
+    const pmsPreset = sanitizeWingsPmsPreset(
+      source.pmsPreset || source.wingsPmsPreset || {
+        presetKey: source.pmsPresetKey || source.presetKey || "",
+        propertyNo: source.pmsPropertyNo || source.PROPERTY_NO || source.propertyNo || "",
+        bsnsCode: source.pmsBsnsCode || source.BSNS_CODE || source.bsnsCode || "",
+        pageId: source.pmsPageId || source.PAGE_ID || source.pageId || "",
+        pageSize: source.pmsPageSize || source.pageSize || source.take || ""
+      }
+    );
+    if (!branch && !pmsReservationUrl && !pmsPreset.presetKey && !Object.keys(pmsAuthBundle || {}).length) return null;
+    if (!pmsReservationUrl && !pmsPreset.presetKey) return null;
+    return {
+      branch,
+      pmsReservationUrl,
+      pmsAuthBundle,
+      pmsPreset
+    };
+  }
+
+  function sanitizeWingsPmsBranchProfiles(raw) {
+    const source =
+      Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.entries(raw).map(([branch, value]) => ({
+        branch,
+        ...(value && typeof value === "object" && !Array.isArray(value) ? value : {})
+      })) : [];
+    const deduped = new Map();
+    source.forEach((item) => {
+      const profile = sanitizeWingsPmsBranchProfile(item, item?.branch || "");
+      if (!profile) return;
+      const key = [
+        normalizeText(profile.branch || ""),
+        normalizeText(profile.pmsReservationUrl || ""),
+        normalizeText(profile.pmsPreset?.presetKey || ""),
+        normalizeText(profile.pmsPreset?.propertyNo || "")
+      ].join("::");
+      deduped.set(key, profile);
+    });
+    return [...deduped.values()];
   }
 
   function buildWingsPmsPresetRequest(rawPreset, currentUrl = "") {
@@ -1778,6 +1867,9 @@
           pageSize: config.pmsPageSize || config.take || ""
         }
       ),
+      pmsBranchProfiles: sanitizeWingsPmsBranchProfiles(
+        config.pmsBranchProfiles || config.wingsPmsBranchProfiles || config.branchPmsProfiles || []
+      ),
       stationBranchId,
       naverBusinessId
     };
@@ -1920,6 +2012,10 @@
     sanitizeProviderAuthBundle,
     sanitizeStoredAuthBundles,
     sanitizeWingsPmsPreset,
+    sanitizeWingsPmsBranchProfile,
+    sanitizeWingsPmsBranchProfiles,
+    normalizeBranchLabel,
+    normalizeReadonlyDateRange,
     buildWingsPmsPresetRequest,
     convertHarToWingsPmsConfig,
     captureProviderAuthBundle,

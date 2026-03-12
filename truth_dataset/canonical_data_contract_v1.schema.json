@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "truth_dataset/canonical_data_contract_v1.schema.json",
+  "title": "Canonical Data Contract V1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "manifest",
+    "entities"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "canonical-data-contract-v1"
+    },
+    "manifest": {
+      "type": "object",
+      "required": [
+        "bundle_id",
+        "captured_at",
+        "branches",
+        "query"
+      ],
+      "properties": {
+        "bundle_id": { "type": "string" },
+        "captured_at": { "type": "string" },
+        "branches": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "query": {
+          "type": "object",
+          "required": ["startDate", "endDate"],
+          "properties": {
+            "startDate": { "type": "string" },
+            "endDate": { "type": "string" }
+          }
+        }
+      }
+    },
+    "entities": {
+      "type": "object",
+      "required": [
+        "sheet_rows",
+        "wings_reservations",
+        "ota_inventory_rows",
+        "ota_reservations",
+        "bridge_events"
+      ],
+      "properties": {
+        "sheet_rows": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sheetRow" }
+        },
+        "wings_reservations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/wingsReservation" }
+        },
+        "ota_inventory_rows": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/otaInventoryRow" }
+        },
+        "ota_reservations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/otaReservation" }
+        },
+        "bridge_events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/bridgeEvent" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "evidenceSignal": {
+      "type": "object",
+      "required": ["kind", "value", "source"],
+      "properties": {
+        "kind": { "type": "string" },
+        "value": { "type": "string" },
+        "source": { "type": "string", "enum": ["line", "context", "runtime", "derived"] }
+      }
+    },
+    "evidenceTag": {
+      "type": "object",
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": { "type": "string" },
+        "value": { "type": "string" }
+      }
+    },
+    "sheetRow": {
+      "type": "object",
+      "required": [
+        "source_system",
+        "branch",
+        "sheet_tab",
+        "room_row",
+        "inventory_row",
+        "date",
+        "room_aliases",
+        "raw_channel",
+        "canonical_channel"
+      ],
+      "properties": {
+        "source_system": { "const": "SHEET" },
+        "branch": { "type": "string" },
+        "sheet_tab": { "type": "string" },
+        "room_row": { "type": "integer" },
+        "inventory_row": { "type": "integer" },
+        "date": { "type": "string" },
+        "note_head": { "type": "string" },
+        "color_hex": { "type": "string" },
+        "raw_channel": { "type": "string" },
+        "canonical_channel": { "type": "string" },
+        "canonical_room_id": { "type": "string" },
+        "room_aliases": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "wingsReservation": {
+      "type": "object",
+      "required": [
+        "source_system",
+        "branch",
+        "reservation_no",
+        "status",
+        "status_bucket",
+        "raw_channel",
+        "canonical_channel",
+        "room_no",
+        "updated_at"
+      ],
+      "properties": {
+        "source_system": { "const": "WINGS" },
+        "branch": { "type": "string" },
+        "reservation_no": { "type": "string" },
+        "reservation_ref": { "type": "string" },
+        "guest_name_redacted": { "type": "string" },
+        "phone_tail": { "type": "string" },
+        "room_no": { "type": "string" },
+        "room_type": { "type": "string" },
+        "status": { "type": "string" },
+        "status_bucket": { "type": "string" },
+        "raw_channel": { "type": "string" },
+        "canonical_channel": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "canonical_reservation_id": { "type": "string" },
+        "canonical_room_id": { "type": "string" }
+      }
+    },
+    "otaInventoryRow": {
+      "type": "object",
+      "required": [
+        "source_system",
+        "provider",
+        "branch",
+        "item_id",
+        "date",
+        "stock",
+        "raw_room_label",
+        "raw_channel"
+      ],
+      "properties": {
+        "source_system": { "const": "OTA_INVENTORY" },
+        "provider": { "type": "string" },
+        "branch": { "type": "string" },
+        "item_id": { "type": "string" },
+        "date": { "type": "string" },
+        "stock": { "type": "integer" },
+        "sale_day": { "type": "boolean" },
+        "raw_room_label": { "type": "string" },
+        "raw_channel": { "type": "string" },
+        "canonical_channel": { "type": "string" },
+        "canonical_room_id": { "type": "string" }
+      }
+    },
+    "otaReservation": {
+      "type": "object",
+      "required": [
+        "source_system",
+        "provider",
+        "branch",
+        "reservation_id",
+        "raw_status",
+        "raw_room_label",
+        "raw_channel"
+      ],
+      "properties": {
+        "source_system": { "const": "OTA_RESERVATION" },
+        "provider": { "type": "string" },
+        "branch": { "type": "string" },
+        "reservation_id": { "type": "string" },
+        "raw_status": { "type": "string" },
+        "canonical_status": { "type": "string" },
+        "raw_room_label": { "type": "string" },
+        "raw_channel": { "type": "string" },
+        "canonical_channel": { "type": "string" },
+        "canonical_reservation_id": { "type": "string" }
+      }
+    },
+    "bridgeEvent": {
+      "type": "object",
+      "required": [
+        "source_system",
+        "provider",
+        "branch",
+        "rawLine",
+        "sourceLineIndex",
+        "candidateBasis",
+        "signals",
+        "tags",
+        "auth_summary",
+        "info_summary"
+      ],
+      "properties": {
+        "source_system": { "const": "BRIDGE" },
+        "provider": { "type": "string" },
+        "branch": { "type": "string" },
+        "rawLine": { "type": "string" },
+        "sourceLineIndex": { "type": "integer" },
+        "candidateBasis": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "signals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceSignal" }
+        },
+        "tags": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceTag" }
+        },
+        "auth_summary": { "type": "object" },
+        "info_summary": { "type": "object" }
+      }
+    }
+  }
+}

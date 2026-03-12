@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -247,11 +246,10 @@ class HttpJsonOTAAdapter(OTAAdapter):
             raise OTAAdapterError(
                 f"HTTP {response.status_code} {method.upper()} {url} failed: {response.text[:500]}"
             )
-        text = response.text.strip()
-        if not text:
+        if not response.content:
             return {}
         try:
-            return json.loads(text)
+            return response.json()
         except Exception as exc:  # noqa: BLE001
             raise OTAAdapterError(f"Invalid JSON payload: {url}") from exc
 

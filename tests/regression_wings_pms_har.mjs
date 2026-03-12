@@ -40,7 +40,7 @@ function main() {
           startedDateTime: "2026-03-01T01:00:00.000Z",
           request: {
             method: "POST",
-            url: "https://pms.sanhait.com/pms/biz/ir04_0100X/searchListRsvn.do",
+            url: "https://pms.sanhait.com/pms/biz/ir04_0200X_V03/searchListRsvn.do",
             headers: [
               { name: "Content-Type", value: "application/x-www-form-urlencoded; charset=UTF-8" },
               { name: "Cookie", value: "SESSION=abc123; Path=/" },
@@ -53,7 +53,7 @@ function main() {
                 "skip=0",
                 "page=1",
                 "pageSize=500",
-                "filter[PAGE_ID]=IR04_0100X",
+                "filter[PAGE_ID]=IR04_0200X_V03",
                 "filter[filters][0][field]=BSNS_CODE",
                 "filter[filters][0][value]=91",
                 "filter[filters][1][field]=PROPERTY_NO",
@@ -72,11 +72,11 @@ function main() {
   assert.equal(converted.preset.presetKey, "wings-reservation-list");
   assert.equal(converted.preset.propertyNo, "91");
   assert.equal(converted.preset.bsnsCode, "91");
-  assert.equal(converted.preset.pageId, "IR04_0100X");
+  assert.equal(converted.preset.pageId, "IR04_0200X_V03");
   assert.equal(converted.preset.pageSize, 500);
   assert.equal(
     converted.url,
-    "https://pms.sanhait.com/pms/biz/ir04_0100X/searchListRsvn.do"
+    "https://pms.sanhait.com/pms/biz/ir04_0200X_V03/searchListRsvn.do"
   );
   assert.equal(converted.bundle.method, "POST");
   assert.equal(converted.bundle.contentType, "form");

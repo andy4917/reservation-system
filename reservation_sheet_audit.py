@@ -19,6 +19,7 @@ import zipfile
 import secrets
 import threading
 from collections import Counter
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -65,6 +66,7 @@ from src.domain.sheet_domain import (
     normalize_text,
     parse_money_to_int,
 )
+from src.io.har_cache import load_har_entries
 from src.io.sheets_api import GoogleSheetsReadonlyClient
 from src.io.sheet_loader import load_sheet_matrix_and_dates
 from src.scan.sheet_scan import (
@@ -138,9 +140,7 @@ ROOM_REGISTRY_COMPARE_FIELDS = (
 )
 
 def parse_har_records(har_path: Path) -> List[HarRecord]:
-    with har_path.open("r", encoding="utf-8") as f:
-        har = json.load(f)
-    entries = har.get("log", {}).get("entries", [])
+    entries = load_har_entries(har_path)
     records: List[HarRecord] = []
 
     for entry in entries:
@@ -182,9 +182,7 @@ def parse_source_reservations_from_har(
     *,
     pms_branch_map: Optional[Dict[str, str]] = None,
 ) -> List[SourceReservation]:
-    with har_path.open("r", encoding="utf-8") as f:
-        har = json.load(f)
-    entries = har.get("log", {}).get("entries", [])
+    entries = load_har_entries(har_path)
     records: List[SourceReservation] = []
 
     for entry in entries:
@@ -258,8 +256,12 @@ def load_source_reservations(
     if har_path:
         path = Path(har_path)
         if path.exists():
-            records.extend(parse_source_reservations_from_har(path, pms_branch_map=pms_branch_map))
-            for hr in parse_har_records(path):
+            source_records, har_records = load_har_reservation_data(
+                path,
+                pms_branch_map=pms_branch_map,
+            )
+            records.extend(source_records)
+            for hr in har_records:
                 if not hr.reservation_no or not hr.checkin:
                     continue
                 checkin, checkout, nights = calculate_checkout_from_dates(
@@ -330,6 +332,34 @@ def load_source_reservations(
         )
         deduped[key] = record
     return list(deduped.values())
+
+
+@lru_cache(maxsize=32)
+def _cached_har_reservation_data(
+    path_text: str,
+    branch_items: Tuple[Tuple[str, str], ...],
+) -> Tuple[List[SourceReservation], List[HarRecord]]:
+    path = Path(path_text)
+    branch_map = dict(branch_items)
+    source_records = parse_source_reservations_from_har(
+        path,
+        pms_branch_map=branch_map or None,
+    )
+    har_records = parse_har_records(path)
+    return source_records, har_records
+
+
+def load_har_reservation_data(
+    har_path: Path,
+    *,
+    pms_branch_map: Optional[Dict[str, str]] = None,
+) -> Tuple[List[SourceReservation], List[HarRecord]]:
+    branch_items = tuple(sorted((pms_branch_map or {}).items()))
+    source_records, har_records = _cached_har_reservation_data(
+        str(har_path.resolve()),
+        branch_items,
+    )
+    return list(source_records), list(har_records)
 
 
 def enrich_blocks_with_source_metadata(
