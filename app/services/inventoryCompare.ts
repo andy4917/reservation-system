@@ -118,6 +118,16 @@ function getSupportLevel(
   return "read-live";
 }
 
+function getSourceLabel(
+  mode: RuntimeMode,
+  options?: { sourceLabel?: string; liveContextAvailable?: boolean; liveRowsLoaded?: boolean }
+) {
+  if (mode !== "live") {
+    return options?.sourceLabel || (mode === "replay" ? "Replay artifact fixture" : "Dry-run fixture");
+  }
+  return getSupportLevel(mode, options);
+}
+
 function normalizeLiveRow(
   row: ProviderInventoryCompareRow,
   index: number,
@@ -202,8 +212,10 @@ export async function loadInventoryCompareSnapshot(
   const warningCount = rows.filter((row) => row.status === "warning").length;
   const matchedCount = rows.filter((row) => row.status === "match").length;
   const lineSet = buildLines(mode, rows);
-  const sourceLabel =
-    mode === "live" ? "Bridge pending, fixture fallback" : mode === "replay" ? "Replay artifact fixture" : "Dry-run fixture";
+  const sourceLabel = getSourceLabel(mode, {
+    liveContextAvailable: false,
+    liveRowsLoaded: false
+  });
 
   return {
     title: "Inventory Compare",
@@ -249,6 +261,15 @@ export function buildInventoryCompareSnapshot(params: {
   const normalizedRows = liveRows
     .map((row, index) => normalizeLiveRow(row, index, liveProvider))
     .filter((row): row is InventoryCompareRow => Boolean(row));
+  const supportLevel = getSupportLevel("live", {
+    liveContextAvailable,
+    liveRowsLoaded: normalizedRows.length > 0
+  });
+  const normalizedSourceLabel = getSourceLabel("live", {
+    sourceLabel,
+    liveContextAvailable,
+    liveRowsLoaded: normalizedRows.length > 0
+  });
   const emptyLiveRow: InventoryCompareRow = {
     id: "live-empty",
     date: "-",
@@ -273,16 +294,13 @@ export function buildInventoryCompareSnapshot(params: {
 
   return {
     title: "Inventory Compare",
-    supportLevel: getSupportLevel(mode, {
-      liveContextAvailable,
-      liveRowsLoaded: normalizedRows.length > 0
-    }),
-    sourceLabel,
+    supportLevel,
+    sourceLabel: normalizedSourceLabel,
     lastRunAt: new Date().toISOString(),
     rows,
     mismatchCount,
     warningCount,
     matchedCount,
-    ...buildLines(mode, rows, { sourceLabel, usedDomFallback, liveContextAvailable })
+    ...buildLines(mode, rows, { sourceLabel: normalizedSourceLabel, usedDomFallback, liveContextAvailable })
   };
 }

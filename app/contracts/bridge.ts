@@ -46,6 +46,7 @@ export interface BridgeRuntimeStatus {
   rateLimitWindowMs: number;
   rateLimitMaxRequests: number;
   maxBodyBytes: number;
+  requestTimeoutMs: number;
 }
 
 export type BridgeRequest =

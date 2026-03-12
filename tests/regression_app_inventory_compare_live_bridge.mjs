@@ -34,7 +34,7 @@ async function main() {
 
   const snapshot = inventoryCompare.buildInventoryCompareSnapshot({
     mode: "live",
-    sourceLabel: "Bridge live rows",
+    sourceLabel: "read-live",
     liveProvider: "naver-partner",
     liveContextAvailable: true,
     usedDomFallback: false,
@@ -61,7 +61,7 @@ async function main() {
     ]
   });
 
-  assert.equal(snapshot.sourceLabel, "Bridge live rows");
+  assert.equal(snapshot.sourceLabel, "read-live");
   assert.equal(snapshot.supportLevel, "read-live");
   assert.equal(snapshot.mismatchCount, 1);
   assert.equal(snapshot.matchedCount, 1);
@@ -74,7 +74,7 @@ async function main() {
 
   const partial = inventoryCompare.buildInventoryCompareSnapshot({
     mode: "live",
-    sourceLabel: "Bridge live rows pending payload",
+    sourceLabel: "partial-live",
     liveProvider: "naver-partner",
     liveContextAvailable: true,
     usedDomFallback: false,
@@ -84,7 +84,7 @@ async function main() {
 
   const fallback = inventoryCompare.buildInventoryCompareSnapshot({
     mode: "live",
-    sourceLabel: "Bridge pending, fixture fallback",
+    sourceLabel: "fixture-fallback",
     liveProvider: "naver-partner",
     liveContextAvailable: false,
     usedDomFallback: false,

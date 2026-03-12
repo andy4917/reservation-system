@@ -34,7 +34,7 @@ async function main() {
 
   const snapshot = reservationAudit.buildReservationAuditSnapshot({
     mode: "live",
-    sourceLabel: "Bridge auth ready, audit fixture fallback",
+    sourceLabel: "partial-live",
     liveContextAvailable: true,
     bridgeSummary: {
       authSummary: {
@@ -52,8 +52,8 @@ async function main() {
     }
   });
 
-  assert.equal(snapshot.sourceLabel, "Bridge auth ready, audit fixture fallback");
-  assert.equal(snapshot.supportLevel, "read-live");
+  assert.equal(snapshot.sourceLabel, "partial-live");
+  assert.equal(snapshot.supportLevel, "partial-live");
   assert.equal(snapshot.reviewCount, 1);
   assert.equal(snapshot.anomalyCount, 0);
   assert.equal(snapshot.rows.length, 1);

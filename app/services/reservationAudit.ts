@@ -94,6 +94,16 @@ function getSupportLevel(
   return "fixture-fallback";
 }
 
+function getSourceLabel(
+  mode: RuntimeMode,
+  options?: { liveContextAvailable?: boolean; hasUpstreamAuth?: boolean; hasReservationRows?: boolean; sourceLabel?: string }
+) {
+  if (mode !== "live") {
+    return options?.sourceLabel || (mode === "replay" ? "Replay audit fixture" : "Dry-run audit fixture");
+  }
+  return getSupportLevel(mode, options);
+}
+
 function buildLines(
   mode: RuntimeMode,
   rows: ReservationAuditRow[],
@@ -158,28 +168,39 @@ function buildSnapshot(mode: RuntimeMode, rows: ReservationAuditRow[], options?:
   const reviewCount = rows.filter((row) => row.auditStatus === "review").length;
   const activeCount = rows.filter((row) => row.status === "ACTIVE").length;
   const canceledCount = rows.filter((row) => row.status === "CANCELED").length;
+  const hasUpstreamAuth = Boolean(options?.bridgeSummary?.authSummary?.cookieCount || options?.bridgeSummary?.authSummary?.hasBearer);
+  const hasReservationRows = rows[0]?.reservationNo !== "pending";
+  const normalizedSourceLabel = getSourceLabel(mode, {
+    sourceLabel: options?.sourceLabel,
+    liveContextAvailable: options?.liveContextAvailable,
+    hasUpstreamAuth,
+    hasReservationRows
+  });
   return {
     title: "Reservation Audit",
     supportLevel: getSupportLevel(mode, {
       liveContextAvailable: options?.liveContextAvailable,
-      hasUpstreamAuth: Boolean(options?.bridgeSummary?.authSummary?.cookieCount || options?.bridgeSummary?.authSummary?.hasBearer),
-      hasReservationRows: rows[0]?.reservationNo !== "pending"
+      hasUpstreamAuth,
+      hasReservationRows
     }),
-    sourceLabel: options?.sourceLabel || mode,
+    sourceLabel: normalizedSourceLabel,
     lastRunAt: new Date().toISOString(),
     rows,
     anomalyCount,
     reviewCount,
     activeCount,
     canceledCount,
-    ...buildLines(mode, rows, options)
+    ...buildLines(mode, rows, {
+      ...options,
+      sourceLabel: normalizedSourceLabel
+    })
   };
 }
 
 export async function loadReservationAuditSnapshot(mode: RuntimeMode): Promise<ReservationAuditSnapshot> {
-  const sourceLabel =
-    mode === "live" ? "Bridge pending, audit fixture fallback" : mode === "replay" ? "Replay audit fixture" : "Dry-run audit fixture";
-  return buildSnapshot(mode, FIXTURE_ROWS[mode], { sourceLabel });
+  return buildSnapshot(mode, FIXTURE_ROWS[mode], {
+    sourceLabel: getSourceLabel(mode, { liveContextAvailable: false, hasUpstreamAuth: false, hasReservationRows: false })
+  });
 }
 
 export function buildReservationAuditSnapshot(params: {

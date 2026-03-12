@@ -35,7 +35,8 @@
       "port": 45123,
       "updatePath": "/bridge/update",
       "statePath": "/bridge/state",
-      "secret": ""
+      "secret": "",
+      "timeoutMs": 3000
     },
     "noteChannelPrefix": {
       "enabled": true,

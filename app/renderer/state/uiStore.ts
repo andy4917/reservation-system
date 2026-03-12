@@ -250,12 +250,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
             mode: "live",
             sourceLabel:
               liveRowsResponse?.payload?.length
-                ? liveRowsResponse.usedDomFallback
-                  ? "Bridge live rows (DOM fallback)"
-                  : "Bridge live rows"
+                ? "read-live"
                 : context?.sessionAvailable
-                  ? "Bridge live rows pending payload"
-                  : "Bridge pending, fixture fallback",
+                  ? "partial-live"
+                  : "fixture-fallback",
             liveRows: liveRowsResponse?.payload,
             liveProvider: context?.provider || "naver-partner",
             usedDomFallback: liveRowsResponse?.usedDomFallback || false,
@@ -268,8 +266,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
             mode: "live",
             sourceLabel:
               context?.sessionAvailable && (bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer)
-                ? "Bridge auth ready, audit fixture fallback"
-                : "Bridge pending, audit fixture fallback",
+                ? "partial-live"
+                : "fixture-fallback",
             bridgeSummary: bridgeSummary || currentState.bridgeSummary,
             liveContextAvailable: context?.sessionAvailable || false
           })

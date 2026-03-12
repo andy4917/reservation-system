@@ -36,10 +36,11 @@
   const bridgePort = Number(bridgePolicy.port || 45123);
   const bridgeUpdatePath = String(bridgePolicy.updatePath || "/bridge/update");
   const bridgeSecret = String(bridgePolicy.secret || "");
+  const bridgeTimeoutMs = Number(bridgePolicy.timeoutMs || 3000);
   const BRIDGE_ENDPOINT = `http://${bridgeHost}:${bridgePort}${bridgeUpdatePath}`;
   const BRIDGE_PUSH_INTERVAL_MS = 5000;
   const AUTH_CAPTURE_REFRESH_MS = 15000;
-  const BRIDGE_REQUEST_TIMEOUT_MS = 3000;
+  const BRIDGE_REQUEST_TIMEOUT_MS = Number.isFinite(bridgeTimeoutMs) && bridgeTimeoutMs > 0 ? bridgeTimeoutMs : 3000;
   const DOM_EXTRACT_PROVIDERS = new Set(["naver-partner", "admin-station"]);
   /** @type {ReturnType<typeof setInterval> | null} */
   let bridgePushTimer = null;

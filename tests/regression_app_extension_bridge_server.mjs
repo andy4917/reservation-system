@@ -37,6 +37,7 @@ async function main() {
     });
     assert.equal(response.ok, true);
     assert.equal(runtime.capability, "ready");
+    assert.equal(runtime.requestTimeoutMs, 3000);
 
     const context = bridgeServer.getLatestBridgeContext();
     assert.equal(context.sessionAvailable, true);

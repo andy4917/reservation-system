@@ -5,6 +5,8 @@ export function SettingsSurface() {
   const providerCards = useUiStore((state) => state.providerCards);
   const bridgeStatus = useUiStore((state) => state.bridgeStatus);
   const bridgeSummary = useUiStore((state) => state.bridgeSummary);
+  const inventoryCompare = useUiStore((state) => state.inventoryCompare);
+  const reservationAudit = useUiStore((state) => state.reservationAudit);
   const jobStatusCards = useUiStore((state) => state.jobStatusCards);
   const authBundleSettingsSnapshot = useUiStore((state) => state.authBundleSettingsSnapshot);
   const recommendationSettings = useUiStore((state) => state.recommendationSettings);
@@ -59,10 +61,11 @@ export function SettingsSurface() {
         <div className="placeholder-panel">
           <h3>Bridge Runtime Summary</h3>
           <p>
-            status={bridgeStatus.capability} · write={bridgeStatus.writeEnabled ? "enabled" : "blocked"} · auth={bridgeStatus.authConfigured ? "configured" : "missing"}
+            status={bridgeStatus.capability} · inventory={inventoryCompare.supportLevel} · audit={reservationAudit.supportLevel} · write=
+            {bridgeStatus.writeEnabled ? "enabled" : "blocked"}
           </p>
           <p>{bridgeStatus.code ? `reason=${bridgeStatus.code}` : "reason=none"}</p>
-          <p>{bridgeStatus.recoveryAction || "No recovery action required."}</p>
+          <p>recovery={bridgeStatus.recoveryAction || "none"}</p>
         </div>
         <div className="placeholder-panel">
           <h3>Settings Snapshot</h3>

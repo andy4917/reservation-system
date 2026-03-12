@@ -87,7 +87,8 @@ let bridgeRuntimeStatus: BridgeRuntimeStatus = {
     : "Set the same bridge secret in app env (UHS_BRIDGE_SHARED_SECRET) and extension sync policy.",
   rateLimitWindowMs: BRIDGE_RATE_LIMIT_WINDOW_MS,
   rateLimitMaxRequests: BRIDGE_RATE_LIMIT_MAX_REQUESTS,
-  maxBodyBytes: BRIDGE_MAX_BODY_BYTES
+  maxBodyBytes: BRIDGE_MAX_BODY_BYTES,
+  requestTimeoutMs: BRIDGE_REQUEST_TIMEOUT_MS
 };
 
 function normalizeProviderType(value: unknown): ProviderType | null {
@@ -589,6 +590,7 @@ export function __resetBridgeStateForTests() {
       : "Set the same bridge secret in app env (UHS_BRIDGE_SHARED_SECRET) and extension sync policy.",
     rateLimitWindowMs: BRIDGE_RATE_LIMIT_WINDOW_MS,
     rateLimitMaxRequests: BRIDGE_RATE_LIMIT_MAX_REQUESTS,
-    maxBodyBytes: BRIDGE_MAX_BODY_BYTES
+    maxBodyBytes: BRIDGE_MAX_BODY_BYTES,
+    requestTimeoutMs: BRIDGE_REQUEST_TIMEOUT_MS
   };
 }
