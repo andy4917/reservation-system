@@ -1,4 +1,5 @@
 import { getBridgeContext, getBridgeMeta, getBridgeRuntime, getBridgeSummary, pingDesktopRuntime } from "../../services/bridgeClient";
+import { resolveBridgeIssue } from "../../services/bridgeStatus";
 import { buildJobStatusCards } from "../../services/jobRunner";
 import { getProviderCapabilityCards } from "../../services/providerRegistry";
 import { loadAuthBundleSettingsSnapshot, loadRecommendationSettings, saveAuthBundleSettingsSnapshot } from "../../services/settingsStorage";
@@ -45,6 +46,16 @@ export async function bootstrapUiState() {
     }
 
     if (context) {
+      const hasUpstreamAuth = Boolean(bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer);
+      const bridgeIssue = resolveBridgeIssue({
+        runtimeMode: "live",
+        supportLevel: context.sessionAvailable ? (hasUpstreamAuth ? "partial-live" : "fixture-fallback") : "fixture-fallback",
+        sessionAvailable: context.sessionAvailable,
+        hasUpstreamAuth,
+        bridgeRuntimeCode: bridgeRuntime?.code || null,
+        bridgeRuntimeRecoveryAction: bridgeRuntime?.recoveryAction || null,
+        fallbackRecoveryAction: useUiStore.getState().bridgeStatus.recoveryAction
+      });
       const nextSettingsSnapshot =
         context.provider && (bridgeSummary?.authSummary || bridgeSummary?.infoSummary)
           ? {
@@ -73,11 +84,11 @@ export async function bootstrapUiState() {
           message: context.sessionAvailable
             ? `Bridge context ready: ${context.provider ?? "unknown"} @ ${context.host ?? "unknown host"}`
             : bridgeRuntime?.message || state.bridgeStatus.message,
-          code: context.sessionAvailable ? bridgeRuntime?.code || null : bridgeRuntime?.code || "FIXTURE_FALLBACK_ACTIVE",
-          recoveryAction: bridgeRuntime?.recoveryAction || state.bridgeStatus.recoveryAction,
+          code: bridgeIssue.code,
+          recoveryAction: bridgeIssue.recoveryAction,
           authConfigured: bridgeRuntime?.authConfigured ?? state.bridgeStatus.authConfigured,
           writeEnabled:
-            Boolean(context.sessionAvailable && (bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer)) &&
+            Boolean(context.sessionAvailable && hasUpstreamAuth) &&
             bridgeRuntime?.capability !== "degraded"
         },
         logs: [
@@ -106,11 +117,11 @@ export async function bootstrapUiState() {
             message: context.sessionAvailable
               ? `Bridge context ready: ${context.provider ?? "unknown"} @ ${context.host ?? "unknown host"}`
               : bridgeRuntime?.message || state.bridgeStatus.message,
-            code: context.sessionAvailable ? bridgeRuntime?.code || null : bridgeRuntime?.code || "FIXTURE_FALLBACK_ACTIVE",
-            recoveryAction: bridgeRuntime?.recoveryAction || state.bridgeStatus.recoveryAction,
+            code: bridgeIssue.code,
+            recoveryAction: bridgeIssue.recoveryAction,
             authConfigured: bridgeRuntime?.authConfigured ?? state.bridgeStatus.authConfigured,
             writeEnabled:
-              Boolean(context.sessionAvailable && (bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer)) &&
+              Boolean(context.sessionAvailable && hasUpstreamAuth) &&
               bridgeRuntime?.capability !== "degraded"
           },
           bridgeSummary: {

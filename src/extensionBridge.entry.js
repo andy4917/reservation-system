@@ -468,9 +468,10 @@
     };
     const payloadKey = buildPayloadFingerprint(snapshot, rows, context);
     if (payloadKey === lastBridgePayloadKey) return;
+    let timeoutId = null;
     try {
       const controller = typeof AbortController === "function" ? new AbortController() : null;
-      const timeoutId =
+      timeoutId =
         controller && typeof setTimeout === "function"
           ? setTimeout(() => controller.abort(), BRIDGE_REQUEST_TIMEOUT_MS)
           : null;
@@ -483,10 +484,11 @@
         body: JSON.stringify(payload),
         signal: controller?.signal
       });
-      if (timeoutId) clearTimeout(timeoutId);
       lastBridgePayloadKey = payloadKey;
     } catch (_error) {
       // App bridge may be unavailable while the desktop process is not running.
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
   }
 

@@ -22,6 +22,7 @@ import {
   saveAuthBundleSettingsSnapshot,
   saveRecommendationSettings
 } from "../../services/settingsStorage";
+import { resolveBridgeIssue } from "../../services/bridgeStatus";
 import type { AppTaskId, RightPanelTab, SummaryMetric, WorkspaceMockState } from "../types";
 import type { RuntimeMode } from "../../contracts";
 import type { RecommendationSettings } from "../../contracts";
@@ -284,6 +285,16 @@ export const useUiStore = create<UiStore>((set, get) => ({
             : `Live bridge context detected at ${context.host ?? "unknown host"}. provider.fetchRows responded with no rows for the selected range.`
           : "Live mode selected, but no active bridge context was reported. provider.fetchRows remains pending."
         : `Fixture compare loaded for ${runtimeMode} mode.`;
+    const hasUpstreamAuth = Boolean(bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer);
+    const bridgeIssue = resolveBridgeIssue({
+      runtimeMode,
+      supportLevel: snapshot.supportLevel,
+      sessionAvailable: context?.sessionAvailable || false,
+      hasUpstreamAuth,
+      bridgeRuntimeCode: bridgeRuntime?.code || null,
+      bridgeRuntimeRecoveryAction: bridgeRuntime?.recoveryAction || null,
+      fallbackRecoveryAction: currentState.bridgeStatus.recoveryAction
+    });
     const nextBridgeStatus = {
       ...currentState.bridgeStatus,
       connected: bridgeRuntime?.connected ?? currentState.bridgeStatus.connected,
@@ -293,23 +304,13 @@ export const useUiStore = create<UiStore>((set, get) => ({
       activeHost: context?.host || currentState.bridgeStatus.activeHost,
       message: bridgeMessage
         + (bridgeRuntime?.capability === "degraded" ? ` · ${bridgeRuntime.message}` : ""),
-      code:
-        runtimeMode === "live" && snapshot.supportLevel === "fixture-fallback"
-          ? "FIXTURE_FALLBACK_ACTIVE"
-          : context?.sessionAvailable && !(bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer)
-            ? "UPSTREAM_AUTH_EXPIRED"
-            : bridgeRuntime?.code || null,
-      recoveryAction:
-        runtimeMode === "live" && snapshot.supportLevel === "fixture-fallback"
-          ? "Attach the extension session and verify bridge authentication before retrying live mode."
-          : context?.sessionAvailable && !(bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer)
-            ? "Re-authenticate the provider session in the extension. Read-only review can continue."
-            : bridgeRuntime?.recoveryAction || currentState.bridgeStatus.recoveryAction,
+      code: bridgeIssue.code,
+      recoveryAction: bridgeIssue.recoveryAction,
       authConfigured: bridgeRuntime?.authConfigured ?? currentState.bridgeStatus.authConfigured,
       writeEnabled:
         runtimeMode === "live" &&
         snapshot.supportLevel === "read-live" &&
-        Boolean(bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer)
+        hasUpstreamAuth
     };
     const nextWorkspaceState = {
       ...currentState,

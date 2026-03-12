@@ -7,7 +7,7 @@
   "scripts": {
     "app:dev:renderer": "vite --config app/vite.config.ts",
     "app:build:renderer": "vite build --config app/vite.config.ts",
-    "app:build:main": "tsc -p tsconfig.json",
+    "app:build:main": "tsc -p tsconfig.json && node scripts/write-dist-app-package-json.mjs",
     "app:build": "npm run app:build:renderer && npm run app:build:main",
     "app:preview": "vite preview --config app/vite.config.ts",
     "app:electron": "npm run app:build:main && electron .",
