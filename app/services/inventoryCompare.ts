@@ -1,4 +1,6 @@
 import type { RuntimeMode, LiveSupportLevel } from "../contracts";
+import type { ProviderInventoryCompareRow } from "../contracts";
+import type { ProviderType } from "../contracts";
 import type { InventoryCompareRow, InventoryCompareSnapshot } from "../renderer/types";
 
 const FIXTURE_ROWS: Record<RuntimeMode, InventoryCompareRow[]> = {
@@ -106,23 +108,68 @@ const FIXTURE_ROWS: Record<RuntimeMode, InventoryCompareRow[]> = {
   ]
 };
 
-function getSupportLevel(mode: RuntimeMode): LiveSupportLevel {
-  return mode === "live" ? "read-live" : "dry-run-only";
+function getSupportLevel(
+  mode: RuntimeMode,
+  options?: { liveContextAvailable?: boolean; liveRowsLoaded?: boolean }
+): LiveSupportLevel {
+  if (mode !== "live") return "dry-run-only";
+  if (!options?.liveContextAvailable) return "fixture-fallback";
+  if (!options.liveRowsLoaded) return "partial-live";
+  return "read-live";
 }
 
-function buildLines(mode: RuntimeMode, rows: InventoryCompareRow[]) {
+function normalizeLiveRow(
+  row: ProviderInventoryCompareRow,
+  index: number,
+  provider: ProviderType
+): InventoryCompareRow | null {
+  const branch = String(row.branch || "").trim() || undefined;
+  const date = String(row.date || "").trim();
+  const roomType = String(row.roomType || "").trim();
+  const channel = String(row.channel || "").trim() || provider;
+  const siteRaw = String(row.siteRaw || "").trim();
+  const sheetRaw = String(row.sheetRaw || "").trim();
+  if (!date || !roomType || !channel || !siteRaw || !sheetRaw) return null;
+  const status: InventoryCompareRow["status"] = row.status || (siteRaw === sheetRaw ? "match" : "mismatch");
+  return {
+    id: `${provider}-${date}-${roomType}-${index}`,
+    branch,
+    date,
+    roomType,
+    channel,
+    siteRaw,
+    sheetRaw,
+    diff: String(row.diff || (siteRaw === sheetRaw ? "0" : "delta")).trim(),
+    status,
+    reason: String(row.reason || "live provider row loaded").trim(),
+    action: String(row.action || (status === "match" ? "keep" : "review before apply")).trim()
+  };
+}
+
+function buildLines(
+  mode: RuntimeMode,
+  rows: InventoryCompareRow[],
+  options?: { usedDomFallback?: boolean; sourceLabel?: string; liveContextAvailable?: boolean }
+) {
   const mismatches = rows.filter((row) => row.status === "mismatch");
   const warnings = rows.filter((row) => row.status === "warning");
+  const source = options?.sourceLabel || mode;
 
   return {
     evidenceLines: [
-      `Compare source: ${mode}`,
+      `Compare source: ${source}`,
       `Mismatch rows: ${mismatches.length}`,
       ...mismatches.slice(0, 3).map((row) => `${row.date} ${row.roomType} ${row.channel} ${row.siteRaw} vs ${row.sheetRaw}`)
     ],
     opsLines: [
       "Bridge contract path: bridge.getContext -> provider.fetchRows -> provider.domSnapshot",
-      `Support level: ${getSupportLevel(mode)}`,
+      `Support level: ${getSupportLevel(mode, {
+        liveContextAvailable: options?.liveContextAvailable,
+        liveRowsLoaded: rows.length > 0 && rows[0]?.id !== "live-empty"
+      })}`,
+      mode === "live"
+        ? `DOM fallback used: ${options?.usedDomFallback ? "yes" : "no"}`
+        : "DOM fallback used: fixture n/a",
       warnings.length > 0
         ? `Warnings requiring manual review: ${warnings.length}`
         : "No manual-review warnings in current fixture"
@@ -132,11 +179,15 @@ function buildLines(mode: RuntimeMode, rows: InventoryCompareRow[]) {
         ? "Validation gate: mismatch rows remain, apply blocked"
         : "Validation gate: no mismatch rows",
       mode === "live"
-        ? "Validation gate: live bridge missing, fixture fallback active"
+        ? options?.liveContextAvailable
+          ? options?.usedDomFallback
+            ? "Validation gate: live bridge rows loaded through DOM fallback"
+            : "Validation gate: live bridge rows loaded"
+          : "Validation gate: live bridge missing, fixture fallback active"
         : "Validation gate: fixture snapshot loaded"
     ],
     logs: [
-      `Inventory compare loaded for ${mode} mode.`,
+      `Inventory compare loaded for ${source}.`,
       `Rows prepared: ${rows.length}`,
       mismatches.length > 0 ? `Mismatch summary built: ${mismatches.length}` : "No mismatches detected in current set."
     ]
@@ -156,7 +207,7 @@ export async function loadInventoryCompareSnapshot(
 
   return {
     title: "Inventory Compare",
-    supportLevel: getSupportLevel(mode),
+    supportLevel: getSupportLevel(mode, { liveContextAvailable: false, liveRowsLoaded: false }),
     sourceLabel,
     lastRunAt: new Date().toISOString(),
     rows,
@@ -164,5 +215,74 @@ export async function loadInventoryCompareSnapshot(
     warningCount,
     matchedCount,
     ...lineSet
+  };
+}
+
+export function buildInventoryCompareSnapshot(params: {
+  mode: RuntimeMode;
+  sourceLabel: string;
+  liveRows?: ProviderInventoryCompareRow[];
+  liveProvider?: ProviderType;
+  usedDomFallback?: boolean;
+  liveContextAvailable?: boolean;
+}): InventoryCompareSnapshot {
+  const { mode, sourceLabel, liveRows = [], liveProvider = "naver-partner", usedDomFallback = false, liveContextAvailable = false } = params;
+
+  if (mode !== "live") {
+    const rows = FIXTURE_ROWS[mode];
+    const mismatchCount = rows.filter((row) => row.status === "mismatch").length;
+    const warningCount = rows.filter((row) => row.status === "warning").length;
+    const matchedCount = rows.filter((row) => row.status === "match").length;
+    return {
+      title: "Inventory Compare",
+      supportLevel: getSupportLevel(mode, { liveContextAvailable: false, liveRowsLoaded: false }),
+      sourceLabel,
+      lastRunAt: new Date().toISOString(),
+      rows,
+      mismatchCount,
+      warningCount,
+      matchedCount,
+      ...buildLines(mode, rows, { sourceLabel })
+    };
+  }
+
+  const normalizedRows = liveRows
+    .map((row, index) => normalizeLiveRow(row, index, liveProvider))
+    .filter((row): row is InventoryCompareRow => Boolean(row));
+  const emptyLiveRow: InventoryCompareRow = {
+    id: "live-empty",
+    date: "-",
+    roomType: "No Rows",
+    channel: liveProvider,
+    siteRaw: "empty",
+    sheetRaw: "n/a",
+    diff: "n/a",
+    status: "warning",
+    reason: "bridge context exists but provider.fetchRows returned no rows for the selected range",
+    action: usedDomFallback ? "inspect dom fallback payload" : "inspect provider fetch contract"
+  };
+  const rows =
+    normalizedRows.length > 0
+      ? normalizedRows
+      : liveContextAvailable
+        ? [emptyLiveRow]
+        : FIXTURE_ROWS.live;
+  const mismatchCount = rows.filter((row) => row.status === "mismatch").length;
+  const warningCount = rows.filter((row) => row.status === "warning").length;
+  const matchedCount = rows.filter((row) => row.status === "match").length;
+
+  return {
+    title: "Inventory Compare",
+    supportLevel: getSupportLevel(mode, {
+      liveContextAvailable,
+      liveRowsLoaded: normalizedRows.length > 0
+    }),
+    sourceLabel,
+    lastRunAt: new Date().toISOString(),
+    rows,
+    mismatchCount,
+    warningCount,
+    matchedCount,
+    ...buildLines(mode, rows, { sourceLabel, usedDomFallback, liveContextAvailable })
   };
 }

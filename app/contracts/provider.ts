@@ -5,6 +5,33 @@ export interface DateRangeQuery {
   endDate: string;
 }
 
+export interface ProviderInventoryCompareRow {
+  branch?: string;
+  reservationRef?: string;
+  roomNo?: string;
+  date: string;
+  roomType: string;
+  channel: string;
+  siteRaw: string;
+  sheetRaw: string;
+  diff?: string;
+  status?: "match" | "mismatch" | "warning";
+  reason?: string;
+  action?: string;
+  rawLine?: string;
+  sourceLineIndex?: number | null;
+  candidateBasis?: string[];
+  signals?: Array<{
+    kind: string;
+    value: string;
+    source: "line" | "context";
+  }>;
+  tags?: Array<{
+    kind: string;
+    value: string;
+  }>;
+}
+
 export interface FetchProviderRowsRequest {
   type: "provider.fetchRows";
   provider: ProviderType;

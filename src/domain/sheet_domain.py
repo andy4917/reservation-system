@@ -7,18 +7,30 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
-
-DEFAULT_SHEET_ID = "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8"
-DEFAULT_SHEET_NAME = "2026"
-DEFAULT_SHEET_GID = 1459449957
-DEFAULT_START_ROW = 61
-DEFAULT_CLIENT_ID = (
-    "197214578423-9b9647iri321d86g9bvhpdm8sp73qf3b.apps.googleusercontent.com"
+from src.domain.sync_policy import (
+    DEFAULT_GOOGLE_CLIENT_ID as POLICY_DEFAULT_GOOGLE_CLIENT_ID,
+    DEFAULT_GOOGLE_SCOPE as POLICY_DEFAULT_GOOGLE_SCOPE,
+    DEFAULT_PKCE_FILE as POLICY_DEFAULT_PKCE_FILE,
+    DEFAULT_REDIRECT_URI as POLICY_DEFAULT_REDIRECT_URI,
+    DEFAULT_SHEET_GID as POLICY_DEFAULT_SHEET_GID,
+    DEFAULT_SHEET_NAME as POLICY_DEFAULT_SHEET_NAME,
+    DEFAULT_SPREADSHEET_ID as POLICY_DEFAULT_SPREADSHEET_ID,
+    DEFAULT_START_ROW as POLICY_DEFAULT_START_ROW,
+    DEFAULT_TOKEN_FILE as POLICY_DEFAULT_TOKEN_FILE,
+    NOTE_CHANNEL_PREFIX_ENABLED,
+    NOTE_CHANNEL_PREFIX_TEMPLATE,
+    ROOM_TYPE_BY_ROOM_NO as POLICY_ROOM_TYPE_BY_ROOM_NO,
 )
-DEFAULT_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
-DEFAULT_REDIRECT_URI = "http://127.0.0.1:8080"
-DEFAULT_TOKEN_FILE = ".google_oauth_token.json"
-DEFAULT_PKCE_FILE = ".google_oauth_pkce.json"
+
+DEFAULT_SHEET_ID = POLICY_DEFAULT_SPREADSHEET_ID
+DEFAULT_SHEET_NAME = POLICY_DEFAULT_SHEET_NAME
+DEFAULT_SHEET_GID = POLICY_DEFAULT_SHEET_GID
+DEFAULT_START_ROW = POLICY_DEFAULT_START_ROW
+DEFAULT_CLIENT_ID = POLICY_DEFAULT_GOOGLE_CLIENT_ID
+DEFAULT_SCOPE = POLICY_DEFAULT_GOOGLE_SCOPE
+DEFAULT_REDIRECT_URI = POLICY_DEFAULT_REDIRECT_URI
+DEFAULT_TOKEN_FILE = POLICY_DEFAULT_TOKEN_FILE
+DEFAULT_PKCE_FILE = POLICY_DEFAULT_PKCE_FILE
 
 BRANCH_SPLIT_ROW = 60
 BRANCH_GANGNAM = "GANGNAM"
@@ -255,23 +267,10 @@ ROOM_CAPACITY_BY_TYPE.update(
     }
 )
 
-_URBAN_ROOM_NOS = [
-    "201", "301", "401", "501", "601", "701", "801", "901", "1001", "1101", "1201",
-    "A301", "A401", "A501", "A601", "A701", "A801", "A901", "A1001", "A1101",
-]
-_DOUBLE_TWIN_ROOM_NOS = [
-    "202", "302", "402", "502", "602", "702", "802", "902", "1002", "1102", "1202",
-    "A302", "A402", "A502", "A602", "A702", "A802", "A902", "A1002", "A1102",
-]
-_GRAND_ROOM_NOS = ["A1201"]
-
-ROOM_TYPE_BY_ROOM_NO: Dict[str, str] = {}
-for _room_no in _URBAN_ROOM_NOS:
-    ROOM_TYPE_BY_ROOM_NO[_room_no] = "Urban Spa Suite 6in"
-for _room_no in _DOUBLE_TWIN_ROOM_NOS:
-    ROOM_TYPE_BY_ROOM_NO[_room_no] = "Double Twin Spa Room 4in"
-for _room_no in _GRAND_ROOM_NOS:
-    ROOM_TYPE_BY_ROOM_NO[_room_no] = "Grand Spa Suite 8in"
+ROOM_TYPE_BY_ROOM_NO: Dict[str, str] = {
+    re.sub(r"\s+", " ", str(room_no)).strip().upper(): re.sub(r"\s+", " ", str(room_type)).strip()
+    for room_no, room_type in POLICY_ROOM_TYPE_BY_ROOM_NO.items()
+}
 
 
 class AuditError(Exception):
@@ -454,6 +453,29 @@ def normalize_platform_name(value: Optional[str]) -> str:
     if best_match is not None:
         return best_match[2]
     return raw
+
+
+def build_channel_note_prefix(channel: Optional[str]) -> str:
+    if not NOTE_CHANNEL_PREFIX_ENABLED:
+        return ""
+    normalized = normalize_platform_name(channel)
+    if not normalized:
+        return ""
+    template = normalize_text(NOTE_CHANNEL_PREFIX_TEMPLATE) or "[CHANNEL: {channel}]"
+    if "{channel}" not in template:
+        template = f"{template} {{channel}}"
+    return template.replace("{channel}", normalized)
+
+
+def ensure_channel_note_prefix(note: Optional[str], channel: Optional[str]) -> str:
+    raw_note = str(note or "")
+    normalized_note = normalize_text(raw_note)
+    prefix = build_channel_note_prefix(channel)
+    if not prefix:
+        return raw_note
+    if normalized_note.upper().startswith(prefix.upper()):
+        return raw_note
+    return prefix if not normalized_note else f"{prefix} {normalized_note}"
 
 
 def parse_money_to_int(value: Optional[str]) -> Optional[int]:

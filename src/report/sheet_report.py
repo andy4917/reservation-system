@@ -351,6 +351,8 @@ def write_long_tail_ota_candidates_csv(path: Path, rows: List[Dict[str, Any]]) -
         "status",
         "channel",
         "candidate_channel",
+        "reservation_no",
+        "candidate_basis",
         "color_hex",
         "formatted_value",
         "note_head",

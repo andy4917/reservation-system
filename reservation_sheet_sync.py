@@ -911,9 +911,10 @@ def summarize_station_action_stats_by_date(actions: List[Dict[str, Any]]) -> Dic
                 "mismatch_signals": 0,
             },
         )
-        row["action_count"] += 1
-        row["stock_actions"] += 1
-        if bool(action.get("hasChange")):
+        has_change = bool(action.get("hasChange"))
+        if has_change:
+            row["action_count"] += 1
+            row["stock_actions"] += 1
             row["change_actions"] += 1
         row["mismatch_signals"] += max(int(action.get("mismatchCount") or 0), 0)
     return {day: by_date[day] for day in sorted(by_date.keys())}
@@ -1095,6 +1096,7 @@ def prepare_station_sync(
         "room_ids": room_ids,
         "target_dates": len(station_targets),
         "actions": station_actions,
+        "effective_actions": [action for action in station_actions if bool(action.get("hasChange"))],
         "warnings": station_warnings,
         "results": [],
         "reconciliation": reconciliation,
@@ -1162,6 +1164,7 @@ def prepare_naver_sync(
         "room_ids": room_ids,
         "target_dates": len(naver_targets),
         "actions": naver_actions,
+        "effective_actions": list(naver_actions),
         "results": [],
         "reconciliation": reconciliation,
     }
@@ -2032,9 +2035,9 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
     print(f"- summary: {summary_path}")
 
     if provider in ("station", "both"):
-        print(f"- station actions: {len(summary.get('station', {}).get('actions', []))}")
+        print(f"- station actions: {len(summary.get('station', {}).get('effective_actions', []))}")
     if provider in ("naver", "both"):
-        print(f"- naver actions: {len(summary.get('naver', {}).get('actions', []))}")
+        print(f"- naver actions: {len(summary.get('naver', {}).get('effective_actions', []))}")
     if provider == "station":
         print(
             "- validation errors/warnings:"

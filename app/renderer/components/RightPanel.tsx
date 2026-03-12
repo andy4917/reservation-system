@@ -15,6 +15,8 @@ export function RightPanel() {
   const opsLines = useUiStore((state) => state.opsLines);
   const validationLines = useUiStore((state) => state.validationLines);
   const logs = useUiStore((state) => state.logs);
+  const searchQuery = useUiStore((state) => state.searchQuery);
+  const searchResults = useUiStore((state) => state.searchResults);
 
   const contentByTab = {
     evidence: evidenceLines,
@@ -38,6 +40,21 @@ export function RightPanel() {
         ))}
       </div>
       <div className="right-panel-body">
+        {searchQuery ? (
+          <div className="search-result-group">
+            {searchResults.length > 0 ? (
+              searchResults.map((result) => (
+                <article key={result.id} className="search-result-card">
+                  <strong>{result.title}</strong>
+                  <span>{result.kind}</span>
+                  <p>{result.excerpt}</p>
+                </article>
+              ))
+            ) : (
+              <p>No matches for "{searchQuery}"</p>
+            )}
+          </div>
+        ) : null}
         {contentByTab[activeTab].map((line) => (
           <p key={line}>{line}</p>
         ))}

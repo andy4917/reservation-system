@@ -93,10 +93,23 @@ def main() -> None:
             room_number="302",
             pms_room_no="301",
         ),
+        6: build_room(
+            row=6,
+            canonical_id="BRANCH_THE_SEOLLEUNG-B-1301",
+            sheet_room_no="1301",
+            building="B",
+            room_number="1301",
+            pms_room_no="1301",
+            branch="BRANCH_THE_SEOLLEUNG",
+        ),
     }
 
     artifact = build_room_registry_artifact(room_rows)
     issue_types = {row.get("issue_type") for row in artifact["identity_issues"]}
+    issue_keys = {
+        (row.get("issue_type"), row.get("branch"), row.get("pms_room_no"))
+        for row in artifact["identity_issues"]
+    }
     assert "BUILDING_RANGE_VIOLATION" in issue_types
     assert "INVALID_PATTERN" in issue_types
     assert "PMS_CANONICAL_COLLISION" in issue_types
@@ -104,6 +117,8 @@ def main() -> None:
     assert int(artifact["counts"].get("pms_room_no_collisions", 0)) >= 2
     assert int(artifact["counts"].get("building_range_violations", 0)) >= 1
     assert int(artifact["counts"].get("invalid_patterns", 0)) >= 1
+    assert ("BUILDING_RANGE_VIOLATION", "COEX", "1301") in issue_keys
+    assert ("BUILDING_RANGE_VIOLATION", "BRANCH_THE_SEOLLEUNG", "1301") not in issue_keys
 
     with tempfile.TemporaryDirectory() as tmp:
         out_dir = Path(tmp)
@@ -113,7 +128,7 @@ def main() -> None:
             sheet_name="2026-03",
             registry_rows=artifact["rows"],
         )
-        assert snapshot1["diff"]["counts"] == {"added": 5, "removed": 0, "moved": 0}
+        assert snapshot1["diff"]["counts"] == {"added": 6, "removed": 0, "moved": 0}
 
         args_init = argparse.Namespace(
             room_registry_baseline=str(out_dir / "room_registry_baseline.json"),

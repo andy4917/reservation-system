@@ -18,6 +18,8 @@
     "service_worker": "src/background.js"
   },
   "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*",
     "https://*/*",
     "https://partner.booking.naver.com/*",
     "https://api-partner.booking.naver.com/*",
@@ -34,7 +36,10 @@
         "https://pms.sanhait.com/*"
       ],
       "js": [
+        "src/shared/syncPolicy.js",
         "src/shared/entryPolicy.js",
+        "src/bridge/infoBridge.js",
+        "src/bridge/providerAuthCapture.js",
         "src/extensionBridge.entry.js"
       ],
       "run_at": "document_idle"

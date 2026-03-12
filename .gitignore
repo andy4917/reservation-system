@@ -13,6 +13,7 @@ build/
 dist/
 dist-app/
 node_modules/
+models/
 # native extension build artifacts
 *.so
 *.pyd

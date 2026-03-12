@@ -5,6 +5,9 @@
   const App = (root.App = root.App || {});
   if (App.constants && App.constants.__ready) return;
   const syncPolicy = root.InventorySyncPolicy || {};
+  const sheetDefaults = syncPolicy.sheetDefaults || {};
+  const roomPresetsPolicy = syncPolicy.roomPresets || {};
+  const roomTypeMapPolicy = syncPolicy.roomTypeByRoomNo || {};
 
   const FIXED_NAVER_BUSINESS_ID = String(syncPolicy.defaultNaverBusinessId || "1356779");
   const FIXED_STATION_BRANCH_ID = String(syncPolicy.defaultStationBranchId || "18");
@@ -22,12 +25,12 @@
   const SYNC_CFG_KEY = "inventory_sheet_sync_cfg_v1";
   const SYNC_APPLY_KEY = "inventory_sheet_apply_enabled_v1";
   const SYNC_FEATURE_KEY_LEGACY = "inventory_sheet_sync_enabled_v1";
-  const DEFAULT_SPREADSHEET_ID = "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8";
-  const DEFAULT_SHEET_NAME = "2026";
-  const DEFAULT_START_ROW = 61;
-  const DEFAULT_YEAR = 2026;
+  const DEFAULT_SPREADSHEET_ID = String(sheetDefaults.spreadsheetId || "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8");
+  const DEFAULT_SHEET_NAME = String(sheetDefaults.sheetName || "2026");
+  const DEFAULT_START_ROW = Number(sheetDefaults.startRow || 61);
+  const DEFAULT_YEAR = Number(sheetDefaults.year || 2026);
   const DEFAULT_GOOGLE_CLIENT_ID =
-    "197214578423-9b9647iri321d86g9bvhpdm8sp73qf3b.apps.googleusercontent.com";
+    String(sheetDefaults.googleClientId || "197214578423-9b9647iri321d86g9bvhpdm8sp73qf3b.apps.googleusercontent.com");
   const DEFAULT_SYNC_SLEEP_MS = 900;
   const SHEET_GRID_FAST_ROW_LIMIT = 260;
   const NAVER_SCHEDULE_FETCH_CONCURRENCY = 3;
@@ -268,46 +271,81 @@
     yearSuffix: "년"
   };
 
-  const ROOM_PRESETS = {
-    "naver-partner": [
+  const ROOM_PRESETS = Object.fromEntries(
+    Object.entries(roomPresetsPolicy).map(([provider, rows]) => [
+      String(provider),
+      Array.isArray(rows)
+        ? rows.map((row) => ({
+            id: String(row?.id || ""),
+            name: String(row?.name || "")
+          }))
+        : []
+    ])
+  );
+  if (!ROOM_PRESETS["naver-partner"]) {
+    ROOM_PRESETS["naver-partner"] = [
       { id: "6556948", name: "Urban Spa Suite 6인" },
       { id: "6556938", name: "Double Twin Spa Room 4인" },
-      { id: "7043386", name: "Grand Spa Suite 8\uC778" }
-    ],
-    "admin-station": [
+      { id: "7043386", name: "Grand Spa Suite 8인" }
+    ];
+  }
+  if (!ROOM_PRESETS["admin-station"]) {
+    ROOM_PRESETS["admin-station"] = [
       { id: "62", name: "Urban Spa Suite 6인" },
       { id: "59", name: "Double Twin Spa Room 4인" },
-      { id: "258", name: "Grand Spa Suite 8\uC778" }
-    ]
-  };
+      { id: "258", name: "Grand Spa Suite 8인" }
+    ];
+  }
   const ROOM_TYPE_LABELS = {
     urban: "Urban Spa Suite 6인",
     doubleTwin: "Double Twin Spa Room 4인",
     grand: "Grand Spa Suite 8인"
   };
-  const ROOM_TYPE_BY_ROOM_NO = (() => {
-    const urban = [
-      "201", "301", "401", "501", "601", "701", "801", "901", "1001", "1101", "1201",
-      "A301", "A401", "A501", "A601", "A701", "A801", "A901", "A1001", "A1101"
-    ];
-    const doubleTwin = [
-      "202", "302", "402", "502", "602", "702", "802", "902", "1002", "1102", "1202",
-      "A302", "A402", "A502", "A602", "A702", "A802", "A902", "A1002", "A1102"
-    ];
-    const grand = ["A1201"];
-    const out = {};
-    urban.forEach((roomNo) => {
-      out[roomNo] = "Urban Spa Suite 6인";
-    });
-    doubleTwin.forEach((roomNo) => {
-      out[roomNo] = "Double Twin Spa Room 4인";
-    });
-    // 명시 규칙 우선: A1201은 Grand 타입으로 고정.
-    grand.forEach((roomNo) => {
-      out[roomNo] = "Grand Spa Suite 8인";
-    });
-    return out;
-  })();
+  const ROOM_TYPE_BY_ROOM_NO = Object.keys(roomTypeMapPolicy || {}).length > 0
+    ? Object.fromEntries(Object.entries(roomTypeMapPolicy).map(([roomNo, roomType]) => [String(roomNo), String(roomType)]))
+    : {
+        "201": "Urban Spa Suite 6인",
+        "301": "Urban Spa Suite 6인",
+        "401": "Urban Spa Suite 6인",
+        "501": "Urban Spa Suite 6인",
+        "601": "Urban Spa Suite 6인",
+        "701": "Urban Spa Suite 6인",
+        "801": "Urban Spa Suite 6인",
+        "901": "Urban Spa Suite 6인",
+        "1001": "Urban Spa Suite 6인",
+        "1101": "Urban Spa Suite 6인",
+        "1201": "Urban Spa Suite 6인",
+        "A301": "Urban Spa Suite 6인",
+        "A401": "Urban Spa Suite 6인",
+        "A501": "Urban Spa Suite 6인",
+        "A601": "Urban Spa Suite 6인",
+        "A701": "Urban Spa Suite 6인",
+        "A801": "Urban Spa Suite 6인",
+        "A901": "Urban Spa Suite 6인",
+        "A1001": "Urban Spa Suite 6인",
+        "A1101": "Urban Spa Suite 6인",
+        "202": "Double Twin Spa Room 4인",
+        "302": "Double Twin Spa Room 4인",
+        "402": "Double Twin Spa Room 4인",
+        "502": "Double Twin Spa Room 4인",
+        "602": "Double Twin Spa Room 4인",
+        "702": "Double Twin Spa Room 4인",
+        "802": "Double Twin Spa Room 4인",
+        "902": "Double Twin Spa Room 4인",
+        "1002": "Double Twin Spa Room 4인",
+        "1102": "Double Twin Spa Room 4인",
+        "1202": "Double Twin Spa Room 4인",
+        "A302": "Double Twin Spa Room 4인",
+        "A402": "Double Twin Spa Room 4인",
+        "A502": "Double Twin Spa Room 4인",
+        "A602": "Double Twin Spa Room 4인",
+        "A702": "Double Twin Spa Room 4인",
+        "A802": "Double Twin Spa Room 4인",
+        "A902": "Double Twin Spa Room 4인",
+        "A1002": "Double Twin Spa Room 4인",
+        "A1102": "Double Twin Spa Room 4인",
+        "A1201": "Grand Spa Suite 8인"
+      };
   const CLOSED_TEXTS = new Set(["closed", "close", "soldout", "off", "x", "닫음", "마감"]);
   const V2_COLOR_STATUS_CHANNEL_MAP = {
     "#EA9999": { status: "OCCUPIED", channel: "AGODA" },

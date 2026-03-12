@@ -9,7 +9,7 @@ export function StatusBanner() {
         <span className="status-kicker">Runtime</span>
         <strong>{bridgeStatus.provider}</strong>
       </div>
-      <p>{bridgeStatus.message}</p>
+      <p>{bridgeStatus.code ? `${bridgeStatus.code} · ${bridgeStatus.message}` : bridgeStatus.message}</p>
     </section>
   );
 }

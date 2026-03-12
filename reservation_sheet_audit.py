@@ -77,6 +77,7 @@ from src.scan.sheet_scan import (
     find_inventory_rows,
     map_room_rows,
     parse_note_info,
+    parse_reservation_identity,
     room_no_alias_keys,
 )
 from src.reconcile.sheet_reconcile import (
@@ -124,6 +125,9 @@ ROOM_REGISTRY_ALLOWED_PATTERNS = (
 ROOM_REGISTRY_BUILDING_MAX_FLOOR = {
     "A": 12,
     "B": 12,
+}
+ROOM_REGISTRY_BRANCH_BUILDING_MAX_FLOOR = {
+    ("BRANCH_THE_SEOLLEUNG", "B"): 13,
 }
 ROOM_REGISTRY_COMPARE_FIELDS = (
     "branch",
@@ -349,6 +353,61 @@ def enrich_blocks_with_source_metadata(
             if nationality_nights:
                 block.nationality_nights = nationality_nights
                 break
+
+
+def enrich_long_tail_candidates_with_source_records(
+    candidates: List[Dict[str, Any]],
+    source_records: List[SourceReservation],
+) -> List[Dict[str, Any]]:
+    by_reservation_no: Dict[str, List[Tuple[str, SourceReservation]]] = {}
+    for record in source_records:
+        reservation_no = normalize_text(record.reservation_no)
+        if reservation_no:
+            by_reservation_no.setdefault(reservation_no, []).append(("reservation_no", record))
+        reservation_ref = normalize_text(record.reservation_ref)
+        if reservation_ref:
+            by_reservation_no.setdefault(reservation_ref, []).append(("reservation_ref", record))
+
+    enriched: List[Dict[str, Any]] = []
+    for item in candidates or []:
+        row = dict(item)
+        if normalize_text(row.get("candidate_channel")):
+            enriched.append(row)
+            continue
+
+        reservation_hint = normalize_text(row.get("reservation_no"))
+        if not reservation_hint:
+            reservation_hint = normalize_text(parse_reservation_identity(str(row.get("note_head", ""))).get("reservation_no", ""))
+        if not reservation_hint:
+            enriched.append(row)
+            continue
+
+        date_val = parse_any_date(row.get("date"))
+        room_no = normalize_text(row.get("room_no"))
+        matched: List[Tuple[str, SourceReservation]] = []
+        for basis, record in by_reservation_no.get(reservation_hint, []):
+            if date_val and not (record.checkin <= date_val < record.checkout):
+                continue
+            record_room_no = normalize_text(record.room_no)
+            if room_no and record_room_no and record_room_no != room_no:
+                continue
+            matched.append((basis, record))
+
+        channels = sorted(
+            {
+                normalize_platform_name(record.channel)
+                for _, record in matched
+                if normalize_platform_name(record.channel)
+            }
+        )
+        if len(channels) == 1:
+            row["candidate_channel"] = channels[0]
+            row["candidate_basis"] = matched[0][0]
+        elif len(channels) > 1:
+            row["candidate_basis"] = "ambiguous_source"
+        row["reservation_no"] = reservation_hint
+        enriched.append(row)
+    return enriched
 
 
 def to_int(value: Any) -> Optional[int]:
@@ -1614,6 +1673,15 @@ def infer_room_floor(room_number: str) -> Optional[int]:
     return None
 
 
+def resolve_room_registry_building_max_floor(branch: str, building: str) -> Optional[int]:
+    branch_key = normalize_text(branch).upper()
+    building_key = normalize_text(building).upper()
+    override = ROOM_REGISTRY_BRANCH_BUILDING_MAX_FLOOR.get((branch_key, building_key))
+    if override is not None:
+        return int(override)
+    return ROOM_REGISTRY_BUILDING_MAX_FLOOR.get(building_key)
+
+
 def normalize_room_registry_snapshot_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     normalized: Dict[str, Dict[str, str]] = {}
     for row in rows or []:
@@ -2011,7 +2079,7 @@ def build_room_registry_artifact(room_rows: Dict[int, Any]) -> Dict[str, Any]:
             )
 
         # Hard Rule 2: building-floor max range guard.
-        max_floor = ROOM_REGISTRY_BUILDING_MAX_FLOOR.get(building)
+        max_floor = resolve_room_registry_building_max_floor(branch, building)
         floor = infer_room_floor(room_number)
         if max_floor is not None and floor is not None and floor > max_floor:
             identity_issues.append(
@@ -2187,6 +2255,10 @@ def build_analysis_artifacts(args: argparse.Namespace, context: Dict[str, Any]) 
             "sheet_name": context["sheet_name"],
         },
     )
+    long_tail_candidates = enrich_long_tail_candidates_with_source_records(
+        list(scan_meta.get("long_tail_ota_candidates", [])),
+        filtered_source_records,
+    )
 
     return {
         "blocks": blocks,
@@ -2210,7 +2282,7 @@ def build_analysis_artifacts(args: argparse.Namespace, context: Dict[str, Any]) 
         "issues": reconcile_sheet_vs_har(blocks, har_index) if har_index else [],
         "cross_issues": cross_issues,
         "suspect_trace": suspect_trace,
-        "long_tail_candidates": list(scan_meta.get("long_tail_ota_candidates", [])),
+        "long_tail_candidates": long_tail_candidates,
         **ops_artifacts,
     }
 

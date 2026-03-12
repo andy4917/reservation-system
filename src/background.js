@@ -2,7 +2,13 @@
 
 if (typeof importScripts === "function") {
   try {
-    importScripts("shared/entryPolicy.js");
+    importScripts(
+      "shared/syncPolicy.js",
+      "shared/entryPolicy.js",
+      "bridge/authBridge.js",
+      "bridge/infoBridge.js",
+      "bridge/providerAuthCapture.js"
+    );
   } catch (_error) {
     // Tests may run without extension worker import support.
   }
@@ -14,70 +20,29 @@ const SECURE_ENCRYPT_MESSAGE = "inventory.secure.encrypt";
 const SECURE_DECRYPT_MESSAGE = "inventory.secure.decrypt";
 const BRIDGE_GET_CONTEXT_MESSAGE = "inventory.bridge.getContext";
 const BRIDGE_DOM_SNAPSHOT_MESSAGE = "inventory.bridge.domSnapshot";
+const BRIDGE_AUTH_SUMMARY_MESSAGE = "inventory.bridge.authSummary";
+const BRIDGE_AUTH_CAPTURE_MESSAGE = "inventory.bridge.authCapture";
 const ENTRY_POLICY = globalThis.InventoryEntryPolicy || {};
+const AUTH_BRIDGE = globalThis.InventoryAuthBridge || {};
+const INFO_BRIDGE = globalThis.InventoryInfoBridge || {};
 const SECURE_DB_NAME = "inventory-secure-store";
 const SECURE_DB_VERSION = 1;
 const SECURE_KEY_STORE = "keys";
 const SECURE_KEY_ID = "sync-config-aes-gcm-v1";
 
 function isObject(value) {
+  if (typeof AUTH_BRIDGE.isObject === "function") return AUTH_BRIDGE.isObject(value);
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function normalizeCookie(item) {
-  if (!isObject(item)) return null;
-  const name = String(item.name || "").trim();
-  const value = item.value === null || item.value === undefined ? "" : String(item.value);
-  const domain = String(item.domain || "").trim();
-  if (!name || !domain) return null;
-
-  const path = String(item.path || "/").trim() || "/";
-  const secure = item.secure === true;
-  const url = String(item.url || `${secure ? "https" : "http"}://${domain.replace(/^\./, "")}${path}`).trim();
-  if (!/^https?:\/\//i.test(url)) return null;
-
-  const cookie = {
-    name,
-    value,
-    domain,
-    path,
-    secure,
-    httpOnly: item.httpOnly === true,
-    sameSite: String(item.sameSite || "unspecified").trim() || "unspecified",
-    session: item.session === true,
-    url
-  };
-
-  if (item.storeId !== undefined && item.storeId !== null && String(item.storeId).trim()) {
-    cookie.storeId = String(item.storeId).trim();
-  }
-  if (item.partitionKey !== undefined && item.partitionKey !== null) {
-    cookie.partitionKey = item.partitionKey;
-  }
-  if (Number.isFinite(Number(item.expirationDate)) && Number(item.expirationDate) > 0) {
-    cookie.expirationDate = Number(item.expirationDate);
-  }
-  return cookie;
+  if (typeof AUTH_BRIDGE.normalizeCookie === "function") return AUTH_BRIDGE.normalizeCookie(item);
+  return null;
 }
 
 function dedupeCookies(cookies) {
-  const seen = new Set();
-  const out = [];
-  (Array.isArray(cookies) ? cookies : []).forEach((item) => {
-    const cookie = normalizeCookie(item);
-    if (!cookie) return;
-    const key = [
-      cookie.storeId || "",
-      cookie.domain,
-      cookie.path,
-      cookie.name,
-      cookie.partitionKey ? JSON.stringify(cookie.partitionKey) : ""
-    ].join("::");
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push(cookie);
-  });
-  return out;
+  if (typeof AUTH_BRIDGE.dedupeCookies === "function") return AUTH_BRIDGE.dedupeCookies(cookies);
+  return [];
 }
 
 function openSecureDb() {
@@ -277,6 +242,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (type === SECURE_DECRYPT_MESSAGE) {
     decryptSecureValue(message)
       .then((result) => sendResponse({ ok: true, ...result }))
+      .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
+    return true;
+  }
+
+  if (type === BRIDGE_AUTH_SUMMARY_MESSAGE) {
+    exportCookies(message)
+      .then((result) => {
+        const summary =
+          typeof AUTH_BRIDGE.summarizeAuthState === "function"
+            ? AUTH_BRIDGE.summarizeAuthState(result.cookies, {
+                authorization: message?.authorization,
+                csrfToken: message?.csrfToken,
+                role: message?.role
+              })
+            : null;
+        sendResponse({ ok: true, summary });
+      })
+      .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
+    return true;
+  }
+
+  if (type === BRIDGE_AUTH_CAPTURE_MESSAGE) {
+    exportCookies(message)
+      .then((result) => {
+        const bundle =
+          typeof AUTH_BRIDGE.buildProviderAuthBundle === "function"
+            ? AUTH_BRIDGE.buildProviderAuthBundle(message?.provider, {
+                cookies: result.cookies,
+                csrfToken: message?.csrfToken,
+                role: message?.role,
+                authorization: message?.authorization,
+                sourceHost: message?.sourceHost
+              })
+            : null;
+        sendResponse({
+          ok: true,
+          authBundle: bundle,
+          summary: typeof AUTH_BRIDGE.summarizeAuthBundle === "function" ? AUTH_BRIDGE.summarizeAuthBundle(bundle) : null
+        });
+      })
       .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
     return true;
   }

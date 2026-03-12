@@ -1715,19 +1715,6 @@
       };
     }
 
-    const typeHint = detectRoomTypeHint(rawName);
-    if (typeHint) {
-      const typedMatch = (preset || []).find((room) => detectRoomTypeHint(room?.name || "") === typeHint);
-      if (typedMatch) {
-        return {
-          roomId: String(typedMatch.id),
-          confidence: 0.93,
-          method: "name_type",
-          matchedName: String(typedMatch.name || "")
-        };
-      }
-    }
-
     let best = null;
     (preset || []).forEach((room) => {
       const presetKey = roomNameKey(room.name);
@@ -1762,6 +1749,19 @@
         method: best.method,
         matchedName: best.matchedName
       };
+    }
+
+    const typeHint = detectRoomTypeHint(rawName);
+    if (typeHint) {
+      const typedMatch = (preset || []).find((room) => detectRoomTypeHint(room?.name || "") === typeHint);
+      if (typedMatch) {
+        return {
+          roomId: String(typedMatch.id),
+          confidence: 0.74,
+          method: "name_type",
+          matchedName: String(typedMatch.name || "")
+        };
+      }
     }
 
     return {

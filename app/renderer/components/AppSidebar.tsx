@@ -1,12 +1,13 @@
 import { useUiStore } from "../state/uiStore";
+import { TASK_META } from "../config/taskMeta";
 import type { AppTaskId } from "../types";
 
 const TASKS: Array<{ id: AppTaskId; label: string; detail: string }> = [
-  { id: "inventory-compare", label: "Inventory Compare", detail: "조회 / 비교 / preview" },
-  { id: "reservation-audit", label: "Reservation Audit", detail: "예약 검증 / anomaly" },
-  { id: "apply-review", label: "Apply Review", detail: "승인 / 실행 / 결과" },
-  { id: "settings", label: "Settings", detail: "시트 / PMS / bridge" },
-  { id: "dry-run", label: "Dry Run", detail: "fixture / replay" }
+  { id: "inventory-compare", label: TASK_META["inventory-compare"].title, detail: "조회 / 비교 / preview" },
+  { id: "reservation-audit", label: TASK_META["reservation-audit"].title, detail: "예약 검증 / anomaly" },
+  { id: "apply-review", label: TASK_META["apply-review"].title, detail: "승인 / 실행 / 결과" },
+  { id: "settings", label: TASK_META.settings.title, detail: "시트 / PMS / bridge" },
+  { id: "dry-run", label: TASK_META["dry-run"].title, detail: "fixture / replay" }
 ];
 
 export function AppSidebar() {

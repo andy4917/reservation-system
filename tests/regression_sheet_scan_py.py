@@ -13,13 +13,15 @@ from src.scan.sheet_scan import (
     classify_color_cell,
     detect_branch_label,
     extract_numeric_reservation_no,
+    infer_candidate_channel_from_cell,
     normalize_room_no,
     resolve_provider_alias,
     room_no_alias_keys,
     resolve_closest_mapped_color_key,
+    select_room_type,
 )
 from src.scan.sheet_scan import parse_note_info
-from src.domain.sheet_domain import normalize_platform_name
+from src.domain.sheet_domain import ensure_channel_note_prefix, normalize_platform_name
 
 
 def main() -> None:
@@ -69,6 +71,13 @@ def main() -> None:
     assert normalize_platform_name("에어비엔비 예약") == "AIRBNB"
     assert normalize_platform_name("익스피디아+에어비앤비") == "EXPEDIA"
     assert normalize_platform_name("디다트레블-코엑스") == "DIDA_TRAVEL"
+    assert ensure_channel_note_prefix("예약번호: 1234", "booking") == "[CHANNEL: BOOKING] 예약번호: 1234"
+    assert ensure_channel_note_prefix("[CHANNEL: BOOKING] 예약번호: 1234", "BOOKING") == "[CHANNEL: BOOKING] 예약번호: 1234"
+    assert infer_candidate_channel_from_cell("", "[CHANNEL: TRIP] 예약번호: 1234") == "TRIP"
+
+    room_type, room_type_source = select_room_type("Urban Spa Suite 6in", "Grand Spa Suite 8in")
+    assert room_type == "Grand Spa Suite 8in"
+    assert room_type_source == "label_override"
 
     print("regression_sheet_scan_py: OK")
 

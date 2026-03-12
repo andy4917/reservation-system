@@ -31,6 +31,23 @@ export interface BridgeContextResponse {
   sessionAvailable: boolean;
 }
 
+export interface BridgeRuntimeStatus {
+  ok: true;
+  connected: boolean;
+  capability: "ready" | "degraded";
+  host: string;
+  port: number;
+  updatePath: string;
+  statePath: string;
+  authConfigured: boolean;
+  code: BridgeFailure["code"] | null;
+  message: string;
+  recoveryAction: string | null;
+  rateLimitWindowMs: number;
+  rateLimitMaxRequests: number;
+  maxBodyBytes: number;
+}
+
 export type BridgeRequest =
   | BridgePingRequest
   | BridgeContextRequest

@@ -35,6 +35,7 @@ from src.domain.sheet_domain import (
     TOTAL_ROOMS_EXPECTED,
     AuditError,
     Cell,
+    ensure_channel_note_prefix,
     normalize_text,
     normalize_platform_name,
     normalize_room_no_key,
@@ -254,6 +255,7 @@ LONG_TAIL_OTA_HINTS: Tuple[Tuple[str, str], ...] = (
     ("네이버", "NAVER"),
     ("naver", "NAVER"),
 )
+NOTE_CHANNEL_PREFIX_RE = re.compile(r"^\s*\[\s*channel\s*:\s*([^\]]+?)\s*\]", flags=re.I)
 PREFERRED_BRANCH_ORDER = {
     BRANCH_GANGNAM: 0,
     BRANCH_COEX: 1,
@@ -395,6 +397,11 @@ def build_row_branch_resolver(markers: List[Dict[str, Any]]):
 
 
 def infer_candidate_channel_from_cell(formatted_value: str, note: str) -> str:
+    prefixed = NOTE_CHANNEL_PREFIX_RE.match(note or "")
+    if prefixed:
+        explicit = normalize_platform_name(prefixed.group(1))
+        if explicit:
+            return explicit
     text = normalize_text(f"{formatted_value} {note}").lower()
     if not text:
         return ""
@@ -546,13 +553,33 @@ def infer_room_type_from_label(value: str) -> str:
     low = text.lower()
     if not low:
         return ""
-    if "urban" in low or "6인" in text:
-        return "Urban Spa Suite 6in"
-    if ("double" in low and "twin" in low) or "4인" in text:
-        return "Double Twin Spa Room 4in"
     if "grand" in low or "8인" in text:
         return "Grand Spa Suite 8in"
+    if ("double" in low and "twin" in low) or "4인" in text:
+        return "Double Twin Spa Room 4in"
+    if "urban" in low or "6인" in text:
+        return "Urban Spa Suite 6in"
     return ""
+
+
+def room_type_capacity(room_type: str) -> Optional[int]:
+    return ROOM_CAPACITY_BY_TYPE.get(normalize_text(room_type).upper())
+
+
+def select_room_type(explicit_room_type: str, inferred_room_type: str) -> Tuple[str, str]:
+    explicit = normalize_text(explicit_room_type)
+    inferred = normalize_text(inferred_room_type)
+    if explicit and inferred:
+        explicit_capacity = room_type_capacity(explicit)
+        inferred_capacity = room_type_capacity(inferred)
+        if explicit_capacity and inferred_capacity and explicit_capacity != inferred_capacity:
+            return inferred, "label_override"
+        return explicit, "explicit"
+    if explicit:
+        return explicit, "explicit"
+    if inferred:
+        return inferred, "inferred"
+    return "UNKNOWN_ROOM_TYPE", "unknown"
 
 
 def extract_room_no_from_row(matrix: SheetMatrix, row: int) -> str:
@@ -1138,13 +1165,7 @@ def map_room_rows(
                 )
                 continue
 
-            room_type = explicit_room_type or inferred_room_type or "UNKNOWN_ROOM_TYPE"
-            if explicit_room_type:
-                room_type_source = "explicit"
-            elif inferred_room_type:
-                room_type_source = "inferred"
-            else:
-                room_type_source = "unknown"
+            room_type, room_type_source = select_room_type(explicit_room_type, inferred_room_type)
             room_type_norm = room_type.upper()
             capacity = ROOM_CAPACITY_BY_TYPE.get(room_type_norm)
             identity = build_room_identity(section_branch, room_no)
@@ -1383,6 +1404,7 @@ def extract_reservation_blocks(
         note: str,
     ) -> None:
         candidate_channel = infer_candidate_channel_from_cell(formatted_value, note)
+        reservation_hint = parse_reservation_identity(note).get("reservation_no", "")
         dedupe_key = (int(row), int(col), normalize_text(reason), normalize_text(candidate_channel))
         if dedupe_key in long_tail_seen:
             return
@@ -1401,9 +1423,13 @@ def extract_reservation_blocks(
                 "status": normalize_text(status),
                 "channel": normalize_text(channel),
                 "candidate_channel": normalize_text(candidate_channel),
+                "reservation_no": normalize_text(reservation_hint),
+                "candidate_basis": "cell_hint" if candidate_channel else "",
                 "color_hex": normalize_text(color_hex).lower(),
                 "formatted_value": normalize_text(formatted_value)[:120],
-                "note_head": " ".join(normalize_text(note).split(" ")[:24]),
+                "note_head": " ".join(
+                    normalize_text(ensure_channel_note_prefix(note, candidate_channel or channel)).split(" ")[:24]
+                ),
             }
         )
     events_by_row: List[Dict[str, Any]] = []
@@ -1613,6 +1639,7 @@ def extract_reservation_blocks(
             normalize_text(room.branch) or resolve_row_branch(row)
         )
         channel_out = normalize_text(str(run.get("channel", "") or ""))
+        note_text = ensure_channel_note_prefix(note_text, channel_out)
         room_type_out = normalize_text(str(run.get("room_type", "") or "")) or room.room_type
         room_no_out = normalize_text(str(run.get("room_no", "") or "")) or room.room_no
         color_hex_out = normalize_text(str(run.get("color_hex", "") or "")).lower() or None

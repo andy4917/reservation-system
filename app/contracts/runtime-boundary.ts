@@ -24,4 +24,4 @@ export type BridgeCapability =
   | "provider.fetchReservations"
   | "provider.domSnapshot";
 
-export type LiveSupportLevel = "dry-run-only" | "read-live" | "apply-live";
+export type LiveSupportLevel = "dry-run-only" | "fixture-fallback" | "partial-live" | "read-live" | "apply-live";

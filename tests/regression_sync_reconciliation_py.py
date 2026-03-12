@@ -42,7 +42,7 @@ def main() -> None:
     )
     assert station_recon["counts"]["dates"] == 2
     assert station_recon["counts"]["drift_dates"] == 1
-    assert station_recon["counts"]["action_dates"] == 2
+    assert station_recon["counts"]["action_dates"] == 1
 
     naver_current_by_room = {
         "A": {

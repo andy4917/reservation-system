@@ -160,13 +160,17 @@ def _collect_apply_action_scope(summary: Dict[str, Any]) -> Dict[str, Any]:
         ),
     )
 
+    station_effective_count = sum(1 for row in station_actions if bool(row.get("hasChange")))
+
     return {
         "station": {
-            "count": len(station_actions),
+            "count": station_effective_count,
+            "candidate_count": len(station_actions),
             "actions": station_actions,
         },
         "naver": {
             "count": len(naver_actions),
+            "candidate_count": len(naver_actions),
             "actions": naver_actions,
         },
     }
