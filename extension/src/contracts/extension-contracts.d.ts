@@ -91,17 +91,6 @@ export interface BridgePayload {
   updatedAt: string;
 }
 
-export interface RecommendationRuntimeStatusContract {
-  enabled: boolean;
-  ready: boolean;
-  activeRuntime: "transformers-js-local" | "lexical-fallback";
-  modelId: string;
-  localModelPath: string;
-  cacheDir: string;
-  reason: string;
-  scoreThreshold: number;
-}
-
 export interface SheetDefaultsPolicy {
   spreadsheetId: string;
   sheetName: string;
@@ -121,6 +110,7 @@ export interface BridgePolicy {
   updatePath: string;
   statePath: string;
   secret?: string;
+  timeoutMs?: number;
 }
 
 export interface NoteChannelPrefixPolicy {
@@ -180,12 +170,17 @@ export interface InventorySyncPolicyGlobal extends Partial<SyncPolicySchema> {
 }
 
 declare global {
+  interface BridgeAuthCaptureResponse {
+    summary?: AuthSummary | null;
+    authBundle?: BridgeAuthBundle | null;
+  }
+
   const chrome:
     | {
         runtime?: {
           sendMessage?: (
             message: unknown,
-            callback?: (response?: { summary?: AuthSummary | null }) => void
+            callback?: (response?: BridgeAuthCaptureResponse) => void
           ) => void;
           onMessage?: {
             addListener?: (

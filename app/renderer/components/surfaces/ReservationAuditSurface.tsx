@@ -1,106 +1,99 @@
 import { useUiStore } from "../../state/uiStore";
-import { PanelHeading } from "../SurfacePrimitives";
+import { PanelHeading, SectionCard } from "../SurfacePrimitives";
 
 export function ReservationAuditSurface() {
   const bridgeSummary = useUiStore((state) => state.bridgeSummary);
-  const jobStatusCards = useUiStore((state) => state.jobStatusCards);
   const reservationAudit = useUiStore((state) => state.reservationAudit);
   const reservationAuditLoading = useUiStore((state) => state.reservationAuditLoading);
-  const runtimeMode = useUiStore((state) => state.runtimeMode);
   const refreshWorkspaceData = useUiStore((state) => state.refreshWorkspaceData);
 
   return (
     <div className="settings-surface">
       <div className="inventory-toolbar">
         <div className="toolbar-copy">
-          <span className="workspace-kicker">Audit Surface</span>
+          <span className="workspace-kicker">예약 점검</span>
           <strong>{reservationAudit.sourceLabel}</strong>
           <p>
-            Support: <strong>{reservationAudit.supportLevel}</strong> · Last run:{" "}
-            {new Date(reservationAudit.lastRunAt).toLocaleString("ko-KR", { hour12: false })}
+            마지막 조회: {new Date(reservationAudit.lastRunAt).toLocaleString("ko-KR", { hour12: false })}
           </p>
         </div>
         <div className="toolbar-actions">
           <button type="button" className="action-button" onClick={() => void refreshWorkspaceData()}>
-            {reservationAuditLoading ? "Loading..." : `${runtimeMode} audit run`}
+            {reservationAuditLoading ? "조회 중..." : "예약 다시 점검"}
           </button>
           <div className="action-hint">
             {reservationAudit.supportLevel === "read-live"
-              ? "Wings reservation lookup이 live row를 공급 중입니다. anomaly만 우선 검토하면 됩니다."
+              ? "실제 예약 데이터를 읽고 있습니다."
               : reservationAudit.supportLevel === "partial-live"
-                ? "bridge auth/info summary는 연결됐지만 reservation row는 아직 일부 fallback 상태입니다."
-                : "live row가 없으면 fixture 또는 bridge summary 기준으로 표시합니다."}
+                ? "일부만 연결되어 있어 예시 데이터가 함께 보일 수 있습니다."
+                : "현재는 예시 데이터 기준으로 보입니다."}
           </div>
         </div>
       </div>
+
       <div className="inventory-summary-grid inventory-summary-grid-wide">
         <article className="summary-card tone-critical">
-          <span>Anomaly</span>
+          <span>이상</span>
           <strong>{reservationAudit.anomalyCount}</strong>
-          <p>즉시 점검 필요</p>
+          <p>즉시 확인 필요</p>
         </article>
         <article className="summary-card tone-warn">
-          <span>Review</span>
+          <span>검토</span>
           <strong>{reservationAudit.reviewCount}</strong>
-          <p>보조 검증 대기</p>
+          <p>추가 확인 필요</p>
         </article>
         <article className="summary-card tone-ok">
-          <span>Active</span>
+          <span>진행 중</span>
           <strong>{reservationAudit.activeCount}</strong>
-          <p>현재 stay 기준</p>
+          <p>현재 예약</p>
         </article>
         <article className="summary-card tone-default">
-          <span>Canceled</span>
+          <span>취소</span>
           <strong>{reservationAudit.canceledCount}</strong>
-          <p>취소 동기화 완료</p>
+          <p>취소 예약</p>
         </article>
       </div>
-      <section className="process-panel">
-        <PanelHeading
-          kicker="Audit Readiness"
-          title="Reservation Audit Inputs"
-          description="provider read 상태 기준으로 감사 준비도만 표시합니다."
-        />
-        <div className="process-grid">
-          {jobStatusCards
-            .filter((job) => ["provider-read", "reservation-audit"].includes(job.id))
-            .map((job) => (
-              <article key={job.id} className={`process-card tone-${job.status === "blocked" ? "critical" : job.status === "running" ? "ok" : "warn"}`}>
-                <span>{job.status}</span>
-                <strong>{job.title}</strong>
-                <p>{job.detail}</p>
-              </article>
-            ))}
-          <article className="process-card tone-default">
-            <span>bridge</span>
-            <strong>Live Workspace</strong>
-            <p>
+
+      <SectionCard>
+        <PanelHeading kicker="상태" title="점검 준비 상태" description="예약 점검에 필요한 상태만 간단히 표시합니다." />
+        <div className="simple-status-grid">
+          <article className="simple-status-card">
+            <span>예약 데이터</span>
+            <strong>{reservationAudit.supportLevel === "read-live" ? "실시간 연결" : "예시 데이터"}</strong>
+          </article>
+          <article className="simple-status-card">
+            <span>확장</span>
+            <strong>
               {bridgeSummary.authSummary?.cookieCount || bridgeSummary.authSummary?.hasBearer || bridgeSummary.authSummary?.hasCsrf
-                ? "Live provider materials available"
-                : "Live provider materials unavailable"}
-            </p>
+                ? "연결됨"
+                : "연결 안 됨"}
+            </strong>
+          </article>
+          <article className="simple-status-card">
+            <span>점검 결과</span>
+            <strong>{reservationAudit.anomalyCount > 0 ? "이상 있음" : "이상 없음"}</strong>
           </article>
         </div>
-      </section>
+      </SectionCard>
+
       <section className="inventory-table-panel">
         <PanelHeading
-          kicker="Audit Queue"
-          title="PMS / OTA Verification Rows"
-          description="이 표는 anomaly와 review-only row를 앱 메인 화면에서 먼저 정리하기 위한 운영 표면입니다."
+          kicker="예약 표"
+          title="예약 점검 결과"
+          description="이상 또는 검토가 필요한 예약을 먼저 확인합니다."
         />
         <div className="inventory-table-scroll">
           <table className="inventory-table">
             <thead>
               <tr>
-                <th>Reservation</th>
-                <th>Guest</th>
-                <th>Channel</th>
-                <th>Check-in</th>
-                <th>Check-out</th>
-                <th>Status</th>
-                <th>Audit</th>
-                <th>Reason</th>
-                <th>Action</th>
+                <th>예약번호</th>
+                <th>이름</th>
+                <th>채널</th>
+                <th>입실</th>
+                <th>퇴실</th>
+                <th>상태</th>
+                <th>점검</th>
+                <th>사유</th>
               </tr>
             </thead>
             <tbody>
@@ -111,14 +104,13 @@ export function ReservationAuditSurface() {
                   <td>{row.channel}</td>
                   <td>{row.checkin}</td>
                   <td>{row.checkout}</td>
-                  <td>{row.status}</td>
+                  <td>{row.status === "ACTIVE" ? "진행" : "취소"}</td>
                   <td>
                     <span className={`status-chip tone-${row.auditStatus === "anomaly" ? "critical" : row.auditStatus === "review" ? "warn" : "ok"}`}>
-                      {row.auditStatus}
+                      {row.auditStatus === "anomaly" ? "이상" : row.auditStatus === "review" ? "검토" : "정상"}
                     </span>
                   </td>
                   <td>{row.reason}</td>
-                  <td>{row.action}</td>
                 </tr>
               ))}
             </tbody>

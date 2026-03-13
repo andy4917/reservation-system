@@ -70,27 +70,38 @@ python3.10 setup.py build_ext --inplace
 
 ## 현재 주요 축
 
-- 데스크톱 앱 골격: `app/`
+- 데스크톱 앱 실행 폴더: `app/`
 - 브리지 전용 확장:
   - 세션 캡처
   - 현재 탭 context
   - DOM snapshot
 - 확장 UI 패널 런타임은 제거 중이며, 메인 조작면은 앱으로 이동합니다.
 
+## 앱 실행
+
+`app/` 폴더에서 바로 실행합니다.
+
+```bash
+cd app
+npm start
+```
+
 ## 확장 브리지 설치
 
-먼저 로드 전용 폴더를 생성합니다.
+직접 로드할 폴더는 `extension/` 입니다.
+
+1. `chrome://extensions` 접속
+2. `개발자 모드` 활성화
+3. `압축해제된 확장 프로그램 로드` 클릭
+4. `extension/` 폴더 선택
+
+압축/배포용 산출물이 필요하면 아래 명령으로 별도 패키징합니다.
 
 ```bash
 ./tasks/build_extension_unpacked.sh
 ```
 
 - 스크립트는 `python3`가 없으면 가능한 패키지 매니저(`apt`, `dnf`, `yum`, `pacman`, `brew`, `winget`, `choco`)로 자동 설치를 시도합니다.
-
-1. `chrome://extensions` 접속
-2. `개발자 모드` 활성화
-3. `압축해제된 확장 프로그램 로드` 클릭
-4. `dist/uhs-extension` 폴더 선택
 
 주의:
 - 현재 확장은 메인 작업 UI가 아니라 브리지 역할만 담당합니다.

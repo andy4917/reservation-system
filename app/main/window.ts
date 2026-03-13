@@ -1,7 +1,9 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { BrowserWindow } from "electron";
 
 let mainWindow: BrowserWindow | null = null;
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 export function createMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -16,7 +18,7 @@ export function createMainWindow() {
     minHeight: 820,
     backgroundColor: "#f4efe4",
     webPreferences: {
-      preload: path.resolve(__dirname, "preload.js"),
+      preload: path.resolve(currentDir, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -26,7 +28,7 @@ export function createMainWindow() {
   if (devUrl) {
     void mainWindow.loadURL(devUrl);
   } else {
-    void mainWindow.loadFile(path.resolve(__dirname, "..", "renderer", "index.html"));
+    void mainWindow.loadFile(path.resolve(currentDir, "..", "renderer", "index.html"));
   }
 
   mainWindow.on("closed", () => {

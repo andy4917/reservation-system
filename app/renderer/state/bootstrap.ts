@@ -2,21 +2,15 @@ import { getBridgeContext, getBridgeMeta, getBridgeRuntime, getBridgeSummary, pi
 import { resolveBridgeIssue } from "../../services/bridgeStatus";
 import { buildJobStatusCards } from "../../services/jobRunner";
 import { getProviderCapabilityCards } from "../../services/providerRegistry";
-import { loadAuthBundleSettingsSnapshot, loadRecommendationSettings, saveAuthBundleSettingsSnapshot } from "../../services/settingsStorage";
+import { loadAuthBundleSettingsSnapshot, saveAuthBundleSettingsSnapshot } from "../../services/settingsStorage";
 import { useUiStore } from "./uiStore";
 
 export async function bootstrapUiState() {
   try {
     const persistedSettings = loadAuthBundleSettingsSnapshot();
-    const recommendationSettings = loadRecommendationSettings();
     if (persistedSettings) {
       useUiStore.setState({
-        authBundleSettingsSnapshot: persistedSettings,
-        recommendationSettings
-      });
-    } else {
-      useUiStore.setState({
-        recommendationSettings
+        authBundleSettingsSnapshot: persistedSettings
       });
     }
 
@@ -37,7 +31,7 @@ export async function bootstrapUiState() {
           authConfigured: bridgeRuntime?.authConfigured ?? state.bridgeStatus.authConfigured,
           code: bridgeRuntime?.code || state.bridgeStatus.code,
           recoveryAction: bridgeRuntime?.recoveryAction || state.bridgeStatus.recoveryAction,
-          message: runtime.connected ? "Live workspace available." : state.bridgeStatus.message
+          message: runtime.connected ? "브라우저가 연결되었습니다." : state.bridgeStatus.message
         }
       }));
     }
@@ -46,7 +40,7 @@ export async function bootstrapUiState() {
       const hasUpstreamAuth = Boolean(bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer);
       const bridgeIssue = resolveBridgeIssue({
         runtimeMode: "live",
-        supportLevel: context.sessionAvailable ? (hasUpstreamAuth ? "partial-live" : "fixture-fallback") : "fixture-fallback",
+        supportLevel: context.sessionAvailable ? "partial-live" : "unavailable",
         provider: context.provider,
         sessionAvailable: context.sessionAvailable,
         hasUpstreamAuth,
@@ -79,7 +73,7 @@ export async function bootstrapUiState() {
           capability: bridgeRuntime?.capability || state.bridgeStatus.capability,
           activeHost: context.host || state.bridgeStatus.activeHost,
           provider: context.provider || state.bridgeStatus.provider,
-          message: context.sessionAvailable ? "Live workspace available." : "Live workspace unavailable.",
+          message: context.sessionAvailable ? "브라우저가 연결되었습니다." : "브라우저가 연결되지 않았습니다.",
           code: bridgeIssue.code,
             recoveryAction: bridgeIssue.recoveryAction,
             authConfigured: bridgeRuntime?.authConfigured ?? state.bridgeStatus.authConfigured,
@@ -103,7 +97,7 @@ export async function bootstrapUiState() {
             capability: bridgeRuntime?.capability || state.bridgeStatus.capability,
             activeHost: context.host || state.bridgeStatus.activeHost,
             provider: context.provider || state.bridgeStatus.provider,
-            message: context.sessionAvailable ? "Live workspace available." : "Live workspace unavailable.",
+            message: context.sessionAvailable ? "브라우저가 연결되었습니다." : "브라우저가 연결되지 않았습니다.",
             code: bridgeIssue.code,
             recoveryAction: bridgeIssue.recoveryAction,
             authConfigured: bridgeRuntime?.authConfigured ?? state.bridgeStatus.authConfigured,
@@ -120,16 +114,12 @@ export async function bootstrapUiState() {
         })
       }));
     }
-
-    await useUiStore.getState().refreshWorkspaceData();
-    await useUiStore.getState().warmRecommendationRuntime();
   } catch (error) {
     useUiStore.setState((state) => ({
       logs: [
         ...state.logs,
-        `Bootstrap degraded: ${error instanceof Error ? error.message : String(error)}`
+        `초기 준비 중 일부 항목을 읽지 못했습니다: ${error instanceof Error ? error.message : String(error)}`
       ]
     }));
-    await useUiStore.getState().refreshWorkspaceData();
   }
 }

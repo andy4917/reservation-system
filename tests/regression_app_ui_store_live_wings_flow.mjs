@@ -192,113 +192,31 @@ async function main() {
         },
         preview: null
       }),
-      getRecommendationRuntime: async () => ({
-        enabled: false,
-        ready: false,
-        activeRuntime: "lexical-fallback",
-        modelId: "intfloat/multilingual-e5-small",
-        localModelPath: "",
-        cacheDir: "",
-        reason: "disabled in test",
-        scoreThreshold: 0.58,
-        runtimeBackend: "onnxruntime-node",
-        runtimeProvider: "cpu",
-        resolvedVariant: "none"
-      }),
-      getRecommendationRuntimeDiagnostics: async () => null,
-      warmRecommendationRuntime: async () => ({
-        status: {
-          enabled: false,
-          ready: false,
-          activeRuntime: "lexical-fallback",
-          modelId: "intfloat/multilingual-e5-small",
-          localModelPath: "",
-          cacheDir: "",
-          reason: "disabled in test",
-          scoreThreshold: 0.58,
-          runtimeBackend: "onnxruntime-node",
-          runtimeProvider: "cpu",
-          resolvedVariant: "none"
-        },
-        warmedUp: false,
-        warmupSample: "",
-        extractorCached: false,
-        embeddingCacheSize: 0,
-        preflight: {
-          ok: false,
-          status: "not_found",
-          requestedModelPath: "",
-          resolvedModelPath: "",
-          modelRoot: "",
-          quantizedAvailable: false,
-          fullAvailable: false,
-          resolvedVariant: "none",
-          runtimeBackend: "onnxruntime-node",
-          runtimeProvider: "cpu",
-          message: "disabled"
-        },
-        lastWarmupAttemptAt: null,
-        lastWarmupSuccessAt: null,
-        lastWarmupFailureAt: null,
-        lastWarmupFailureCode: null,
-        lastWarmupErrorMessage: null,
-        lastWarmupError: null
-      }),
-      sampleRecommendationEmbed: async () => ({
-        ok: false,
-        text: "",
-        vectorLength: 0,
-        diagnostics: null,
-        errorCode: "not_found",
-        errorMessage: "disabled in test"
-      }),
-      scoreRecommendationCandidates: async () => ({
-        ok: true,
-        runtime: {
-          enabled: false,
-          ready: false,
-          activeRuntime: "lexical-fallback",
-          modelId: "intfloat/multilingual-e5-small",
-          localModelPath: "",
-          cacheDir: "",
-          reason: "disabled in test",
-          scoreThreshold: 0.58,
-          runtimeBackend: "onnxruntime-node",
-          runtimeProvider: "cpu",
-          resolvedVariant: "none"
-        },
-        results: []
-      })
     }
   };
 
   const modulePath = path.join(root, "dist-app/renderer/state/uiStore.js");
   const { useUiStore } = await loadBuiltModule(modulePath, { window });
-
   useUiStore.setState((state) => ({
     ...state,
-    runtimeMode: "live",
-    recommendationSettings: {
-      ...state.recommendationSettings,
-      enabled: false
-    }
+    runtimeMode: "live"
   }));
 
   await useUiStore.getState().refreshInventoryCompare();
   const state = useUiStore.getState();
 
   assert.equal(state.reservationAudit.supportLevel, "read-live");
-  assert.equal(state.reservationAudit.rows.length, 2);
-  assert.equal(state.reservationAudit.reviewCount, 1);
-  assert.equal(state.bridgeStatus.message, "Live workspace available.");
+  assert.equal(state.reservationAudit.rows.length, 1);
+  assert.equal(state.reservationAudit.reviewCount, 0);
+  assert.equal(state.bridgeStatus.message, "브라우저가 연결되었습니다.");
   assert.match(
     state.jobStatusCards.find((job) => job.id === "reservation-audit")?.detail || "",
-    /reservation rows available/i
+    /예약 데이터를 읽을 수 있습니다\./
   );
   assert.ok(
     state.providerCards
       .find((card) => card.provider === "wings-pms")
-      ?.capabilities.includes("source-catalog")
+      ?.capabilities.includes("예약 조회")
   );
 
   console.log("regression_app_ui_store_live_wings_flow: OK");

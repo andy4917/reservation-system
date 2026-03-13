@@ -13,7 +13,7 @@ function main() {
   globalThis.App = {};
 
   [
-    "src/shared/syncPolicy.js",
+    "extension/src/shared/syncPolicy.js",
     "src/constants.js"
   ]
     .map((p) => path.join(root, p))

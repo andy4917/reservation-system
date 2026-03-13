@@ -113,11 +113,10 @@ function loadScript(filePath: string) {
 
 function setLocationForProvider(providerType: string) {
   const current = getLatestBridgeContext(providerType as "naver-partner" | "admin-station" | "wings-pms");
-  const fallback =
-    providerType === "admin-station"
-      ? "https://admin.admin-stationbyuhc.com/admin/branch/18/calendar"
-      : "https://partner.booking.naver.com/businesses/1356779";
-  const nextUrl = normalizeText(current.url || "") || fallback;
+  const nextUrl = normalizeText(current.url || "");
+  if (!nextUrl) {
+    throw new Error(`Provider bridge context URL is required for ${providerType}.`);
+  }
   const url = new URL(nextUrl);
   Object.defineProperty(globalThis, "location", {
     value: {
@@ -242,6 +241,10 @@ export async function fetchProviderRowsLive(
   providerType: "naver-partner" | "admin-station",
   query: { startDate: string; endDate: string }
 ) {
+  const authBundle = getLatestBridgeAuthBundle(providerType);
+  if (!authBundle) {
+    throw new Error(`Provider auth bundle is not available for ${providerType}.`);
+  }
   loadProviderRuntimeModules();
   setLocationForProvider(providerType);
   const { pmsFetch } = loadProviderRuntimeModules();

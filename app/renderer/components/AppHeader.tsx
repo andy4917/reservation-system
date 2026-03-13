@@ -17,36 +17,36 @@ export function AppHeader() {
     <header className="app-header">
       <div className="header-primary">
         <div className="header-block">
-          <span className="header-label">Branch</span>
-          <strong>{selectedBranch}</strong>
+          <span className="header-label">지점</span>
+          <strong>{selectedBranch === "ALL" ? "전체" : selectedBranch === "GANGNAM" ? "강남" : "코엑스"}</strong>
         </div>
         <div className="header-block">
-          <span className="header-label">Run</span>
-          <strong>{activeRunContext ? activeRunContext.id.split(":").slice(0, 4).join(" · ") : "not requested"}</strong>
+          <span className="header-label">조회 기간</span>
+          <strong>{selectedRange.startDate} ~ {selectedRange.endDate}</strong>
         </div>
         <div className="header-block">
-          <span className="header-label">Bridge</span>
-          <strong>{bridgeStatus.capability === "ready" ? "Ready" : "Degraded"}</strong>
+          <span className="header-label">확장 연결</span>
+          <strong>{bridgeStatus.sessionAvailable ? "연결됨" : "연결 필요"}</strong>
         </div>
         <div className="header-block">
-          <span className="header-label">Host</span>
-          <strong>{bridgeStatus.activeHost}</strong>
+          <span className="header-label">현재 상태</span>
+          <strong>{activeRunContext ? "조회 완료" : "조회 전"}</strong>
         </div>
         <div className="header-block header-search">
-          <span className="header-label">Search</span>
+          <span className="header-label">검색</span>
           <input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="room / host / warning / token ..."
+            placeholder="객실명, 예약번호, 경고 사유 검색"
           />
-          <small>{searchQuery ? `${searchResults.length} matches` : "Search logs, evidence, rows"}</small>
+          <small>{searchQuery ? `${searchResults.length}건 찾음` : "표와 기록에서 검색"}</small>
         </div>
       </div>
       <div className="header-modes">
         <select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value as "ALL" | "GANGNAM" | "COEX")}>
-          <option value="ALL">ALL</option>
-          <option value="GANGNAM">GANGNAM</option>
-          <option value="COEX">COEX</option>
+          <option value="ALL">전체</option>
+          <option value="GANGNAM">강남</option>
+          <option value="COEX">코엑스</option>
         </select>
         <input
           type="date"
@@ -65,7 +65,7 @@ export function AppHeader() {
             className={`mode-pill ${runtimeMode === mode ? "is-active" : ""}`}
             onClick={() => setRuntimeMode(mode)}
           >
-            {mode}
+            {mode === "dry-run" ? "테스트" : mode === "replay" ? "재현" : "실시간"}
           </button>
         ))}
       </div>

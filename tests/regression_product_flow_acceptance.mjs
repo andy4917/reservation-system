@@ -4,18 +4,18 @@ import path from "node:path";
 import vm from "node:vm";
 
 function readManifest(root) {
-  return JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
+  return JSON.parse(fs.readFileSync(path.join(root, "extension/manifest.json"), "utf8"));
 }
 
 function loadEntryPolicy(root) {
-  const source = fs.readFileSync(path.join(root, "src/shared/entryPolicy.js"), "utf8");
+  const source = fs.readFileSync(path.join(root, "extension/src/shared/entryPolicy.js"), "utf8");
   const sandbox = { URL, console, globalThis: {} };
   vm.runInNewContext(source, sandbox, { filename: "entryPolicy.js" });
   return sandbox.globalThis.InventoryEntryPolicy;
 }
 
 function loadBackground(root) {
-  const source = fs.readFileSync(path.join(root, "src/background.js"), "utf8");
+  const source = fs.readFileSync(path.join(root, "extension/src/background.js"), "utf8");
   const calls = {
     listener: null
   };

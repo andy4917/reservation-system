@@ -24,8 +24,8 @@ async function main() {
   context.globalThis = context;
   context.globalThis.InventoryEntryPolicy = context.InventoryEntryPolicy;
 
-  loadScript(path.join(root, "src/bridge/authBridge.js"), context);
-  loadScript(path.join(root, "src/bridge/infoBridge.js"), context);
+  loadScript(path.join(root, "extension/src/bridge/authBridge.js"), context);
+  loadScript(path.join(root, "extension/src/bridge/infoBridge.js"), context);
 
   const authBridge = context.globalThis.InventoryAuthBridge;
   const infoBridge = context.globalThis.InventoryInfoBridge;

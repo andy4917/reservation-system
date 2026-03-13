@@ -1,7 +1,7 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import type { BridgeRuntimeStatus, ProviderInventoryCompareRow, ProviderType } from "../contracts";
-import type { BridgeErrorCode } from "../contracts";
+import type { BridgeRuntimeStatus, ProviderInventoryCompareRow, ProviderType } from "../contracts/index.js";
+import type { BridgeErrorCode } from "../contracts/index.js";
 
 interface BridgePayload {
   provider: ProviderType | null;

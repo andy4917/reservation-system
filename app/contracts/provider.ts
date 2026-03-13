@@ -1,4 +1,4 @@
-import type { ProviderType } from "./auth";
+import type { ProviderType } from "./auth.js";
 
 export interface DateRangeQuery {
   startDate: string;

@@ -36,9 +36,9 @@ export function getOperatingStageProgress(): {
     },
     {
       id: "stage-4",
-      title: "Search / Recommendation",
-      percent: 20,
-      summary: "lexical/recommendation runtime 골격은 있으나 운영 데이터 기반 활용 검증은 아직 없다."
+      title: "Search",
+      percent: 12,
+      summary: "search는 단순 read-only 보조로 유지되고, 추천 스켈레톤과 관련 런타임은 활성 경로에서 제거했다."
     },
     {
       id: "stage-5",

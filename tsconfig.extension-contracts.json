@@ -12,9 +12,9 @@
     "maxNodeModuleJsDepth": 0
   },
   "include": [
-    "src/contracts/extension-contracts.d.ts",
-    "src/extensionBridge.entry.js",
-    "src/shared/syncPolicy.js"
+    "extension/src/contracts/extension-contracts.d.ts",
+    "extension/src/extensionBridge.entry.js",
+    "extension/src/shared/syncPolicy.js"
   ],
   "exclude": ["dist", "dist-app", "node_modules"]
 }

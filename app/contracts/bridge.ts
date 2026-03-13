@@ -1,5 +1,5 @@
-import type { AuthCaptureRequest, AuthCaptureResponse, AuthRestoreRequest, AuthRestoreResponse, ProviderType } from "./auth";
-import type { BridgeFailure } from "./errors";
+import type { AuthCaptureRequest, AuthCaptureResponse, AuthRestoreRequest, AuthRestoreResponse, ProviderType } from "./auth.js";
+import type { BridgeFailure } from "./errors.js";
 import type {
   DomSnapshotRequest,
   DomSnapshotResponse,
@@ -11,7 +11,7 @@ import type {
   FetchWingsLiveContractResponse,
   FetchReservationsRequest,
   FetchReservationsResponse
-} from "./provider";
+} from "./provider.js";
 
 export interface BridgePingRequest {
   type: "bridge.ping";

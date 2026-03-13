@@ -25,16 +25,15 @@ function main() {
   assert.match(taskWorkspace, /SettingsSurface/);
   assert.doesNotMatch(taskWorkspace, /sheetScanner\.entry|task-results|onboarding/i);
 
-  assert.match(rightPanel, /Evidence/);
-  assert.match(rightPanel, /Validation/);
-  assert.match(rightPanel, /Logs/);
+  assert.match(rightPanel, /요약/);
+  assert.match(rightPanel, /결과/);
+  assert.match(rightPanel, /차이 항목|확인 대상/);
   assert.doesNotMatch(rightPanel, /quick-switch|launcher|drag/i);
 
-  assert.match(inventorySurface, /recommendationAssist/);
-  assert.match(inventorySurface, /recommendationRuntime/);
-  assert.match(reservationSurface, /reservation audit/i);
-  assert.match(settingsSurface, /Recommendation Runtime/);
-  assert.match(settingsSurface, /transformers-js-local/);
+  assert.match(inventorySurface, /재고 비교 결과/);
+  assert.doesNotMatch(inventorySurface, /recommendationAssist|recommendationRuntime/);
+  assert.match(reservationSurface, /예약 점검 결과/);
+  assert.doesNotMatch(settingsSurface, /추천|recommendation/i);
 
   assert.equal(fs.existsSync(path.join(root, "src/sheetScanner.entry.js")), false);
   assert.equal(fs.existsSync(path.join(root, "src/ui/productFlow.js")), false);

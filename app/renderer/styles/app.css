@@ -41,22 +41,22 @@ select {
 
 .workspace-shell {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 232px 1fr;
   min-height: 100vh;
 }
 
 .app-sidebar {
   border-right: 1px solid var(--border);
   background: rgba(255, 248, 236, 0.9);
-  padding: 28px 18px;
+  padding: 20px 14px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 16px;
 }
 
 .sidebar-brand h1 {
   margin: 4px 0 0;
-  font-size: 28px;
+  font-size: 24px;
 }
 
 .sidebar-kicker,
@@ -79,7 +79,7 @@ select {
   border: 1px solid var(--border);
   background: var(--panel);
   border-radius: 16px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -98,7 +98,7 @@ select {
 }
 
 .workspace-main {
-  padding: 20px 24px 24px;
+  padding: 16px 18px 18px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -117,13 +117,13 @@ select {
 .app-header {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px;
+  gap: 12px;
+  padding: 14px 16px;
 }
 
 .header-primary {
   display: flex;
-  gap: 24px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
@@ -134,7 +134,7 @@ select {
 }
 
 .header-search input {
-  min-width: 260px;
+  min-width: 220px;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 8px 10px;
@@ -170,22 +170,29 @@ select {
 .status-banner {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
-  padding: 16px 20px;
+  padding: 12px 16px;
+}
+
+.status-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
 }
 
 .task-workspace {
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .workspace-hero {
@@ -197,12 +204,12 @@ select {
 
 .workspace-hero h2 {
   margin: 6px 0 8px;
-  font-size: 32px;
+  font-size: 28px;
 }
 
 .workspace-action {
-  max-width: 280px;
-  padding: 14px 16px;
+  max-width: 240px;
+  padding: 12px 14px;
   border-radius: 16px;
   background: rgba(216, 155, 72, 0.18);
   color: var(--accent);
@@ -211,13 +218,13 @@ select {
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .metric-card {
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 16px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -225,7 +232,7 @@ select {
 }
 
 .metric-card strong {
-  font-size: 28px;
+  font-size: 24px;
 }
 
 .tone-critical strong {
@@ -255,13 +262,13 @@ select {
 .process-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .process-card {
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 14px;
+  padding: 12px;
   background: #fff;
   display: flex;
   flex-direction: column;
@@ -278,8 +285,8 @@ select {
 .inventory-toolbar {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px;
+  gap: 12px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.78);
@@ -288,7 +295,7 @@ select {
 .toolbar-copy {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .toolbar-copy p,
@@ -302,7 +309,7 @@ select {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .action-button {
@@ -315,16 +322,16 @@ select {
 }
 
 .action-hint {
-  max-width: 280px;
+  max-width: 240px;
   text-align: right;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .inventory-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .inventory-summary-grid-wide {
@@ -334,7 +341,7 @@ select {
 .summary-card {
   border: 1px solid var(--border);
   border-radius: 18px;
-  padding: 16px;
+  padding: 14px;
   background: #fff;
   display: flex;
   flex-direction: column;
@@ -342,7 +349,7 @@ select {
 }
 
 .summary-card strong {
-  font-size: 30px;
+  font-size: 26px;
 }
 
 .inventory-table-panel {
@@ -368,13 +375,14 @@ select {
 .panel-heading {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px;
+  gap: 12px;
+  padding: 14px 16px;
   border-bottom: 1px solid rgba(217, 200, 173, 0.6);
 }
 
 .panel-heading h3 {
   margin: 6px 0 0;
+  font-size: 18px;
 }
 
 .inventory-table-scroll {
@@ -384,19 +392,26 @@ select {
 .inventory-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 920px;
+  min-width: 760px;
 }
 
 .inventory-table th,
 .inventory-table td {
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-bottom: 1px solid rgba(217, 200, 173, 0.5);
   text-align: left;
   vertical-align: top;
+  font-size: 14px;
 }
 
 .inventory-table thead {
   background: rgba(246, 233, 213, 0.8);
+}
+
+.inventory-table th {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .status-chip {
@@ -469,22 +484,23 @@ select {
 .right-panel {
   display: flex;
   flex-direction: column;
-  min-height: 520px;
+  min-height: 480px;
 }
 
 .right-panel-tabs {
   display: flex;
   gap: 8px;
-  padding: 16px 16px 0;
+  padding: 10px 12px 0;
   flex-wrap: wrap;
 }
 
 .right-panel-body {
-  padding: 16px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   color: var(--muted);
+  font-size: 14px;
 }
 
 .search-result-group {
@@ -507,7 +523,7 @@ select {
 }
 
 .log-panel {
-  padding: 18px 20px;
+  padding: 12px 16px;
 }
 
 .panel-title {
@@ -524,6 +540,51 @@ select {
   gap: 8px;
 }
 
+.simple-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 16px 16px;
+}
+
+.simple-status-card {
+  border: 1px solid rgba(217, 200, 173, 0.7);
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.simple-status-card span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.simple-status-card strong {
+  font-size: 18px;
+}
+
+.simple-guide-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 16px;
+  color: var(--muted);
+}
+
+.simple-guide-list p {
+  margin: 0;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 0 16px 16px;
+}
+
 @media (max-width: 1280px) {
   .workspace-shell {
     grid-template-columns: 220px 1fr;
@@ -537,7 +598,8 @@ select {
   .workspace-placeholder,
   .inventory-summary-grid,
   .process-grid,
-  .recommendation-grid {
+  .recommendation-grid,
+  .simple-status-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -556,7 +618,8 @@ select {
   .workspace-placeholder,
   .inventory-summary-grid,
   .process-grid,
-  .recommendation-grid {
+  .recommendation-grid,
+  .simple-status-grid {
     grid-template-columns: 1fr;
   }
 

@@ -2,10 +2,10 @@ import { useUiStore } from "../state/uiStore";
 import type { RightPanelTab } from "../types";
 
 const TABS: Array<{ id: RightPanelTab; label: string }> = [
-  { id: "evidence", label: "Evidence" },
-  { id: "ops", label: "Ops" },
-  { id: "validation", label: "Validation" },
-  { id: "logs", label: "Logs" }
+  { id: "evidence", label: "근거" },
+  { id: "ops", label: "처리" },
+  { id: "validation", label: "점검" },
+  { id: "logs", label: "기록" }
 ];
 
 export function RightPanel() {
@@ -27,6 +27,7 @@ export function RightPanel() {
 
   return (
     <aside className="right-panel">
+      <div className="panel-title">상세 정보</div>
       <div className="right-panel-tabs">
         {TABS.map((tab) => (
           <button
@@ -51,7 +52,7 @@ export function RightPanel() {
                 </article>
               ))
             ) : (
-              <p>No matches for "{searchQuery}"</p>
+              <p>"{searchQuery}"에 대한 검색 결과가 없습니다.</p>
             )}
           </div>
         ) : null}

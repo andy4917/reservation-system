@@ -5,6 +5,7 @@
 
   /** @typedef {import("./contracts/extension-contracts").AuthSummary} AuthSummary */
   /** @typedef {import("./contracts/extension-contracts").BridgeAppGlobal} BridgeAppGlobal */
+  /** @typedef {import("./contracts/extension-contracts").BridgeAuthBundle} BridgeAuthBundle */
   /** @typedef {import("./contracts/extension-contracts").BridgeContext} BridgeContext */
   /** @typedef {import("./contracts/extension-contracts").BridgeInfoSnapshot} BridgeInfoSnapshot */
   /** @typedef {import("./contracts/extension-contracts").BridgePolicy} BridgePolicy */
@@ -46,6 +47,7 @@
   let bridgePushTimer = null;
   /** @type {AuthSummary | null} */
   let latestAuthSummary = null;
+  /** @type {BridgeAuthBundle | null} */
   let latestAuthBundle = null;
   /** @type {BridgeContext["providerType"]} */
   let latestAuthProvider = null;

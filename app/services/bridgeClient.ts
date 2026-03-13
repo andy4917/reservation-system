@@ -6,15 +6,9 @@ import type {
   FetchProviderRowsRequest,
   FetchProviderRowsResponse,
   ProviderInventoryCompareRow,
-  RecommendationScoreRequest,
-  RecommendationScoreResponse,
-  RecommendationSampleEmbedResult,
   BridgeRuntimeStatus,
   FetchReservationsRequest,
   FetchReservationsResponse,
-  RecommendationRuntimeDiagnostics,
-  RecommendationRuntimeStatus,
-  RecommendationSettings,
   FetchWingsLiveContractRequest,
   FetchWingsLiveContractResponse,
   ProviderReservationRow
@@ -82,13 +76,6 @@ declare global {
           }>;
         } | null;
       }>;
-      getRecommendationRuntime: (settings?: RecommendationSettings) => Promise<RecommendationRuntimeStatus>;
-      getRecommendationRuntimeDiagnostics: (settings?: RecommendationSettings) => Promise<RecommendationRuntimeDiagnostics>;
-      warmRecommendationRuntime: (settings?: RecommendationSettings) => Promise<RecommendationRuntimeDiagnostics>;
-      sampleRecommendationEmbed: (settings?: RecommendationSettings, text?: string) => Promise<RecommendationSampleEmbedResult>;
-      scoreRecommendationCandidates: (
-        request: RecommendationScoreRequest
-      ) => Promise<RecommendationScoreResponse>;
     };
   }
 }
@@ -203,38 +190,4 @@ export async function getBridgeRuntime(): Promise<BridgeRuntimeStatus | null> {
 export async function getBridgeSummary(provider?: string | null) {
   if (!window.desktopBridge?.getBridgeSummary) return null;
   return window.desktopBridge.getBridgeSummary(provider);
-}
-
-export async function getRecommendationRuntime(settings?: RecommendationSettings): Promise<RecommendationRuntimeStatus | null> {
-  if (!window.desktopBridge?.getRecommendationRuntime) return null;
-  return window.desktopBridge.getRecommendationRuntime(settings);
-}
-
-export async function getRecommendationRuntimeDiagnostics(
-  settings?: RecommendationSettings
-): Promise<RecommendationRuntimeDiagnostics | null> {
-  if (!window.desktopBridge?.getRecommendationRuntimeDiagnostics) return null;
-  return window.desktopBridge.getRecommendationRuntimeDiagnostics(settings);
-}
-
-export async function warmRecommendationRuntime(
-  settings?: RecommendationSettings
-): Promise<RecommendationRuntimeDiagnostics | null> {
-  if (!window.desktopBridge?.warmRecommendationRuntime) return null;
-  return window.desktopBridge.warmRecommendationRuntime(settings);
-}
-
-export async function sampleRecommendationEmbed(
-  settings?: RecommendationSettings,
-  text?: string
-): Promise<RecommendationSampleEmbedResult | null> {
-  if (!window.desktopBridge?.sampleRecommendationEmbed) return null;
-  return window.desktopBridge.sampleRecommendationEmbed(settings, text);
-}
-
-export async function scoreRecommendationCandidates(
-  request: RecommendationScoreRequest
-): Promise<RecommendationScoreResponse | null> {
-  if (!window.desktopBridge?.scoreRecommendationCandidates) return null;
-  return window.desktopBridge.scoreRecommendationCandidates(request);
 }

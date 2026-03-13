@@ -1,10 +1,6 @@
 import type {
   FetchSheetSnapshotSummary,
   LiveSupportLevel,
-  RecommendationSampleEmbedResult,
-  RecommendationRuntimeDiagnostics,
-  RecommendationRuntimeStatus,
-  RecommendationSettings,
   RuntimeMode
 } from "../contracts";
 
@@ -12,11 +8,10 @@ export type AppTaskId =
   | "inventory-compare"
   | "reservation-audit"
   | "apply-review"
-  | "settings"
-  | "dry-run";
+  | "settings";
 
 export type RightPanelTab = "evidence" | "ops" | "validation" | "logs";
-export type BranchSelection = "ALL" | "GANGNAM" | "COEX";
+export type BranchSelection = "GANGNAM" | "COEX";
 
 export interface BridgeStatus {
   connected: boolean;
@@ -112,44 +107,6 @@ export interface AuthBundleSettingsSnapshot {
   host: string;
   updatedAt: string;
   bridgeSummary: BridgeSummary;
-}
-
-export interface RecommendationCandidate {
-  value: string;
-  reason: string;
-  score: number;
-  confidence: number;
-}
-
-export interface RecommendationResult {
-  input: {
-    rawValue: string;
-    source: string;
-    provider: string;
-    fieldType: "roomType" | "channel" | "range" | "inventoryValue";
-    evidence: string[];
-    confidence: number;
-  };
-  candidates: RecommendationCandidate[];
-  reason: string;
-  confidence: number;
-  requires_review: boolean;
-}
-
-export interface RecommendationGroup {
-  id: "dom-drift" | "mapping-drift" | "range-gap" | "auth-context" | "inventory-delta";
-  title: string;
-  detail: string;
-  count: number;
-  confidence: number;
-  examples: string[];
-}
-
-export interface RecommendationAssist {
-  enabled: boolean;
-  summary: string;
-  recommendations: RecommendationResult[];
-  mismatchGroups: RecommendationGroup[];
 }
 
 export interface InventoryCompareRow {
@@ -252,9 +209,5 @@ export interface WorkspaceMockState {
   jobStatusCards: JobStatusCard[];
   bridgeSummary: BridgeSummary;
   authBundleSettingsSnapshot: AuthBundleSettingsSnapshot | null;
-  recommendationSettings: RecommendationSettings;
-  recommendationRuntime: RecommendationRuntimeStatus | null;
-  recommendationRuntimeDiagnostics: RecommendationRuntimeDiagnostics | null;
-  recommendationSampleEmbedResult: RecommendationSampleEmbedResult | null;
-  recommendationAssist: RecommendationAssist;
+  hasPendingQueryChanges: boolean;
 }

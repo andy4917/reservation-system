@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from "electron";
-import { startBridgeServer, stopBridgeServer } from "./bridgeServer";
-import { createMainWindow } from "./window";
-import { registerAppIpc } from "./ipc";
+import { startBridgeServer, stopBridgeServer } from "./bridgeServer.js";
+import { createMainWindow } from "./window.js";
+import { registerAppIpc } from "./ipc.js";
 
 async function bootstrap() {
   await app.whenReady();

@@ -89,10 +89,10 @@ async function main() {
   context.window = context;
   context.globalThis.InventoryEntryPolicy = context.InventoryEntryPolicy;
 
-  loadScript(path.join(root, "src/bridge/infoBridge.js"), context);
-  loadScript(path.join(root, "src/bridge/providerAuthCapture.js"), context);
-  loadScript(path.join(root, "src/shared/syncPolicy.js"), context);
-  loadScript(path.join(root, "src/extensionBridge.entry.js"), context);
+  loadScript(path.join(root, "extension/src/bridge/infoBridge.js"), context);
+  loadScript(path.join(root, "extension/src/bridge/providerAuthCapture.js"), context);
+  loadScript(path.join(root, "extension/src/shared/syncPolicy.js"), context);
+  loadScript(path.join(root, "extension/src/extensionBridge.entry.js"), context);
 
   const bridge = context.globalThis.App?.bridge;
   assert.ok(bridge, "App.bridge should be initialized");

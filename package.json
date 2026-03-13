@@ -12,7 +12,8 @@
     "app:preview": "vite preview --config app/vite.config.ts",
     "app:electron": "npm run app:build:main && electron .",
     "app:check": "tsc -p tsconfig.json --noEmit",
-    "extension:contracts:check": "tsc -p tsconfig.extension-contracts.json --noEmit"
+    "extension:contracts:check": "tsc -p tsconfig.extension-contracts.json --noEmit",
+    "extension:package": "./tasks/build_extension_unpacked.sh"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",

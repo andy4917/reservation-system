@@ -2,13 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+EXTENSION_DIR="${ROOT_DIR}/extension"
 OUT_DIR="${ROOT_DIR}/dist/uhs-extension"
 ZIP_PATH="${ROOT_DIR}/dist/uhs-extension.zip"
 
-cd "${ROOT_DIR}"
+cd "${EXTENSION_DIR}"
 
 if [[ ! -f manifest.json ]]; then
-  echo "manifest.json not found in ${ROOT_DIR}" >&2
+  echo "manifest.json not found in ${EXTENSION_DIR}" >&2
   exit 1
 fi
 
@@ -60,37 +61,7 @@ try_install_python3() {
 try_install_python3
 
 mapfile -t FILES < <(
-  python3 - <<'PY'
-import json
-
-with open("manifest.json", "r", encoding="utf-8") as fp:
-    manifest = json.load(fp)
-
-out = {"manifest.json"}
-
-bg = (manifest.get("background") or {}).get("service_worker")
-if isinstance(bg, str) and bg.strip():
-    out.add(bg.strip())
-
-for script in manifest.get("content_scripts") or []:
-    for js in script.get("js") or []:
-        if isinstance(js, str) and js.strip():
-            out.add(js.strip())
-
-for path in (manifest.get("icons") or {}).values():
-    if isinstance(path, str) and path.strip():
-        out.add(path.strip())
-
-default_icon = (manifest.get("action") or {}).get("default_icon")
-if isinstance(default_icon, str) and default_icon.strip():
-    out.add(default_icon.strip())
-elif isinstance(default_icon, dict):
-    for path in default_icon.values():
-        if isinstance(path, str) and path.strip():
-            out.add(path.strip())
-
-print("\n".join(sorted(out)))
-PY
+  find . -type f ! -name 'README.md' -printf '%P\n' | sort
 )
 
 rm -rf "${OUT_DIR}"

@@ -1,6 +1,6 @@
 import { BrowserWindow, session } from "electron";
-import { upsertLocalBridgePayload } from "./bridgeServer";
-import { buildWingsAppBridgePayload } from "./wingsSessionPayload";
+import { upsertLocalBridgePayload } from "./bridgeServer.js";
+import { buildWingsAppBridgePayload } from "./wingsSessionPayload.js";
 
 const WINGS_SESSION_PARTITION = "persist:wings-pms-auth";
 const WINGS_LOGIN_URL = "https://pms.sanhait.com/";

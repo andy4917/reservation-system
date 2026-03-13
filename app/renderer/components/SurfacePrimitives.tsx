@@ -5,7 +5,7 @@ export function WorkspaceHero(props: { title: string; summary: string; action: s
   return (
     <div className="workspace-hero">
       <div>
-        <span className="workspace-kicker">Main Task</span>
+        <span className="workspace-kicker">현재 메뉴</span>
         <h2>{props.title}</h2>
         <p>{props.summary}</p>
       </div>

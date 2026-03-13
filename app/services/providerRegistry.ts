@@ -12,29 +12,22 @@ export function getProviderCapabilityCards(): ProviderCapabilityCard[] {
   return [
     {
       provider: "naver-partner",
-      label: "Naver Partner",
-      capabilities: ["inventory-read", "session-auth", "csrf-role", "dom-fallback"],
+      label: "네이버 예약",
+      capabilities: ["재고 조회", "로그인 확인", "페이지 읽기"],
       owner: "hybrid",
       status: "bridge-required"
     },
     {
       provider: "admin-station",
-      label: "Admin Station",
-      capabilities: ["inventory-read", "reservation-read", "bearer-auth"],
+      label: "스테이션 관리자",
+      capabilities: ["재고 조회", "예약 조회", "로그인 확인"],
       owner: "hybrid",
       status: "bridge-required"
     },
     {
       provider: "wings-pms",
-      label: "Wings PMS",
-      capabilities: [
-        "reservation-lookup",
-        "reservation-detail",
-        "source-catalog",
-        "nationality-lookup",
-        "assigned-room-lookup",
-        "har-readonly"
-      ],
+      label: "윙스 PMS",
+      capabilities: ["예약 조회", "상세 확인", "읽기 전용 연결"],
       owner: "hybrid",
       status: "ready"
     }

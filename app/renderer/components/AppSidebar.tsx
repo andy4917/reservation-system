@@ -3,11 +3,11 @@ import { TASK_META } from "../config/taskMeta";
 import type { AppTaskId } from "../types";
 
 const TASKS: Array<{ id: AppTaskId; label: string; detail: string }> = [
-  { id: "inventory-compare", label: TASK_META["inventory-compare"].title, detail: "조회 / 비교 / preview" },
-  { id: "reservation-audit", label: TASK_META["reservation-audit"].title, detail: "예약 검증 / anomaly" },
-  { id: "apply-review", label: TASK_META["apply-review"].title, detail: "승인 / 실행 / 결과" },
-  { id: "settings", label: TASK_META.settings.title, detail: "시트 / PMS / bridge" },
-  { id: "dry-run", label: TASK_META["dry-run"].title, detail: "fixture / replay" }
+  { id: "inventory-compare", label: TASK_META["inventory-compare"].title, detail: "재고 차이 확인" },
+  { id: "reservation-audit", label: TASK_META["reservation-audit"].title, detail: "예약 이상 점검" },
+  { id: "apply-review", label: TASK_META["apply-review"].title, detail: "반영 전 확인" },
+  { id: "settings", label: TASK_META.settings.title, detail: "연결 상태 확인" },
+  { id: "dry-run", label: TASK_META["dry-run"].title, detail: "예시 데이터 보기" }
 ];
 
 export function AppSidebar() {
@@ -17,8 +17,8 @@ export function AppSidebar() {
   return (
     <aside className="app-sidebar">
       <div className="sidebar-brand">
-        <div className="sidebar-kicker">Reservation Ops</div>
-        <h1>Unified Control</h1>
+        <div className="sidebar-kicker">예약 운영</div>
+        <h1>예약 통합 관리</h1>
       </div>
       <nav className="task-nav">
         {TASKS.map((task) => (
