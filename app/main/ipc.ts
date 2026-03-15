@@ -1,12 +1,18 @@
 import { ipcMain } from "electron";
 import type { ProviderType } from "../contracts/index.js";
 import type {
+  DeleteBindingDecisionRequest,
+  DeleteManualScanAnchorsRequest,
   FetchSheetSnapshotRequest,
   FetchProviderRowsRequest,
   FetchReservationsRequest,
   FetchWingsLiveContractRequest,
+  LoadBindingDecisionsRequest,
+  LoadManualScanAnchorsRequest,
   ProviderInventoryCompareRow,
-  ProviderReservationRow
+  ProviderReservationRow,
+  SaveManualScanAnchorsRequest,
+  SaveBindingDecisionRequest
 } from "../contracts/index.js";
 import {
   getBridgePort,
@@ -16,6 +22,9 @@ import {
   getProviderRowsFromBridge
 } from "./bridgeServer.js";
 import { fetchWingsLiveContract, fetchWingsReservations, getWingsRuntimeDiagnostics } from "./wingsRuntime.js";
+import { deleteBindingDecision, loadBindingDecisions, saveBindingDecision } from "./bindingStore.js";
+import { deleteManualScanAnchor, loadManualScanAnchor, saveManualScanAnchor } from "./scanAnchorStore.js";
+import { getSheetArtifactVisibleSlice, storeSheetRunArtifact } from "./runArtifactStore.js";
 import { fetchSheetSnapshot } from "./sheetRuntime.js";
 import { fetchProviderRowsLive, getProviderRuntimeDiagnostics } from "./providerRuntime.js";
 import { captureWingsSession, openWingsLoginWindow } from "./wingsSession.js";
@@ -49,11 +58,94 @@ export function registerAppIpc() {
     };
   });
 
+  ipcMain.handle("desktop:load-binding-decisions", async (_event, request: LoadBindingDecisionsRequest) => ({
+    ok: true,
+    decisions: await loadBindingDecisions({
+      branch: typeof request?.branch === "string" ? request.branch : "",
+      sheetRef: {
+        spreadsheetId: typeof request?.sheetRef?.spreadsheetId === "string" ? request.sheetRef.spreadsheetId : "",
+        sheetName: typeof request?.sheetRef?.sheetName === "string" ? request.sheetRef.sheetName : "",
+        sheetId: typeof request?.sheetRef?.sheetId === "string" ? request.sheetRef.sheetId : null,
+        timezone: typeof request?.sheetRef?.timezone === "string" ? request.sheetRef.timezone : null
+      }
+    })
+  }));
+
+  ipcMain.handle("desktop:save-binding-decision", async (_event, request: SaveBindingDecisionRequest) => ({
+    ok: true,
+    decision: await saveBindingDecision((() => {
+      if (!request?.decision) {
+        throw new Error("Missing binding decision payload.");
+      }
+      return request.decision;
+    })())
+  }));
+
+  ipcMain.handle("desktop:delete-binding-decision", async (_event, request: DeleteBindingDecisionRequest) => ({
+    ok: true,
+    deleted: await deleteBindingDecision(typeof request?.decisionKey === "string" ? request.decisionKey : "")
+  }));
+
+  ipcMain.handle("desktop:load-manual-scan-anchor", async (_event, request: LoadManualScanAnchorsRequest) => ({
+    ok: true,
+    anchor: await loadManualScanAnchor({
+      branch: typeof request?.branch === "string" ? request.branch : "",
+      sheetRef: {
+        spreadsheetId: typeof request?.sheetRef?.spreadsheetId === "string" ? request.sheetRef.spreadsheetId : "",
+        sheetName: typeof request?.sheetRef?.sheetName === "string" ? request.sheetRef.sheetName : "",
+        sheetId: typeof request?.sheetRef?.sheetId === "string" ? request.sheetRef.sheetId : null,
+        timezone: typeof request?.sheetRef?.timezone === "string" ? request.sheetRef.timezone : null
+      }
+    })
+  }));
+
+  ipcMain.handle("desktop:save-manual-scan-anchor", async (_event, request: SaveManualScanAnchorsRequest) => ({
+    ok: true,
+    anchor: await saveManualScanAnchor((() => {
+      if (!request?.sheetRef || !request?.scan) {
+        throw new Error("Missing manual scan anchor payload.");
+      }
+      return {
+        branch: typeof request.branch === "string" ? request.branch : "",
+        sheetRef: {
+          spreadsheetId: typeof request.sheetRef.spreadsheetId === "string" ? request.sheetRef.spreadsheetId : "",
+          sheetName: typeof request.sheetRef.sheetName === "string" ? request.sheetRef.sheetName : "",
+          sheetId: typeof request.sheetRef.sheetId === "string" ? request.sheetRef.sheetId : null,
+          timezone: typeof request.sheetRef.timezone === "string" ? request.sheetRef.timezone : null
+        },
+        scan: request.scan
+      };
+    })())
+  }));
+
+  ipcMain.handle("desktop:delete-manual-scan-anchor", async (_event, request: DeleteManualScanAnchorsRequest) => ({
+    ok: true,
+    deleted: await deleteManualScanAnchor({
+      branch: typeof request?.branch === "string" ? request.branch : "",
+      sheetRef: {
+        spreadsheetId: typeof request?.sheetRef?.spreadsheetId === "string" ? request.sheetRef.spreadsheetId : "",
+        sheetName: typeof request?.sheetRef?.sheetName === "string" ? request.sheetRef.sheetName : "",
+        sheetId: typeof request?.sheetRef?.sheetId === "string" ? request.sheetRef.sheetId : null,
+        timezone: typeof request?.sheetRef?.timezone === "string" ? request.sheetRef.timezone : null
+      }
+    })
+  }));
+
   ipcMain.handle("desktop:fetch-sheet-snapshot", async (_event, request: FetchSheetSnapshotRequest) => {
     const result = await fetchSheetSnapshot(request.query);
+    const artifact = storeSheetRunArtifact({
+      source: result.source,
+      error: typeof result.error === "string" ? result.error : "",
+      summary: result.summary,
+      snapshot: result.snapshot
+    });
     return {
       ok: true,
-      payload: result.summary,
+      payload: {
+        runId: artifact.runId,
+        summary: artifact.summary,
+        visibleSlice: getSheetArtifactVisibleSlice(artifact.runId)
+      },
       source: result.source,
       error: typeof result.error === "string" ? result.error : ""
     };

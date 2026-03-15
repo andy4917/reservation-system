@@ -1,6 +1,10 @@
 import type { AuthCaptureRequest, AuthCaptureResponse, AuthRestoreRequest, AuthRestoreResponse, ProviderType } from "./auth.js";
 import type { BridgeFailure } from "./errors.js";
 import type {
+  DeleteBindingDecisionRequest,
+  DeleteBindingDecisionResponse,
+  DeleteManualScanAnchorsRequest,
+  DeleteManualScanAnchorsResponse,
   DomSnapshotRequest,
   DomSnapshotResponse,
   FetchSheetSnapshotRequest,
@@ -9,6 +13,14 @@ import type {
   FetchProviderRowsResponse,
   FetchWingsLiveContractRequest,
   FetchWingsLiveContractResponse,
+  LoadBindingDecisionsRequest,
+  LoadBindingDecisionsResponse,
+  LoadManualScanAnchorsRequest,
+  LoadManualScanAnchorsResponse,
+  SaveManualScanAnchorsRequest,
+  SaveManualScanAnchorsResponse,
+  SaveBindingDecisionRequest,
+  SaveBindingDecisionResponse,
   FetchReservationsRequest,
   FetchReservationsResponse
 } from "./provider.js";
@@ -58,6 +70,12 @@ export type BridgeRequest =
   | BridgeContextRequest
   | AuthCaptureRequest
   | AuthRestoreRequest
+  | LoadBindingDecisionsRequest
+  | SaveBindingDecisionRequest
+  | DeleteBindingDecisionRequest
+  | LoadManualScanAnchorsRequest
+  | SaveManualScanAnchorsRequest
+  | DeleteManualScanAnchorsRequest
   | FetchSheetSnapshotRequest
   | FetchProviderRowsRequest
   | FetchReservationsRequest
@@ -69,6 +87,12 @@ export type BridgeSuccessResponse =
   | BridgeContextResponse
   | AuthCaptureResponse
   | AuthRestoreResponse
+  | LoadBindingDecisionsResponse
+  | SaveBindingDecisionResponse
+  | DeleteBindingDecisionResponse
+  | LoadManualScanAnchorsResponse
+  | SaveManualScanAnchorsResponse
+  | DeleteManualScanAnchorsResponse
   | FetchSheetSnapshotResponse
   | FetchProviderRowsResponse
   | FetchReservationsResponse

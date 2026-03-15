@@ -58,6 +58,34 @@ async function main() {
   );
   assert.equal(validationIssues.some((issue) => issue.code === "CUSTOM_WARN"), true);
 
+  const relaxedSlotIssues = sheetsFetch.validationSupport.buildInventoryDataRowSlotIssues(
+    "STATION",
+    [21, 22, 20],
+    null,
+    { mode: "manual", hasCompleteManualTypeRanges: false }
+  );
+  assert.equal(
+    relaxedSlotIssues.some((issue) => issue.code === "INVENTORY_DATA_ROW_PHYSICAL_ORDER_VARIANT" && issue.severity === "warn"),
+    true,
+    "minimal manual anchors must surface physical order variance as warning instead of a hard slot-order failure"
+  );
+
+  const strictSlotIssues = sheetsFetch.validationSupport.buildInventoryDataRowSlotIssues(
+    "STATION",
+    [21, 22, 20],
+    {
+      urban: { start: 20, end: 20 },
+      doubleTwin: { start: 21, end: 21 },
+      grand: { start: 22, end: 22 }
+    },
+    { mode: "manual", hasCompleteManualTypeRanges: true }
+  );
+  assert.equal(
+    strictSlotIssues.some((issue) => issue.code === "INVENTORY_DATA_ROW_SLOT_ORDER_INVALID" && issue.severity === "error"),
+    true,
+    "complete manual type ranges must keep strict slot ordering validation"
+  );
+
   const normalizedRange = sheetsFetch.inventorySelection.normalizeOneBasedRange(12, 10);
   assert.deepEqual(normalizedRange, { start: 9, end: 11 });
 
@@ -96,10 +124,36 @@ async function main() {
 
   globalThis.fetch = async () => ({
     ok: false,
-    status: 400,
-    text: async () => "invalid field in fields parameter"
+    status: 401,
+    text: async () => "NeedToken"
   });
-  const retryResult = await sheetsFetch.sheetReadRuntime.executeSheetRead({
+  const credentialRetry = await sheetsFetch.sheetReadRuntime.executeSheetRead({
+    request: {
+      method: "GET",
+      url: "https://sheets.googleapis.com/v4/spreadsheets/spreadsheet-123",
+      headers: {}
+    },
+    opts: {},
+    effectiveUseFullRange: false,
+    effectiveScanCfg: { mode: "auto" },
+    canRefreshCredentials: true,
+    forceRefreshToken: false
+  });
+  assert.equal(credentialRetry.retry.forceRefreshToken, true);
+  assert.equal(credentialRetry.retry.reason, "credential-refresh");
+
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      sheets: [
+        {
+          data: []
+        }
+      ]
+    })
+  });
+  const fullRangeRetry = await sheetsFetch.sheetReadRuntime.executeSheetRead({
     request: {
       method: "GET",
       url: "https://sheets.googleapis.com/v4/spreadsheets/spreadsheet-123",
@@ -109,7 +163,28 @@ async function main() {
     effectiveUseFullRange: false,
     effectiveScanCfg: { mode: "auto" }
   });
-  assert.equal(retryResult.retry.options.legacyFieldMask, true);
+  assert.equal(fullRangeRetry.retry.useFullRange, true);
+  assert.equal(fullRangeRetry.retry.reason, "auto-full-range");
+
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 400,
+    text: async () => "invalid field in fields parameter"
+  });
+  await assert.rejects(
+    () =>
+      sheetsFetch.sheetReadRuntime.executeSheetRead({
+        request: {
+          method: "GET",
+          url: "https://sheets.googleapis.com/v4/spreadsheets/spreadsheet-123",
+          headers: {}
+        },
+        opts: {},
+        effectiveUseFullRange: false,
+        effectiveScanCfg: { mode: "auto" }
+      }),
+    /Google Sheets request failed \(400\)/i
+  );
 
   console.log("regression_sheets_fetch_boundaries: OK");
 }

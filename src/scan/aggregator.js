@@ -6,47 +6,7 @@
   App.scan = App.scan || {};
   const ns = (App.scan.aggregator = App.scan.aggregator || {});
   const C = App.constants || {};
-  const {
-    FIXED_NAVER_BUSINESS_ID,
-    FIXED_STATION_BRANCH_ID,
-    PREF_KEY,
-    SYNC_CFG_KEY,
-    SYNC_APPLY_KEY,
-    SYNC_FEATURE_KEY_LEGACY,
-    DEFAULT_SPREADSHEET_ID,
-    DEFAULT_SHEET_NAME,
-    DEFAULT_START_ROW,
-    DEFAULT_YEAR,
-    DEFAULT_GOOGLE_CLIENT_ID,
-    DEFAULT_SYNC_SLEEP_MS,
-    SHEET_GRID_FAST_ROW_LIMIT,
-    NAVER_SCHEDULE_FETCH_CONCURRENCY,
-    ROOM_MAPPING_WARN_THRESHOLD,
-    STATION_TOKEN_CACHE_TTL_MS,
-    DATE_RANGE_CACHE_LIMIT,
-    APPLY_JITTER_MS,
-    APPLY_RETRY_LIMIT,
-    EMBEDDED_AUTH_MODE,
-    EMBEDDED_AUTH,
-    TEXT,
-    ROOM_PRESETS,
-    ROOM_TYPE_LABELS,
-    ROOM_TYPE_BY_ROOM_NO,
-    CLOSED_TEXTS,
-    V2_COLOR_STATUS_CHANNEL_MAP,
-    RESERVATION_BLOCK_COLOR_HEX,
-    INVENTORY_PROVIDER_ALIASES,
-    DATE_LABEL_RE,
-    ROOM_ROW_SKIP_TOKENS,
-    DATE_HEADER_HINT,
-    SHEET_HINTS_SCAN_RANGE,
-    SHEET_HINTS_ROOM_MAP_RANGE,
-    SHEET_HINT_CACHE_TTL_MS,
-    SHEET_SNAPSHOT_CACHE_TTL_MS,
-    SHEET_SNAPSHOT_CACHE_MAX,
-    NAVER_BIZ_ITEMS_CACHE_TTL_MS,
-    DEFAULT_SCAN_CONFIG,
-  } = C;
+  const { ROOM_TYPE_LABELS, CLOSED_TEXTS, INVENTORY_PROVIDER_ALIASES } = C;
   const N = App.scan?.normalize || {};
   const R = App.engine?.rules || {};
   const { normalizeText } = N;
@@ -151,14 +111,15 @@
       if (!labelKey) return false;
       return compact.includes(labelKey) || labelKey.includes(compact);
     };
-    if (text.includes("urban") || containsLabel(ROOM_TYPE_LABELS?.urban)) return "urban";
+    if (text.includes("urban") || text.includes("6인") || containsLabel(ROOM_TYPE_LABELS?.urban)) return "urban";
     if (
+      text.includes("4인") ||
       (text.includes("double") && text.includes("twin")) ||
       containsLabel(ROOM_TYPE_LABELS?.doubleTwin)
     ) {
       return "doubleTwin";
     }
-    if (text.includes("grand") || containsLabel(ROOM_TYPE_LABELS?.grand)) return "grand";
+    if (text.includes("grand") || text.includes("8인") || containsLabel(ROOM_TYPE_LABELS?.grand)) return "grand";
     return "";
   }
 

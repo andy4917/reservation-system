@@ -7,18 +7,12 @@
   const ns = (App.scan.normalize = App.scan.normalize || {});
   const C = App.constants || {};
   const {
-    FIXED_NAVER_BUSINESS_ID,
-    FIXED_STATION_BRANCH_ID,
+    configuredProviderIds,
     NAVER_COOKIE_EXPORT_URLS,
     PREF_KEY,
     SYNC_CFG_KEY,
     SYNC_APPLY_KEY,
-    SYNC_FEATURE_KEY_LEGACY,
-    DEFAULT_SPREADSHEET_ID,
-    DEFAULT_SHEET_NAME,
-    DEFAULT_START_ROW,
-    DEFAULT_YEAR,
-    DEFAULT_GOOGLE_CLIENT_ID,
+    syncSheetDefaults,
     DEFAULT_SYNC_SLEEP_MS,
     SHEET_GRID_FAST_ROW_LIMIT,
     NAVER_SCHEDULE_FETCH_CONCURRENCY,
@@ -28,8 +22,6 @@
     APPLY_JITTER_MS,
     APPLY_RETRY_LIMIT,
     READ_ONLY_TOOL_MODE,
-    EMBEDDED_AUTH_MODE,
-    EMBEDDED_AUTH,
     TEXT,
     ROOM_PRESETS,
     ROOM_TYPE_LABELS,
@@ -519,10 +511,7 @@
     },
     "wings-reservation-list": {
       urlPath: "/pms/biz/ir04_0200X_V03/searchListRsvn.do",
-      harPathAliases: [
-        "/pms/biz/ir04_0200X_V03/searchListRsvn.do",
-        "/pms/biz/ir04_0100X/searchListRsvn.do"
-      ],
+      harPathAliases: ["/pms/biz/ir04_0200X_V03/searchListRsvn.do"],
       defaultPageId: "IR04_0200X_V03",
       defaultPageSize: 300,
       dateStartKey: "ARRV_DATE_F",
@@ -1023,7 +1012,7 @@
     if (cached?.authBundles?.[providerType]) return cached.authBundles[providerType];
     const raw = await storageGet(SYNC_CFG_KEY);
     const restored = await restoreSyncConfigFromStorage(raw);
-    const normalized = sanitizeSyncConfig(applyEmbeddedSyncConfig(restored));
+    const normalized = sanitizeSyncConfig(restored);
     App.runtime.syncConfigCache = normalized;
     return normalized.authBundles?.[providerType] || null;
   }
@@ -1314,7 +1303,7 @@
   }
 
   async function prepareSyncConfigForStorage(config) {
-    const normalized = sanitizeSyncConfig(applyEmbeddedSyncConfig(config));
+    const normalized = sanitizeSyncConfig(config);
     const { safeConfig, sensitive } = splitSensitiveSyncConfig(normalized);
     const encrypted = await encryptSensitiveSyncConfig(sensitive);
     if (!chrome?.runtime?.sendMessage) return normalized;
@@ -1706,6 +1695,11 @@
       }
     }
 
+    // Do not guess a room map from arbitrary sheet body rows.
+    // Without an explicit header, fallback ranges like A1:H320 can contain
+    // pricing tables or helper sections that would produce junk mappings.
+    if (headerIdx < 0) return result;
+
     const start = headerIdx >= 0 ? headerIdx + 1 : 0;
     let emptyStreak = 0;
     for (let i = start; i < rows.length; i += 1) {
@@ -1765,39 +1759,6 @@
   }
 
 
-  function applyEmbeddedSyncConfig(config) {
-    const base = config && typeof config === "object" ? { ...config } : {};
-    if (!EMBEDDED_AUTH_MODE) return base;
-    return {
-      ...base,
-      spreadsheet: normalizeText(EMBEDDED_AUTH.spreadsheet || base.spreadsheet || ""),
-      sheetName: normalizeText(EMBEDDED_AUTH.sheetName || base.sheetName || ""),
-      startRow: Number(EMBEDDED_AUTH.startRow) || base.startRow,
-      year: Number(EMBEDDED_AUTH.year) || base.year,
-      stockMode: normalizeText(EMBEDDED_AUTH.stockMode || base.stockMode || "available"),
-      clientId: normalizeText(EMBEDDED_AUTH.clientId || base.clientId || ""),
-      clientSecret: normalizeText(EMBEDDED_AUTH.clientSecret || base.clientSecret || ""),
-      refreshToken: normalizeText(EMBEDDED_AUTH.refreshToken || base.refreshToken || "")
-    };
-  }
-
-
-  function getEmbeddedAuthMissingFields(syncConfig) {
-    if (!EMBEDDED_AUTH_MODE) return [];
-    const cfg = syncConfig || {};
-    const invalid = (value) => {
-      const text = normalizeText(value);
-      if (!text) return true;
-      if (/^PUT_/i.test(text)) return true;
-      return false;
-    };
-    const missing = [];
-    if (invalid(cfg.clientId)) missing.push("clientId");
-    if (invalid(cfg.clientSecret)) missing.push("clientSecret");
-    if (invalid(cfg.refreshToken)) missing.push("refreshToken");
-    return missing;
-  }
-
   function sanitizeNaverExecutionConfig(raw) {
     const cfg = raw && typeof raw === "object" ? raw : {};
     const modeRaw = normalizeText(cfg.mode || "").toLowerCase();
@@ -1828,24 +1789,24 @@
 
 
   function sanitizeSyncConfig(raw) {
-    const config = applyEmbeddedSyncConfig(raw && typeof raw === "object" ? raw : {});
-    const spreadsheetRaw = normalizeSpreadsheetInput(config.spreadsheet || DEFAULT_SPREADSHEET_ID);
+    const config = raw && typeof raw === "object" ? raw : {};
+    const spreadsheetRaw = normalizeSpreadsheetInput(config.spreadsheet || syncSheetDefaults.spreadsheetId);
     const spreadsheetId = extractSpreadsheetId(spreadsheetRaw);
     const stationBranchId = sanitizePositiveNumericId(
-      config.stationBranchId || config.station_branch_id || config.branchId || config.branch_id || ""
+      config.stationBranchId || config.station_branch_id || config.branchId || config.branch_id || configuredProviderIds.stationBranchId || ""
     );
     const naverBusinessId = sanitizePositiveNumericId(
-      config.naverBusinessId || config.naver_business_id || config.businessId || config.business_id || ""
+      config.naverBusinessId || config.naver_business_id || config.businessId || config.business_id || configuredProviderIds.naverBusinessId || ""
     );
     return {
       spreadsheet: spreadsheetId || spreadsheetRaw,
-      sheetName: normalizeText(config.sheetName || DEFAULT_SHEET_NAME),
-      startRow: Math.max(1, Number(config.startRow) || DEFAULT_START_ROW),
-      year: Math.max(2000, Number(config.year) || DEFAULT_YEAR),
+      sheetName: normalizeText(config.sheetName || syncSheetDefaults.sheetName),
+      startRow: Math.max(1, Number(config.startRow) || syncSheetDefaults.startRow || 1),
+      year: Math.max(2000, Number(config.year) || syncSheetDefaults.year || 2000),
       stockMode: normalizeText(config.stockMode || "available") === "current" ? "current" : "available",
       accessToken: normalizeText(config.accessToken || ""),
       refreshToken: normalizeText(config.refreshToken || ""),
-      clientId: normalizeText(config.clientId || DEFAULT_GOOGLE_CLIENT_ID),
+      clientId: normalizeText(config.clientId || syncSheetDefaults.clientId),
       clientSecret: normalizeText(config.clientSecret || ""),
       accessTokenExpiresAt: Number(config.accessTokenExpiresAt || 0) || 0,
       sleepMs: Math.max(0, Number(config.sleepMs) || DEFAULT_SYNC_SLEEP_MS),
@@ -1879,14 +1840,14 @@
   async function loadSyncConfig() {
     const raw = await storageGet(SYNC_CFG_KEY);
     const restored = await restoreSyncConfigFromStorage(raw);
-    const normalized = sanitizeSyncConfig(applyEmbeddedSyncConfig(restored));
+    const normalized = sanitizeSyncConfig(restored);
     App.runtime.syncConfigCache = normalized;
     return normalized;
   }
 
 
   async function saveSyncConfig(config) {
-    const normalized = sanitizeSyncConfig(applyEmbeddedSyncConfig(config));
+    const normalized = sanitizeSyncConfig(config);
     const stored = await prepareSyncConfigForStorage(normalized);
     await storageSet(SYNC_CFG_KEY, stored);
     App.runtime.syncConfigCache = normalized;
@@ -1999,8 +1960,6 @@
     resolveEffectiveScanConfig,
     parseTokenBundleMaybe,
     parseAuthBundleMaybe,
-    applyEmbeddedSyncConfig,
-    getEmbeddedAuthMissingFields,
     sanitizeNaverExecutionConfig,
     sanitizeSyncConfig,
     loadSyncConfig,

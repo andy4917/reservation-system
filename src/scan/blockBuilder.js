@@ -6,47 +6,7 @@
   App.scan = App.scan || {};
   const ns = (App.scan.blockBuilder = App.scan.blockBuilder || {});
   const C = App.constants || {};
-  const {
-    FIXED_NAVER_BUSINESS_ID,
-    FIXED_STATION_BRANCH_ID,
-    PREF_KEY,
-    SYNC_CFG_KEY,
-    SYNC_APPLY_KEY,
-    SYNC_FEATURE_KEY_LEGACY,
-    DEFAULT_SPREADSHEET_ID,
-    DEFAULT_SHEET_NAME,
-    DEFAULT_START_ROW,
-    DEFAULT_YEAR,
-    DEFAULT_GOOGLE_CLIENT_ID,
-    DEFAULT_SYNC_SLEEP_MS,
-    SHEET_GRID_FAST_ROW_LIMIT,
-    NAVER_SCHEDULE_FETCH_CONCURRENCY,
-    ROOM_MAPPING_WARN_THRESHOLD,
-    STATION_TOKEN_CACHE_TTL_MS,
-    DATE_RANGE_CACHE_LIMIT,
-    APPLY_JITTER_MS,
-    APPLY_RETRY_LIMIT,
-    EMBEDDED_AUTH_MODE,
-    EMBEDDED_AUTH,
-    TEXT,
-    ROOM_PRESETS,
-    ROOM_TYPE_LABELS,
-    ROOM_TYPE_BY_ROOM_NO,
-    CLOSED_TEXTS,
-    V2_COLOR_STATUS_CHANNEL_MAP,
-    RESERVATION_BLOCK_COLOR_HEX,
-    INVENTORY_PROVIDER_ALIASES,
-    DATE_LABEL_RE,
-    ROOM_ROW_SKIP_TOKENS,
-    DATE_HEADER_HINT,
-    SHEET_HINTS_SCAN_RANGE,
-    SHEET_HINTS_ROOM_MAP_RANGE,
-    SHEET_HINT_CACHE_TTL_MS,
-    SHEET_SNAPSHOT_CACHE_TTL_MS,
-    SHEET_SNAPSHOT_CACHE_MAX,
-    NAVER_BIZ_ITEMS_CACHE_TTL_MS,
-    DEFAULT_SCAN_CONFIG,
-  } = C;
+  const { ROOM_TYPE_LABELS, ROOM_TYPE_BY_ROOM_NO, DATE_LABEL_RE, ROOM_ROW_SKIP_TOKENS, DATE_HEADER_HINT, CLOSED_TEXTS, IGNORED_COLOR_HEX } = C;
   const N = App.scan?.normalize || {};
   const R = App.engine?.rules || {};
   const { normalizeText, normalizeRoomNoKey, oneBasedToZeroBased, safeInt, sanitizeScanConfig, colZeroToA1 } = N;
@@ -632,12 +592,40 @@
     scanRowEnd = null
   ) {
     const rows = [];
-    const dateIndexes = (dateCols || []).map((dc) => dc.col);
     let currentRoomType = "";
     const maxRow = Number.isInteger(scanRowEnd) ? Math.min(scanRowEnd, matrix.maxRow) : matrix.maxRow;
     const hasManualTypeRanges = Boolean(
       roomTypeRanges?.urban || roomTypeRanges?.doubleTwin || roomTypeRanges?.grand
     );
+
+    const inferRoomTypeFromLabel = (value) => {
+      const text = normalizeText(value);
+      const low = text.toLowerCase();
+      if (!low) return "";
+      if (low.includes("grand") || text.includes("8인")) return ROOM_TYPE_LABELS.grand;
+      if ((low.includes("double") && low.includes("twin")) || text.includes("4인")) return ROOM_TYPE_LABELS.doubleTwin;
+      if (low.includes("urban") || text.includes("6인")) return ROOM_TYPE_LABELS.urban;
+      return "";
+    };
+
+    const rowHasRoomSignals = (row) => {
+      const sampleCols = (dateCols || []).slice(0, Math.min((dateCols || []).length, 31));
+      if (!sampleCols.length) return false;
+      for (const dc of sampleCols) {
+        const cell = matrix.get(row, dc.col);
+        const raw = normalizeText(cell?.formattedValue || "");
+        const note = normalizeText(cell?.note || "");
+        const colorHex = normalizeText(colorObjToHex(cell?.backgroundColor || null)).toUpperCase();
+        if (note) return true;
+        if (colorHex && !(IGNORED_COLOR_HEX instanceof Set && IGNORED_COLOR_HEX.has(colorHex)) && colorHex !== "#FFFFFF") {
+          return true;
+        }
+        const low = raw.toLowerCase();
+        if (raw && (CLOSED_TEXTS instanceof Set && CLOSED_TEXTS.has(low))) return true;
+        if (["vac", "vip", "ooo", "marketing", "마케팅"].includes(low)) return true;
+      }
+      return false;
+    };
 
     for (let row = scanRowStart; row <= maxRow; row += 1) {
       if (matrix.hiddenRows?.has(row)) continue;
@@ -653,14 +641,14 @@
 
       const roomNoKey = normalizeRoomNoKey(roomNo);
       const rangedRoomType = resolveManualRoomTypeByRow(row, roomTypeRanges);
+      const inferredRoomType = inferRoomTypeFromLabel(roomTypeRaw || currentRoomType || "");
+      const hasRoomSignal = rowHasRoomSignals(row);
       if (hasManualTypeRanges && !rangedRoomType) continue;
       const explicitRoomType = roomTypeByRoomNo?.[roomNoKey] || "";
       const knownRoomNo = Boolean(explicitRoomType);
-      // Auto scan must not promote inventory/provider helper rows as room rows.
-      // Keep rows only when room number is known by map or when explicit manual range pins type.
-      if (!knownRoomNo && !rangedRoomType) continue;
+      if (!knownRoomNo && !rangedRoomType && (!inferredRoomType || !hasRoomSignal)) continue;
 
-      const roomType = rangedRoomType || explicitRoomType || currentRoomType || "UNKNOWN_ROOM_TYPE";
+      const roomType = rangedRoomType || explicitRoomType || inferredRoomType || currentRoomType || "UNKNOWN_ROOM_TYPE";
       rows.push({
         row,
         roomType,

@@ -63,6 +63,49 @@ function buildMatrix() {
   };
 }
 
+function buildShorthandMatrix() {
+  const cells = new Map();
+  const setCell = (row, col, formattedValue = "", backgroundColor = null) => {
+    cells.set(`${row}:${col}`, {
+      formattedValue,
+      note: "",
+      formula: "",
+      backgroundColor
+    });
+  };
+
+  setCell(20, 0, "네이버");
+  setCell(20, 1, "Spa Suite 8인");
+  setCell(20, 5, "닫음");
+  setCell(20, 6, "0/2");
+  setCell(20, 7, "닫음");
+
+  setCell(21, 1, "Suite 6인");
+  setCell(21, 5, "닫음");
+  setCell(21, 6, "0/1");
+  setCell(21, 7, "닫음");
+
+  setCell(22, 1, "Suite 4인");
+  setCell(22, 5, "닫음");
+  setCell(22, 6, "0/1");
+  setCell(22, 7, "닫음");
+
+  return {
+    maxRow: 30,
+    hiddenRows: new Set(),
+    get(row, col) {
+      return (
+        cells.get(`${Number(row)}:${Number(col)}`) || {
+          formattedValue: "",
+          note: "",
+          formula: "",
+          backgroundColor: null
+        }
+      );
+    }
+  };
+}
+
 function main() {
   const root = process.cwd();
   globalThis.App = {};
@@ -93,6 +136,16 @@ function main() {
     providerKey: "STATION"
   });
   assert.deepEqual(rows, [10, 11, 12], "must keep scanning same-provider typed rows");
+
+  const shorthandRows = aggregator.collectProviderInventoryDataRows(buildShorthandMatrix(), 20, dateCols, 3, {
+    allowPkgInventoryRows: false,
+    providerKey: "NAVER"
+  });
+  assert.deepEqual(
+    shorthandRows,
+    [21, 22, 20],
+    "must classify 6인/4인/8인 shorthand rows into typed slots without dropping the provider grand row"
+  );
 
   const colorStatus = rules.classifySheetCellColorStatus({
     formattedValue: "",

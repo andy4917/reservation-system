@@ -4,11 +4,18 @@ import {
   fetchProviderRows,
   fetchProviderReservations,
   captureWingsSession,
+  deleteBindingDecision,
+  deleteManualScanAnchor,
+  loadBindingDecisions,
+  loadManualScanAnchor,
+  saveBindingDecision,
+  saveManualScanAnchor,
   getBridgeContext,
   getBridgeRuntime,
   openWingsLoginWindow,
   getBridgeSummary
 } from "../../services/bridgeClient";
+import { buildGeneratedBindingDraft, buildSheetRef, mergeBindingDraftWithSavedDecisions } from "../../services/bindingArtifacts";
 import { buildInventoryCompareSnapshot } from "../../services/inventoryCompare";
 import { buildJobStatusCards } from "../../services/jobRunner";
 import { buildProcessModules } from "../../services/processModules";
@@ -73,7 +80,14 @@ function createInitialWorkspaceState(): WorkspaceMockState {
     sourceLabel: "조회 전",
     lastRunAt: new Date().toISOString(),
     summary: null,
-    logs: []
+    selectedRunId: null,
+    visibleSlice: {
+      runId: null,
+      offset: 0,
+      limit: 12,
+      total: 0,
+      lines: []
+    }
   };
 
   return {
@@ -110,6 +124,11 @@ function createInitialWorkspaceState(): WorkspaceMockState {
     inventoryCompare,
     inventoryCompareLoading: false,
     sheetRead,
+    manualScanAnchor: null,
+    manualScanAnchorDraft: {},
+    sheetTerms: [],
+    termBindings: [],
+    unresolvedBindings: [],
     reservationAudit,
     reservationAuditLoading: false,
     searchQuery: "",
@@ -178,6 +197,11 @@ interface UiStore extends WorkspaceMockState {
   setSearchQuery: (query: string) => void;
   openWingsLogin: () => Promise<void>;
   captureWingsSession: () => Promise<void>;
+  setManualScanAnchorDraft: (patch: Record<string, number | null | undefined>) => void;
+  saveManualScanAnchorDraft: () => Promise<void>;
+  deleteManualScanAnchorDraft: () => Promise<void>;
+  saveManualBindingDecision: (anchorId: string, termId: string) => Promise<void>;
+  deleteManualBindingDecision: (decisionKey: string) => Promise<void>;
   runSelectedQuery: () => Promise<void>;
   refreshWorkspaceData: () => Promise<void>;
   refreshInventoryCompare: () => Promise<void>;
@@ -193,6 +217,24 @@ function buildRunContext(state: WorkspaceMockState, provider: string | null = nu
     requestedAt: new Date().toISOString(),
     sourceProvider: provider
   };
+}
+
+async function rebuildBindingState(sheetRead: SheetReadSnapshot, branch: BranchSelection) {
+  const generatedBindingDraft = buildGeneratedBindingDraft(sheetRead, branch);
+  const savedBindingDecisions =
+    generatedBindingDraft.sheetRef
+      ? (await loadBindingDecisions({
+          type: "binding.loadDecisions",
+          branch,
+          sheetRef: {
+            spreadsheetId: generatedBindingDraft.sheetRef.spreadsheetId,
+            sheetName: generatedBindingDraft.sheetRef.sheetName,
+            sheetId: generatedBindingDraft.sheetRef.sheetId,
+            timezone: generatedBindingDraft.sheetRef.timezone
+          }
+        }).catch(() => ({ ok: true as const, decisions: [] }))).decisions
+      : [];
+  return mergeBindingDraftWithSavedDecisions(generatedBindingDraft, savedBindingDecisions, branch);
 }
 
 export const useUiStore = create<UiStore>((set, get) => ({
@@ -241,6 +283,126 @@ export const useUiStore = create<UiStore>((set, get) => ({
         : [...state.logs, "Wings session capture failed."]
     }));
   },
+  setManualScanAnchorDraft: (patch) =>
+    set((state) => ({
+      manualScanAnchorDraft: {
+        ...state.manualScanAnchorDraft,
+        ...patch
+      }
+    })),
+  saveManualScanAnchorDraft: async () => {
+    const currentState = get();
+    const summary = currentState.sheetRead.summary;
+    if (!summary) return;
+    const anchor = await saveManualScanAnchor({
+      type: "scanAnchor.save",
+      branch: currentState.selectedBranch,
+      sheetRef: {
+        spreadsheetId: summary.spreadsheetId,
+        sheetName: summary.sheetName,
+        sheetId: null,
+        timezone: "Asia/Seoul"
+      },
+      scan: currentState.manualScanAnchorDraft
+    }).catch(() => null);
+    if (!anchor?.ok) {
+      set((state) => ({
+        logs: [...state.logs, "manual scan anchor save failed."]
+      }));
+      return;
+    }
+    set({
+      manualScanAnchor: anchor.anchor
+    });
+    await get().refreshInventoryCompare();
+  },
+  deleteManualScanAnchorDraft: async () => {
+    const currentState = get();
+    const summary = currentState.sheetRead.summary;
+    if (!summary) return;
+    const result = await deleteManualScanAnchor({
+      type: "scanAnchor.delete",
+      branch: currentState.selectedBranch,
+      sheetRef: {
+        spreadsheetId: summary.spreadsheetId,
+        sheetName: summary.sheetName,
+        sheetId: null,
+        timezone: "Asia/Seoul"
+      }
+    }).catch(() => null);
+    if (!result?.ok) {
+      set((state) => ({
+        logs: [...state.logs, "manual scan anchor delete failed."]
+      }));
+      return;
+    }
+    set({
+      manualScanAnchor: null,
+      manualScanAnchorDraft: {}
+    });
+    await get().refreshInventoryCompare();
+  },
+  saveManualBindingDecision: async (anchorId, termId) => {
+    const currentState = get();
+    const unresolved = currentState.unresolvedBindings.find((item) => item.anchorId === anchorId);
+    const sheetRef = buildSheetRef(currentState.sheetRead.summary, currentState.selectedBranch);
+    if (!unresolved || !sheetRef || !unresolved.candidateTerms.includes(termId)) {
+      set((state) => ({
+        logs: [...state.logs, `binding save skipped: ${anchorId} -> ${termId}`]
+      }));
+      return;
+    }
+    const result = await saveBindingDecision({
+      type: "binding.saveDecision",
+      decision: {
+        branch: currentState.selectedBranch,
+        sheetRef: {
+          spreadsheetId: sheetRef.spreadsheetId,
+          sheetName: sheetRef.sheetName,
+          sheetId: sheetRef.sheetId,
+          timezone: sheetRef.timezone
+        },
+        anchorId: unresolved.anchorId,
+        rawHeader: unresolved.rawHeader,
+        termId,
+        confidence: 1
+      }
+    }).catch(() => null);
+    if (!result?.ok) {
+      set((state) => ({
+        logs: [...state.logs, `binding save failed: ${anchorId} -> ${termId}`]
+      }));
+      return;
+    }
+    const bindingDraft = await rebuildBindingState(currentState.sheetRead, currentState.selectedBranch);
+    set((state) => ({
+      sheetTerms: bindingDraft.sheetTerms,
+      termBindings: bindingDraft.termBindings,
+      unresolvedBindings: bindingDraft.unresolvedBindings,
+      logs: [...state.logs, `binding saved: ${anchorId} -> ${termId}`]
+    }));
+  },
+  deleteManualBindingDecision: async (decisionKey) => {
+    const currentState = get();
+    if (!decisionKey) return;
+    const result = await deleteBindingDecision({
+      type: "binding.deleteDecision",
+      decisionKey
+    }).catch(() => null);
+    if (!result?.ok || !result.deleted) {
+      set((state) => ({
+        logs: [...state.logs, `binding delete failed: ${decisionKey}`]
+      }));
+      return;
+    }
+    const bindingDraft = await rebuildBindingState(currentState.sheetRead, currentState.selectedBranch);
+    set((state) => ({
+      sheetTerms: bindingDraft.sheetTerms,
+      termBindings: bindingDraft.termBindings,
+      unresolvedBindings: bindingDraft.unresolvedBindings,
+      logs: [...state.logs, `binding deleted: ${decisionKey}`]
+    }));
+  },
   runSelectedQuery: async () => {
     set({ hasPendingQueryChanges: false });
     await get().refreshWorkspaceData();
@@ -261,7 +423,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
     const [liveSheetSnapshot, context, bridgeRuntime, bridgeSummary] = await Promise.all([
       fetchSheetSnapshotBridge({
         type: "provider.fetchSheetSnapshot",
-        query: selectedRange
+        query: {
+          ...selectedRange,
+          branch: selectedBranch
+        }
       }).catch(() => null),
       getBridgeContext().catch(() => null),
       getBridgeRuntime().catch(() => null),
@@ -322,27 +487,54 @@ export const useUiStore = create<UiStore>((set, get) => ({
           !["pms-unconfigured", "unavailable", "bridge-unavailable"].includes(liveReservationResponse.source)),
       branch: selectedBranch
     });
+    const sheetPayload = liveSheetSnapshot?.payload || {
+      runId: null,
+      summary: null,
+      visibleSlice: {
+        runId: null,
+        offset: 0,
+        limit: 12,
+        total: 0,
+        lines: []
+      }
+    };
+    const sheetSummary = sheetPayload.summary || null;
     const sheetRead: SheetReadSnapshot = {
       supportLevel:
-        liveSheetSnapshot?.payload && liveSheetSnapshot.source === "sheet-api"
+        sheetSummary && liveSheetSnapshot?.source === "sheet-api"
           ? "read-live"
           : liveContextAvailable
             ? "partial-live"
             : "unavailable",
       sourceLabel:
-        liveSheetSnapshot?.payload && liveSheetSnapshot.source === "sheet-api"
+        sheetSummary && liveSheetSnapshot?.source === "sheet-api"
           ? "실시간 시트 데이터"
-          : liveContextAvailable
+          : sheetSummary && liveSheetSnapshot?.source === "sheet-unconfigured"
+            ? "시트 설정 필요"
+            : sheetSummary && liveSheetSnapshot?.source
+            ? "시트 오류 확인 필요"
+            : liveContextAvailable
             ? "시트 확인 중"
             : "조회 전",
       lastRunAt: new Date().toISOString(),
-      summary: liveSheetSnapshot?.payload || null,
-      logs: [
-        liveSheetSnapshot?.payload
-          ? `시트 데이터를 불러왔습니다: ${liveSheetSnapshot.payload.sheetName} ${liveSheetSnapshot.payload.startDate}..${liveSheetSnapshot.payload.endDate}`
-          : `시트 데이터를 불러오지 못했습니다: ${liveSheetSnapshot?.error || liveSheetSnapshot?.source || "unknown"}`
-      ]
+      summary: sheetSummary,
+      selectedRunId: sheetPayload.runId,
+      visibleSlice: sheetPayload.visibleSlice
     };
+    const loadedManualScanAnchor =
+      sheetSummary?.spreadsheetId && sheetSummary?.sheetName
+        ? await loadManualScanAnchor({
+            type: "scanAnchor.load",
+            branch: selectedBranch,
+            sheetRef: {
+              spreadsheetId: sheetSummary.spreadsheetId,
+              sheetName: sheetSummary.sheetName,
+              sheetId: null,
+              timezone: "Asia/Seoul"
+            }
+          }).catch(() => null)
+        : null;
+    const bindingDraft = await rebuildBindingState(sheetRead, selectedBranch);
 
     const hasUpstreamAuth = Boolean(bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer);
     const bridgeIssue = resolveBridgeIssue({
@@ -374,6 +566,11 @@ export const useUiStore = create<UiStore>((set, get) => ({
       activeRunContext: buildRunContext(currentState, context?.provider || null),
       inventoryCompare: snapshot,
       sheetRead,
+      manualScanAnchor: loadedManualScanAnchor,
+      manualScanAnchorDraft: loadedManualScanAnchor?.scan || {},
+      sheetTerms: bindingDraft.sheetTerms,
+      termBindings: bindingDraft.termBindings,
+      unresolvedBindings: bindingDraft.unresolvedBindings,
       bridgeStatus: nextBridgeStatus,
       bridgeSummary: {
         authSummary: bridgeSummary?.authSummary || currentState.bridgeSummary.authSummary,
@@ -408,13 +605,16 @@ export const useUiStore = create<UiStore>((set, get) => ({
       activeRunContext: nextWorkspaceState.activeRunContext,
       inventoryCompare: snapshot,
       sheetRead,
+      sheetTerms: bindingDraft.sheetTerms,
+      termBindings: bindingDraft.termBindings,
+      unresolvedBindings: bindingDraft.unresolvedBindings,
       reservationAudit,
       metrics: projectedState.metrics,
       evidenceLines: projectedState.evidenceLines,
       opsLines: projectedState.opsLines,
       validationLines: projectedState.validationLines,
       logs: [
-        ...sheetRead.logs,
+        ...sheetRead.visibleSlice.lines,
         ...projectedState.logs
       ],
       bridgeStatus: nextBridgeStatus,

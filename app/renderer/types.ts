@@ -1,5 +1,8 @@
 import type {
   FetchSheetSnapshotSummary,
+  ManualScanAnchorValues,
+  SavedManualScanAnchor,
+  SheetArtifactVisibleSlice,
   LiveSupportLevel,
   RuntimeMode
 } from "../contracts";
@@ -40,6 +43,48 @@ export interface SummaryMetric {
   label: string;
   value: string;
   tone?: "default" | "warn" | "critical" | "ok";
+}
+
+export interface SheetRef {
+  spreadsheetId: string;
+  sheetName: string;
+  sheetId: string | null;
+  branch: BranchSelection | null;
+  timezone: string | null;
+}
+
+export interface Anchor {
+  anchorId: string;
+  kind: "named-range" | "developer-metadata" | "grid-hash";
+  scope: string;
+  sheetRef: SheetRef;
+}
+
+export interface SheetTerm {
+  termId: string;
+  canonicalName: string;
+  synonyms: string[];
+  datatype: string;
+  description: string;
+}
+
+export interface TermBinding {
+  anchorId: string;
+  termId: string;
+  confidence: number;
+  method: "rule" | "manual" | "embedding";
+  decidedAt: string;
+  decisionKey?: string | null;
+  rawHeader?: string | null;
+}
+
+export interface UnresolvedBinding {
+  anchorId: string;
+  rawHeader: string;
+  sampleValues: string[];
+  candidateTerms: string[];
+  reason: string;
+  status: "open" | "reviewed" | "resolved";
 }
 
 export interface SearchResult {
@@ -178,8 +223,9 @@ export interface SheetReadSnapshot {
   supportLevel: LiveSupportLevel;
   sourceLabel: string;
   lastRunAt: string;
+  selectedRunId: string | null;
   summary: FetchSheetSnapshotSummary | null;
-  logs: string[];
+  visibleSlice: SheetArtifactVisibleSlice;
 }
 
 export interface WorkspaceMockState {
@@ -200,6 +246,11 @@ export interface WorkspaceMockState {
   inventoryCompare: InventoryCompareSnapshot;
   inventoryCompareLoading: boolean;
   sheetRead: SheetReadSnapshot;
+  manualScanAnchor: SavedManualScanAnchor | null;
+  manualScanAnchorDraft: ManualScanAnchorValues;
+  sheetTerms: SheetTerm[];
+  termBindings: TermBinding[];
+  unresolvedBindings: UnresolvedBinding[];
   reservationAudit: ReservationAuditSnapshot;
   reservationAuditLoading: boolean;
   searchQuery: string;

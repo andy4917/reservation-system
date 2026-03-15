@@ -63,7 +63,97 @@ export interface FetchReservationsRequest {
 
 export interface FetchSheetSnapshotRequest {
   type: "provider.fetchSheetSnapshot";
-  query: DateRangeQuery;
+  query: DateRangeQuery & {
+    branch?: string;
+  };
+}
+
+export type SheetReadFailureCategory = "none" | "access" | "sheet-structure" | "mapping" | "value-parse";
+
+export interface FetchSheetAnchorSummary {
+  namedRangeCount: number;
+  metadataCount: number;
+  hasScanConfigNamedRange: boolean;
+  hasRoomMapNamedRange: boolean;
+  hasMetadataScanConfig: boolean;
+}
+
+export interface FetchSheetHintSummary {
+  fingerprint: string;
+  roomMapCount: number;
+  scanMode: string;
+  manualMode: boolean;
+  hasRoomTypeMap: boolean;
+}
+
+export interface FetchSheetValidationSummary {
+  providerKey: string;
+  issueCount: number;
+  errorCount: number;
+  warningCount: number;
+  issueCodes: string[];
+  hasTypeMismatch: boolean;
+  hasPartitionMismatch: boolean;
+  hasInsufficientRows: boolean;
+  providerValueRawCount: number;
+  providerValueParsedCount: number;
+}
+
+export interface FetchSheetCoverageSummary {
+  dateCount: number;
+  inventoryRowsDetected: {
+    NAVER: boolean;
+    STATION: boolean;
+  };
+  inventoryValueRowsDetected: {
+    NAVER: boolean;
+    STATION: boolean;
+  };
+  inventoryDataRowCounts: {
+    NAVER: number;
+    STATION: number;
+  };
+  providerValueDays: {
+    NAVER: number;
+    STATION: number;
+  };
+  reservationBlockCount: number;
+}
+
+export interface SheetArtifactVisibleSlice {
+  runId: string | null;
+  offset: number;
+  limit: number;
+  total: number;
+  lines: string[];
+}
+
+export interface BindingDecisionSheetRef {
+  spreadsheetId: string;
+  sheetName: string;
+  sheetId: string | null;
+  timezone: string | null;
+}
+
+export interface SavedBindingDecision {
+  decisionKey: string;
+  branch: string;
+  sheetRef: BindingDecisionSheetRef;
+  anchorId: string;
+  rawHeader: string;
+  termId: string;
+  method: "manual";
+  decidedAt: string;
+  confidence: number;
+}
+
+export interface SaveBindingDecisionInput {
+  branch: string;
+  sheetRef: BindingDecisionSheetRef;
+  anchorId: string;
+  rawHeader: string;
+  termId: string;
+  confidence?: number;
 }
 
 export interface FetchSheetSnapshotSummary {
@@ -72,6 +162,10 @@ export interface FetchSheetSnapshotSummary {
   startDate: string;
   endDate: string;
   readMode: string;
+  retryReason: string | null;
+  retryTrace: string[];
+  failureCategory: SheetReadFailureCategory;
+  failureDetail: string;
   reservationBlockCount: number;
   validationIssueCount: number;
   inventoryRows: {
@@ -82,13 +176,104 @@ export interface FetchSheetSnapshotSummary {
     NAVER: number;
     STATION: number;
   };
+  anchorSummary: FetchSheetAnchorSummary;
+  hintSummary: FetchSheetHintSummary;
+  validationSummary: FetchSheetValidationSummary;
+  coverage: FetchSheetCoverageSummary;
+}
+
+export interface FetchSheetSnapshotPayload {
+  runId: string | null;
+  summary: FetchSheetSnapshotSummary | null;
+  visibleSlice: SheetArtifactVisibleSlice;
 }
 
 export interface FetchSheetSnapshotResponse {
   ok: true;
-  payload: FetchSheetSnapshotSummary | null;
+  payload: FetchSheetSnapshotPayload;
   source?: string;
   error?: string;
+}
+
+export interface LoadBindingDecisionsRequest {
+  type: "binding.loadDecisions";
+  branch: string;
+  sheetRef: BindingDecisionSheetRef;
+}
+
+export interface LoadBindingDecisionsResponse {
+  ok: true;
+  decisions: SavedBindingDecision[];
+}
+
+export interface SaveBindingDecisionRequest {
+  type: "binding.saveDecision";
+  decision: SaveBindingDecisionInput;
+}
+
+export interface SaveBindingDecisionResponse {
+  ok: true;
+  decision: SavedBindingDecision;
+}
+
+export interface DeleteBindingDecisionRequest {
+  type: "binding.deleteDecision";
+  decisionKey: string;
+}
+
+export interface DeleteBindingDecisionResponse {
+  ok: true;
+  deleted: boolean;
+}
+
+export interface ManualScanAnchorValues {
+  dateRow?: number | null;
+  roomStartRow?: number | null;
+  inventorySearchStartRow?: number | null;
+  naverInventoryRow?: number | null;
+  stationInventoryRow?: number | null;
+}
+
+export interface SavedManualScanAnchor {
+  anchorKey: string;
+  branch: string;
+  sheetRef: BindingDecisionSheetRef;
+  scan: ManualScanAnchorValues;
+  updatedAt: string;
+}
+
+export interface LoadManualScanAnchorsRequest {
+  type: "scanAnchor.load";
+  branch: string;
+  sheetRef: BindingDecisionSheetRef;
+}
+
+export interface LoadManualScanAnchorsResponse {
+  ok: true;
+  anchor: SavedManualScanAnchor | null;
+}
+
+export interface SaveManualScanAnchorsRequest {
+  type: "scanAnchor.save";
+  branch: string;
+  sheetRef: BindingDecisionSheetRef;
+  scan: ManualScanAnchorValues;
+}
+
+export interface SaveManualScanAnchorsResponse {
+  ok: true;
+  anchor: SavedManualScanAnchor;
+}
+
+export interface DeleteManualScanAnchorsRequest {
+  type: "scanAnchor.delete";
+  branch: string;
+  sheetRef: BindingDecisionSheetRef;
+}
+
+export interface DeleteManualScanAnchorsResponse {
+  ok: true;
+  deleted: boolean;
 }
 
 export interface FetchReservationsResponse<T = unknown> {

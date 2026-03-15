@@ -8,17 +8,10 @@
   const entryPolicy = root.InventoryEntryPolicy || {};
   const C = App.constants || {};
   const {
-    FIXED_NAVER_BUSINESS_ID,
-    FIXED_STATION_BRANCH_ID,
     PREF_KEY,
     SYNC_CFG_KEY,
     SYNC_APPLY_KEY,
-    SYNC_FEATURE_KEY_LEGACY,
-    DEFAULT_SPREADSHEET_ID,
-    DEFAULT_SHEET_NAME,
-    DEFAULT_START_ROW,
-    DEFAULT_YEAR,
-    DEFAULT_GOOGLE_CLIENT_ID,
+    syncSheetDefaults,
     DEFAULT_SYNC_SLEEP_MS,
     SHEET_GRID_FAST_ROW_LIMIT,
     NAVER_SCHEDULE_FETCH_CONCURRENCY,
@@ -27,8 +20,6 @@
     DATE_RANGE_CACHE_LIMIT,
     APPLY_JITTER_MS,
     APPLY_RETRY_LIMIT,
-    EMBEDDED_AUTH_MODE,
-    EMBEDDED_AUTH,
     TEXT,
     ROOM_PRESETS,
     ROOM_TYPE_LABELS,
@@ -286,7 +277,7 @@
     const slots = Array.isArray(dataRows) ? dataRows.slice(0, 3) : [];
     const mode = normalizeText(options?.mode || "auto").toLowerCase() === "manual" ? "manual" : "auto";
     const hasCompleteManualTypeRanges = options?.hasCompleteManualTypeRanges === true;
-    const strictMode = mode === "manual" || hasCompleteManualTypeRanges;
+    const strictMode = hasCompleteManualTypeRanges;
     const slotRows = {
       urban: Number.isInteger(slots[0]) ? slots[0] + 1 : null,
       doubleTwin: Number.isInteger(slots[1]) ? slots[1] + 1 : null,
@@ -311,19 +302,23 @@
     if (uniqueRows.size !== slots.length) {
       issues.push({
         code: "INVENTORY_DATA_ROW_SLOT_DUPLICATE",
-        severity: "error",
+        severity: strictMode ? "error" : "warn",
         message:
           `${providerKey} inventory data row slots contain duplicate rows. ` +
-          `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand}`
+          `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand}` +
+          (!strictMode ? " (continuing with provider/derived fallback)" : "")
       });
     }
     if (!(slots[0] < slots[1] && slots[1] < slots[2])) {
       issues.push({
-        code: "INVENTORY_DATA_ROW_SLOT_ORDER_INVALID",
-        severity: "error",
-        message:
-          `${providerKey} inventory data row slots must be strictly increasing. ` +
-          `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand}`
+        code: strictMode ? "INVENTORY_DATA_ROW_SLOT_ORDER_INVALID" : "INVENTORY_DATA_ROW_PHYSICAL_ORDER_VARIANT",
+        severity: strictMode ? "error" : "warn",
+        message: strictMode
+          ? `${providerKey} inventory data row slots must be strictly increasing. ` +
+            `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand}`
+          : `${providerKey} inventory data row slots are type-complete but physically ordered differently. ` +
+            `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand} ` +
+            "(continuing with provider/derived fallback)"
       });
     }
     return issues;
@@ -870,6 +865,16 @@
     return out;
   }
 
+  function appendRetryReason(options, reason) {
+    const opts = options && typeof options === "object" ? { ...options } : {};
+    const current = Array.isArray(opts.__retryTrace)
+      ? opts.__retryTrace.filter((entry) => typeof entry === "string" && normalizeText(entry))
+      : [];
+    if (normalizeText(reason)) current.push(normalizeText(reason));
+    opts.__retryTrace = current;
+    return opts;
+  }
+
   async function loadSheetReadHints(spreadsheetId, sheetName, accessToken) {
     let anchors;
     try {
@@ -926,7 +931,14 @@
     return {
       scan,
       roomTypeByRoomNo: parseRoomTypeMapFromValuesGrid(roomValues),
-      fingerprint: digestValueRanges(valueRanges)
+      fingerprint: digestValueRanges(valueRanges),
+      anchorSummary: {
+        namedRangeCount: Object.keys(anchors.namedRanges || {}).length,
+        metadataCount: Object.keys(anchors.metadata || {}).length,
+        hasScanConfigNamedRange: Boolean(anchors.namedRanges?.SCAN_CONFIG),
+        hasRoomMapNamedRange: Boolean(anchors.namedRanges?.ROOM_MAP),
+        hasMetadataScanConfig: Object.keys(metadataScan || {}).length > 0
+      }
     };
   }
 
@@ -979,7 +991,9 @@
     const opts = options && typeof options === "object" ? options : {};
     const blockDetailMode = normalizeText(opts.blockDetailMode || "light").toLowerCase() === "full" ? "full" : "light";
     const bypassCache = opts.bypassCache === true;
-    const legacyFieldMask = opts.legacyFieldMask === true;
+    const retryTrace = Array.isArray(opts.__retryTrace)
+      ? opts.__retryTrace.filter((entry) => typeof entry === "string" && normalizeText(entry))
+      : [];
     const safeTitle = quoteSheetTitleForA1(syncConfig.sheetName);
     const scanCfg = sanitizeScanConfig(syncConfig.scan || {});
     const effectiveUseFullRange =
@@ -1002,7 +1016,7 @@
       effectiveUseFullRange
     );
     const snapshotCacheKey = `${snapshotCacheKeyBase}::block:${blockDetailMode}`;
-    const configuredStartRow = Math.max(1, Number(syncConfig.startRow) || DEFAULT_START_ROW);
+    const configuredStartRow = Math.max(1, Number(syncConfig.startRow) || syncSheetDefaults.startRow || 1);
     const manualDateRow = effectiveScanCfg.mode === "manual" ? parseOptionalPositiveInt(effectiveScanCfg.dateRow) : null;
     const rangeAnchorRow = manualDateRow || configuredStartRow;
     const scanStartRow = effectiveUseFullRange ? 1 : Math.max(1, rangeAnchorRow - SHEET_GRID_FAST_ROW_LIMIT);
@@ -1035,12 +1049,12 @@
     const requestUrl = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`);
     requestUrl.searchParams.set("ranges", rangeA1);
     requestUrl.searchParams.set("includeGridData", "true");
-    requestUrl.searchParams.set("fields", legacyFieldMask ? fieldsLegacy : fieldsAdvanced);
+    requestUrl.searchParams.set("fields", fieldsAdvanced);
     return {
       opts,
       blockDetailMode,
       bypassCache,
-      legacyFieldMask,
+      retryTrace,
       spreadsheetId,
       scanCfg,
       accessToken,
@@ -1074,20 +1088,13 @@
 
     if (response.status === 401 || response.status === 403) {
       if (!plan.forceRefreshToken && plan.canRefreshCredentials) {
-        return { retry: { forceRefreshToken: true } };
+        return { retry: { forceRefreshToken: true, reason: "credential-refresh" } };
       }
       const text = await response.text();
       throw new Error(`Google Sheets auth failed (${response.status}): ${text.slice(0, 280)}`);
     }
     if (!response.ok) {
       const text = await response.text();
-      if (
-        response.status === 400 &&
-        !plan.opts?.legacyFieldMask &&
-        /invalid field|invalid value at 'fields'|cannot find matching fields|error expanding 'fields' parameter/i.test(text || "")
-      ) {
-        return { retry: { options: { ...plan.opts, legacyFieldMask: true } } };
-      }
       const violationSummary = summarizeSheetsFieldViolations(text);
       if (violationSummary) {
         throw new Error(`Google Sheets request failed (${response.status}): ${violationSummary}`);
@@ -1100,7 +1107,7 @@
     const firstGrid = Array.isArray(firstSheet?.data) ? firstSheet.data[0] : null;
     if (!firstGrid) {
       if (!plan.effectiveUseFullRange && plan.effectiveScanCfg.mode !== "manual") {
-        return { retry: { useFullRange: true } };
+        return { retry: { useFullRange: true, reason: "auto-full-range" } };
       }
       throw new Error("Google Sheets grid data is empty in the selected range.");
     }
@@ -1235,7 +1242,7 @@
         spreadsheet: plan.spreadsheetId,
         sheetName: syncConfig.sheetName,
         startRow: plan.configuredStartRow,
-        year: Number(syncConfig.year) || DEFAULT_YEAR,
+        year: Number(syncConfig.year) || syncSheetDefaults.year || 0,
         stockMode: normalizeText(syncConfig.stockMode || "available"),
         scanMode: normalizeText(plan.effectiveScanCfg?.mode || "auto"),
         allowPkgInventoryRows: plan.effectiveScanCfg.allowPkgInventoryRows === true,
@@ -1303,6 +1310,20 @@
         grand: validationSupport.toPositiveIntOrNull(formulaTypeCounts.grand) ?? Number(fallbackTypeCounts.grand || 0)
       };
       const detectedTypeCounts = summarizeDetectedRoomTypeCounts(hostDiagnostics?.roomTypeCounts || {});
+      if (
+        Number(expectedTypeCounts.urban || 0) <= 0 &&
+        Number(expectedTypeCounts.doubleTwin || 0) <= 0 &&
+        Number(expectedTypeCounts.grand || 0) <= 0 &&
+        (
+          Number(detectedTypeCounts.urban || 0) > 0 ||
+          Number(detectedTypeCounts.doubleTwin || 0) > 0 ||
+          Number(detectedTypeCounts.grand || 0) > 0
+        )
+      ) {
+        expectedTypeCounts.urban = Number(detectedTypeCounts.urban || 0);
+        expectedTypeCounts.doubleTwin = Number(detectedTypeCounts.doubleTwin || 0);
+        expectedTypeCounts.grand = Number(detectedTypeCounts.grand || 0);
+      }
       const expectedPartitionCounts = countExpectedPartitionRooms(plan.effectiveRoomTypeByRoomNo);
       const detectedPartitionCounts = summarizeDetectedPartitionCounts(hostDiagnostics?.partitionCounts || {});
       const hasPartitionExpectation = hasCompleteManualRoomTypeRanges(effectiveRoomTypeRanges);
@@ -1459,6 +1480,7 @@
         },
         trace: {
           generatedAt: new Date().toISOString(),
+          retryTrace: Array.isArray(plan.retryTrace) ? [...plan.retryTrace] : [],
           range: {
             spreadsheetId: plan.spreadsheetId,
             sheetName: firstSheet?.properties?.title || syncConfig.sheetName,
@@ -1592,6 +1614,7 @@
         readHints: {
           fingerprint: plan.sheetHints.fingerprint || "",
           roomMapCount: Object.keys(plan.sheetHints.roomTypeByRoomNo || {}).length,
+          anchorSummary: { ...(plan.sheetHints.anchorSummary || {}) },
           roomTypeByRoomNo: { ...(plan.sheetHints.roomTypeByRoomNo || {}) }
         }
       };
@@ -1645,18 +1668,18 @@
         query,
         readResult.retry.forceRefreshToken === true ? true : forceRefreshToken,
         readResult.retry.useFullRange === true ? true : useFullRange,
-        readResult.retry.options || options
+        appendRetryReason(readResult.retry.options || options, readResult.retry.reason || "")
       );
     }
     try {
       const assembled = assembleSnapshotFromSheetRead(plan, readResult, syncConfig, query);
       if (assembled.needsFullRangeRetry) {
-        return fetchSheetSnapshot(syncConfig, query, forceRefreshToken, true, options);
+        return fetchSheetSnapshot(syncConfig, query, forceRefreshToken, true, appendRetryReason(options, "assemble-full-range"));
       }
       return cacheSheetSnapshotResult(plan.snapshotCacheKey, plan.quickCacheKey, assembled.snapshot);
     } catch (error) {
       if (!plan.effectiveUseFullRange && plan.effectiveScanCfg.mode !== "manual") {
-        return fetchSheetSnapshot(syncConfig, query, forceRefreshToken, true, options);
+        return fetchSheetSnapshot(syncConfig, query, forceRefreshToken, true, appendRetryReason(options, "assemble-full-range"));
       }
       throw error;
     }
