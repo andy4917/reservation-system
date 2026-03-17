@@ -2,6 +2,7 @@ import type {
   FetchSheetSnapshotSummary,
   ManualScanAnchorValues,
   SavedManualScanAnchor,
+  SearchHit,
   SheetArtifactVisibleSlice,
   LiveSupportLevel,
   RuntimeMode
@@ -49,7 +50,7 @@ export interface SheetRef {
   spreadsheetId: string;
   sheetName: string;
   sheetId: string | null;
-  branch: BranchSelection | null;
+  branch: string | null;
   timezone: string | null;
 }
 
@@ -87,11 +88,64 @@ export interface UnresolvedBinding {
   status: "open" | "reviewed" | "resolved";
 }
 
-export interface SearchResult {
-  id: string;
-  kind: "inventory-row" | "audit-row" | "evidence" | "ops" | "validation" | "log";
-  title: string;
-  excerpt: string;
+export interface SectionRef {
+  spreadsheetId: string;
+  sheetName: string;
+  sheetId: string | null;
+  sectionKey: string;
+  state: "active" | "preopen";
+  titleRow: number | null;
+  headerRow: number | null;
+  roomStartRow: number | null;
+  inventoryStartRow: number | null;
+}
+
+export interface AnchorEvidence {
+  why: string;
+  competingCandidates: string[];
+  signals: string[];
+}
+
+export interface MappingAnchor {
+  anchorId: string;
+  kind: "dateRow" | "roomStartRow" | "inventorySearchStartRow" | "stationInventoryRow" | "naverInventoryRow";
+  source: "manual" | "scan" | "metadata" | "namedRange";
+  row: number | null;
+  confidence: number;
+  evidence: AnchorEvidence;
+}
+
+export interface ProviderValueSource {
+  providerKey: string;
+  providerRow: number | null;
+  providerValueRow: number | null;
+  providerRowRole: "none" | "aggregate-only" | "aggregate+typed-slot";
+  sourceKind: "none" | "provider-row" | "typed-row";
+  sourceReason: string;
+  typedSlotRows: {
+    urban: number | null;
+    doubleTwin: number | null;
+    grand: number | null;
+  };
+  typedSlotComplete: boolean;
+  typedSlotDuplicate: boolean;
+}
+
+export interface StructuralVariant {
+  kind: "physicalOrderVariant" | "manualAnchorUsed" | "branchSectionEvidence";
+  value: boolean | string | number | null;
+  detail: string;
+}
+
+export interface MappingArtifact {
+  runId: string | null;
+  section: SectionRef;
+  anchors: MappingAnchor[];
+  bindings: TermBinding[];
+  unresolved: UnresolvedBinding[];
+  providerValueSource: ProviderValueSource;
+  structuralSummary: StructuralVariant[];
+  validationSummary: FetchSheetSnapshotSummary["validationSummary"];
 }
 
 export interface ProcessModule {
@@ -226,6 +280,7 @@ export interface SheetReadSnapshot {
   selectedRunId: string | null;
   summary: FetchSheetSnapshotSummary | null;
   visibleSlice: SheetArtifactVisibleSlice;
+  mappingArtifacts: MappingArtifact[];
 }
 
 export interface WorkspaceMockState {
@@ -254,7 +309,7 @@ export interface WorkspaceMockState {
   reservationAudit: ReservationAuditSnapshot;
   reservationAuditLoading: boolean;
   searchQuery: string;
-  searchResults: SearchResult[];
+  searchResults: SearchHit[];
   processModules: ProcessModule[];
   providerCards: ProviderCapabilityCard[];
   jobStatusCards: JobStatusCard[];

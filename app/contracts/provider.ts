@@ -76,6 +76,8 @@ export interface FetchSheetAnchorSummary {
   hasScanConfigNamedRange: boolean;
   hasRoomMapNamedRange: boolean;
   hasMetadataScanConfig: boolean;
+  manualAnchorUsed: boolean;
+  manualAnchorFields: string[];
 }
 
 export interface FetchSheetHintSummary {
@@ -84,6 +86,8 @@ export interface FetchSheetHintSummary {
   scanMode: string;
   manualMode: boolean;
   hasRoomTypeMap: boolean;
+  branch: string;
+  branchSectionEvidence: string[];
 }
 
 export interface FetchSheetValidationSummary {
@@ -97,6 +101,19 @@ export interface FetchSheetValidationSummary {
   hasInsufficientRows: boolean;
   providerValueRawCount: number;
   providerValueParsedCount: number;
+  providerRow: number | null;
+  providerValueRow: number | null;
+  providerRowRole: "none" | "aggregate-only" | "aggregate+typed-slot";
+  providerValueSourceKind: "none" | "provider-row" | "typed-row";
+  providerValueSourceReason: string;
+  typedSlotRows: {
+    urban: number | null;
+    doubleTwin: number | null;
+    grand: number | null;
+  };
+  typedSlotComplete: boolean;
+  typedSlotDuplicate: boolean;
+  physicalOrderVariant: boolean;
 }
 
 export interface FetchSheetCoverageSummary {
@@ -135,10 +152,191 @@ export interface BindingDecisionSheetRef {
   timezone: string | null;
 }
 
+export interface SectionRef {
+  spreadsheetId: string;
+  sheetName: string;
+  sheetId: string | null;
+  sectionKey: string;
+  state: "active" | "preopen";
+  titleRow: number | null;
+  headerRow: number | null;
+  roomStartRow: number | null;
+  inventoryStartRow: number | null;
+}
+
+export interface AnchorEvidence {
+  why: string;
+  competingCandidates: string[];
+  signals: string[];
+}
+
+export interface MappingAnchor {
+  anchorId: string;
+  kind: "dateRow" | "roomStartRow" | "inventorySearchStartRow" | "stationInventoryRow" | "naverInventoryRow";
+  source: "manual" | "scan" | "metadata" | "namedRange";
+  row: number | null;
+  confidence: number;
+  evidence: AnchorEvidence;
+}
+
+export interface MappingTermBinding {
+  anchorId: string;
+  termId: string;
+  confidence: number;
+  method: "rule" | "manual" | "embedding";
+  decidedAt: string;
+  decisionKey?: string | null;
+  rawHeader?: string | null;
+}
+
+export interface MappingUnresolvedBinding {
+  anchorId: string;
+  rawHeader: string;
+  sampleValues: string[];
+  candidateTerms: string[];
+  reason: string;
+  status: "open" | "reviewed" | "resolved";
+}
+
+export interface ProviderValueSource {
+  providerKey: string;
+  providerRow: number | null;
+  providerValueRow: number | null;
+  providerRowRole: "none" | "aggregate-only" | "aggregate+typed-slot";
+  sourceKind: "none" | "provider-row" | "typed-row";
+  sourceReason: string;
+  typedSlotRows: {
+    urban: number | null;
+    doubleTwin: number | null;
+    grand: number | null;
+  };
+  typedSlotComplete: boolean;
+  typedSlotDuplicate: boolean;
+}
+
+export interface StructuralVariant {
+  kind: "physicalOrderVariant" | "manualAnchorUsed" | "branchSectionEvidence";
+  value: boolean | string | number | null;
+  detail: string;
+}
+
+export interface MappingArtifact {
+  runId: string | null;
+  section: SectionRef;
+  anchors: MappingAnchor[];
+  bindings: MappingTermBinding[];
+  unresolved: MappingUnresolvedBinding[];
+  providerValueSource: ProviderValueSource;
+  structuralSummary: StructuralVariant[];
+  validationSummary: FetchSheetValidationSummary;
+}
+
+export type SearchDocumentKind =
+  | "inventory-row"
+  | "audit-row"
+  | "unresolved"
+  | "artifact-line"
+  | "evidence"
+  | "ops"
+  | "validation"
+  | "log";
+
+export interface SearchDocument {
+  docId: string;
+  runId: string;
+  kind: SearchDocumentKind;
+  sourceSystem: string;
+  sourceLineIndex: number | null;
+  rawText: string;
+  canonicalFields: string[];
+  candidateBasis: string[];
+  signals: string[];
+  tags: string[];
+  jumpTarget: {
+    runId: string;
+    task: "inventory-compare" | "reservation-audit" | "settings";
+    panel?: "evidence" | "ops" | "validation" | "logs";
+    rowId?: string | null;
+    sectionKey?: string | null;
+    lineIndex?: number | null;
+  };
+}
+
+export interface SearchHit {
+  docId: string;
+  kind: SearchDocumentKind;
+  score: number;
+  matchReason: string;
+  excerpt: string;
+  jumpTarget: SearchDocument["jumpTarget"];
+}
+
+export interface WorkspaceSearchInventoryRow {
+  id: string;
+  date: string;
+  roomType: string;
+  channel: string;
+  siteRaw: string;
+  sheetRaw: string;
+  reason: string;
+  action: string;
+}
+
+export interface WorkspaceSearchReservationRow {
+  id: string;
+  reservationNo: string;
+  guestName: string;
+  channel: string;
+  checkin: string;
+  checkout: string;
+  status: string;
+  auditStatus: string;
+  reason: string;
+  action: string;
+}
+
+export interface WorkspaceSearchIndexInput {
+  runId: string;
+  branch: string;
+  inventoryRows: WorkspaceSearchInventoryRow[];
+  reservationRows: WorkspaceSearchReservationRow[];
+  evidenceLines: string[];
+  opsLines: string[];
+  validationLines: string[];
+  logs: string[];
+  mappingArtifacts: MappingArtifact[];
+  artifactLines: string[];
+}
+
+export interface IndexWorkspaceSearchRequest {
+  type: "search.indexWorkspace";
+  payload: WorkspaceSearchIndexInput;
+}
+
+export interface IndexWorkspaceSearchResponse {
+  ok: true;
+  runId: string;
+  documentCount: number;
+}
+
+export interface QueryWorkspaceSearchRequest {
+  type: "search.queryWorkspace";
+  runId: string;
+  query: string;
+  limit?: number;
+}
+
+export interface QueryWorkspaceSearchResponse {
+  ok: true;
+  runId: string;
+  hits: SearchHit[];
+}
+
 export interface SavedBindingDecision {
   decisionKey: string;
   branch: string;
   sheetRef: BindingDecisionSheetRef;
+  sectionKey: string | null;
   anchorId: string;
   rawHeader: string;
   termId: string;
@@ -150,6 +348,7 @@ export interface SavedBindingDecision {
 export interface SaveBindingDecisionInput {
   branch: string;
   sheetRef: BindingDecisionSheetRef;
+  sectionKey?: string | null;
   anchorId: string;
   rawHeader: string;
   termId: string;
@@ -186,6 +385,7 @@ export interface FetchSheetSnapshotPayload {
   runId: string | null;
   summary: FetchSheetSnapshotSummary | null;
   visibleSlice: SheetArtifactVisibleSlice;
+  mappingArtifacts: MappingArtifact[];
 }
 
 export interface FetchSheetSnapshotResponse {

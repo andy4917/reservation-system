@@ -28,6 +28,8 @@ import { getSheetArtifactVisibleSlice, storeSheetRunArtifact } from "./runArtifa
 import { fetchSheetSnapshot } from "./sheetRuntime.js";
 import { fetchProviderRowsLive, getProviderRuntimeDiagnostics } from "./providerRuntime.js";
 import { captureWingsSession, openWingsLoginWindow } from "./wingsSession.js";
+import { buildGeneratedBindingDraftFromSnapshot } from "../services/bindingArtifacts.js";
+import { indexWorkspaceSearch, queryWorkspaceSearch } from "./searchRuntime.js";
 
 function normalizeProviderType(value: string | undefined): ProviderType | null {
   if (value === "naver-partner" || value === "admin-station" || value === "wings-pms") {
@@ -133,23 +135,33 @@ export function registerAppIpc() {
 
   ipcMain.handle("desktop:fetch-sheet-snapshot", async (_event, request: FetchSheetSnapshotRequest) => {
     const result = await fetchSheetSnapshot(request.query);
+    const bindingDraft = buildGeneratedBindingDraftFromSnapshot(
+      result.snapshot,
+      result.summary,
+      typeof request?.query?.branch === "string" ? request.query.branch : ""
+    );
     const artifact = storeSheetRunArtifact({
       source: result.source,
       error: typeof result.error === "string" ? result.error : "",
       summary: result.summary,
-      snapshot: result.snapshot
+      snapshot: result.snapshot,
+      mappingArtifacts: bindingDraft.mappingArtifacts
     });
     return {
       ok: true,
       payload: {
         runId: artifact.runId,
         summary: artifact.summary,
-        visibleSlice: getSheetArtifactVisibleSlice(artifact.runId)
+        visibleSlice: getSheetArtifactVisibleSlice(artifact.runId),
+        mappingArtifacts: artifact.mappingArtifacts
       },
       source: result.source,
       error: typeof result.error === "string" ? result.error : ""
     };
   });
+
+  ipcMain.handle("desktop:index-workspace-search", async (_event, request) => indexWorkspaceSearch(request));
+  ipcMain.handle("desktop:query-workspace-search", async (_event, request) => queryWorkspaceSearch(request));
 
   ipcMain.handle("desktop:fetch-provider-rows", async (_event, request: FetchProviderRowsRequest) => {
     if (request.provider === "naver-partner" || request.provider === "admin-station") {

@@ -10,10 +10,14 @@ import type {
   FetchSheetSnapshotResponse,
   FetchProviderRowsRequest,
   FetchProviderRowsResponse,
+  IndexWorkspaceSearchRequest,
+  IndexWorkspaceSearchResponse,
   LoadBindingDecisionsRequest,
   LoadBindingDecisionsResponse,
   LoadManualScanAnchorsRequest,
   LoadManualScanAnchorsResponse,
+  QueryWorkspaceSearchRequest,
+  QueryWorkspaceSearchResponse,
   SaveManualScanAnchorsRequest,
   SaveManualScanAnchorsResponse,
   SavedManualScanAnchor,
@@ -58,14 +62,18 @@ function createFallbackSheetSummary(
       metadataCount: 0,
       hasScanConfigNamedRange: false,
       hasRoomMapNamedRange: false,
-      hasMetadataScanConfig: false
+      hasMetadataScanConfig: false,
+      manualAnchorUsed: false,
+      manualAnchorFields: []
     },
     hintSummary: {
       fingerprint: "",
       roomMapCount: 0,
       scanMode: "unknown",
       manualMode: false,
-      hasRoomTypeMap: false
+      hasRoomTypeMap: false,
+      branch: "",
+      branchSectionEvidence: []
     },
     validationSummary: {
       providerKey: "",
@@ -77,7 +85,20 @@ function createFallbackSheetSummary(
       hasPartitionMismatch: false,
       hasInsufficientRows: false,
       providerValueRawCount: 0,
-      providerValueParsedCount: 0
+      providerValueParsedCount: 0,
+      providerRow: null,
+      providerValueRow: null,
+      providerRowRole: "none",
+      providerValueSourceKind: "none",
+      providerValueSourceReason: "",
+      typedSlotRows: {
+        urban: null,
+        doubleTwin: null,
+        grand: null
+      },
+      typedSlotComplete: false,
+      typedSlotDuplicate: false,
+      physicalOrderVariant: false
     },
     coverage: {
       dateCount: 0,
@@ -124,6 +145,8 @@ declare global {
       saveManualScanAnchor: (request: SaveManualScanAnchorsRequest) => Promise<SaveManualScanAnchorsResponse>;
       deleteManualScanAnchor: (request: DeleteManualScanAnchorsRequest) => Promise<DeleteManualScanAnchorsResponse>;
       fetchSheetSnapshot: (request: FetchSheetSnapshotRequest) => Promise<FetchSheetSnapshotResponse>;
+      indexWorkspaceSearch: (request: IndexWorkspaceSearchRequest) => Promise<IndexWorkspaceSearchResponse>;
+      queryWorkspaceSearch: (request: QueryWorkspaceSearchRequest) => Promise<QueryWorkspaceSearchResponse>;
       fetchProviderRows: (
         request: FetchProviderRowsRequest
       ) => Promise<FetchProviderRowsResponse<ProviderInventoryCompareRow>>;
@@ -221,6 +244,7 @@ export async function fetchSheetSnapshot(
     payload: {
       runId: null,
       summary,
+      mappingArtifacts: [],
       visibleSlice: createFallbackVisibleSlice([
         `시트 ${summary.startDate}..${summary.endDate}`,
         "mode=unavailable | failure=access",
@@ -229,6 +253,32 @@ export async function fetchSheetSnapshot(
     },
     source: "bridge-unavailable",
     error: "Sheet runtime unavailable"
+  };
+}
+
+export async function indexWorkspaceSearch(
+  request: IndexWorkspaceSearchRequest
+): Promise<IndexWorkspaceSearchResponse> {
+  if (window.desktopBridge?.indexWorkspaceSearch) {
+    return window.desktopBridge.indexWorkspaceSearch(request);
+  }
+  return {
+    ok: true,
+    runId: request.payload.runId,
+    documentCount: 0
+  };
+}
+
+export async function queryWorkspaceSearch(
+  request: QueryWorkspaceSearchRequest
+): Promise<QueryWorkspaceSearchResponse> {
+  if (window.desktopBridge?.queryWorkspaceSearch) {
+    return window.desktopBridge.queryWorkspaceSearch(request);
+  }
+  return {
+    ok: true,
+    runId: request.runId,
+    hits: []
   };
 }
 

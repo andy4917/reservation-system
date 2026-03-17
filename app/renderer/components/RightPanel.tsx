@@ -45,9 +45,9 @@ export function RightPanel() {
           <div className="search-result-group">
             {searchResults.length > 0 ? (
               searchResults.map((result) => (
-                <article key={result.id} className="search-result-card">
-                  <strong>{result.title}</strong>
-                  <span>{result.kind}</span>
+                <article key={result.docId} className="search-result-card">
+                  <strong>{result.kind}</strong>
+                  <span>{result.matchReason}</span>
                   <p>{result.excerpt}</p>
                 </article>
               ))

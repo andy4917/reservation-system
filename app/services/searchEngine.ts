@@ -1,99 +1,47 @@
-import type { InventoryCompareRow, ReservationAuditRow, SearchResult, WorkspaceMockState } from "../renderer/types";
+import type { WorkspaceSearchIndexInput } from "../contracts/index.js";
+import type { WorkspaceMockState } from "../renderer/types";
 
-function normalizeText(value: unknown) {
-  return String(value ?? "").trim().toLowerCase();
+const MAX_LINE_DOCS = 80;
+const MAX_ARTIFACT_LINE_DOCS = 120;
+
+function sliceBoundedLines(lines: string[], limit: number) {
+  return Array.isArray(lines) ? lines.slice(0, limit) : [];
 }
 
-function matchesQuery(query: string, values: unknown[]) {
-  const normalized = normalizeText(query);
-  if (!normalized) return false;
-  return values.some((value) => normalizeText(value).includes(normalized));
-}
+export function buildWorkspaceSearchIndexInput(state: WorkspaceMockState): WorkspaceSearchIndexInput | null {
+  const runId = String(state.sheetRead?.selectedRunId || "").trim();
+  if (!runId) return null;
 
-function buildInventoryRowResult(row: InventoryCompareRow): SearchResult {
   return {
-    id: `inventory:${row.id}`,
-    kind: "inventory-row",
-    title: `${row.date} ${row.roomType} ${row.channel}`,
-    excerpt: `${row.siteRaw} vs ${row.sheetRaw} | ${row.reason}`
+    runId,
+    branch: state.selectedBranch,
+    inventoryRows: (state.inventoryCompare?.rows || []).map((row) => ({
+      id: row.id,
+      date: row.date,
+      roomType: row.roomType,
+      channel: row.channel,
+      siteRaw: row.siteRaw,
+      sheetRaw: row.sheetRaw,
+      reason: row.reason,
+      action: row.action
+    })),
+    reservationRows: (state.reservationAudit?.rows || []).map((row) => ({
+      id: row.id,
+      reservationNo: row.reservationNo,
+      guestName: row.guestName,
+      channel: row.channel,
+      checkin: row.checkin,
+      checkout: row.checkout,
+      status: row.status,
+      auditStatus: row.auditStatus,
+      reason: row.reason,
+      action: row.action
+    })),
+    evidenceLines: sliceBoundedLines(state.evidenceLines || [], MAX_LINE_DOCS),
+    opsLines: sliceBoundedLines(state.opsLines || [], MAX_LINE_DOCS),
+    validationLines: sliceBoundedLines(state.validationLines || [], MAX_LINE_DOCS),
+    logs: sliceBoundedLines(state.logs || [], MAX_LINE_DOCS),
+    mappingArtifacts: Array.isArray(state.sheetRead?.mappingArtifacts) ? state.sheetRead.mappingArtifacts : [],
+    artifactLines: sliceBoundedLines(state.sheetRead?.visibleSlice?.lines || [], MAX_ARTIFACT_LINE_DOCS)
   };
-}
-
-function buildReservationAuditRowResult(row: ReservationAuditRow): SearchResult {
-  return {
-    id: `audit:${row.id}`,
-    kind: "audit-row",
-    title: `${row.reservationNo} ${row.guestName} ${row.channel}`,
-    excerpt: `${row.checkin} -> ${row.checkout} | ${row.reason}`
-  };
-}
-
-function buildLineResult(kind: SearchResult["kind"], line: string, index: number): SearchResult {
-  return {
-    id: `${kind}:${index}:${line}`,
-    kind,
-    title: kind.toUpperCase(),
-    excerpt: line
-  };
-}
-
-export function runWorkspaceSearch(state: WorkspaceMockState, query: string): SearchResult[] {
-  const normalized = normalizeText(query);
-  if (!normalized) return [];
-
-  const results: SearchResult[] = [];
-  const inventoryRows = state.inventoryCompare?.rows ?? [];
-  const reservationAuditRows = state.reservationAudit?.rows ?? [];
-  const evidenceLines = state.evidenceLines ?? [];
-  const opsLines = state.opsLines ?? [];
-  const validationLines = state.validationLines ?? [];
-  const logs = state.logs ?? [];
-
-  inventoryRows.forEach((row) => {
-    if (
-      matchesQuery(normalized, [
-        row.date,
-        row.roomType,
-        row.channel,
-        row.siteRaw,
-        row.sheetRaw,
-        row.reason,
-        row.action
-      ])
-    ) {
-      results.push(buildInventoryRowResult(row));
-    }
-  });
-  reservationAuditRows.forEach((row) => {
-    if (
-      matchesQuery(normalized, [
-        row.reservationNo,
-        row.guestName,
-        row.channel,
-        row.checkin,
-        row.checkout,
-        row.status,
-        row.auditStatus,
-        row.reason,
-        row.action
-      ])
-    ) {
-      results.push(buildReservationAuditRowResult(row));
-    }
-  });
-
-  evidenceLines.forEach((line, index) => {
-    if (matchesQuery(normalized, [line])) results.push(buildLineResult("evidence", line, index));
-  });
-  opsLines.forEach((line, index) => {
-    if (matchesQuery(normalized, [line])) results.push(buildLineResult("ops", line, index));
-  });
-  validationLines.forEach((line, index) => {
-    if (matchesQuery(normalized, [line])) results.push(buildLineResult("validation", line, index));
-  });
-  logs.forEach((line, index) => {
-    if (matchesQuery(normalized, [line])) results.push(buildLineResult("log", line, index));
-  });
-
-  return results.slice(0, 12);
 }

@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   saveManualScanAnchor: (request: unknown) => ipcRenderer.invoke("desktop:save-manual-scan-anchor", request),
   deleteManualScanAnchor: (request: unknown) => ipcRenderer.invoke("desktop:delete-manual-scan-anchor", request),
   fetchSheetSnapshot: (request: unknown) => ipcRenderer.invoke("desktop:fetch-sheet-snapshot", request),
+  indexWorkspaceSearch: (request: unknown) => ipcRenderer.invoke("desktop:index-workspace-search", request),
+  queryWorkspaceSearch: (request: unknown) => ipcRenderer.invoke("desktop:query-workspace-search", request),
   fetchProviderRows: (request: unknown) => ipcRenderer.invoke("desktop:fetch-provider-rows", request),
   fetchProviderReservations: (request: unknown) => ipcRenderer.invoke("desktop:fetch-provider-reservations", request),
   fetchWingsLiveContract: (request: unknown) => ipcRenderer.invoke("desktop:fetch-wings-live-contract", request),

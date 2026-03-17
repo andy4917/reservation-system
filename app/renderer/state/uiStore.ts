@@ -12,7 +12,9 @@ import {
   saveManualScanAnchor,
   getBridgeContext,
   getBridgeRuntime,
+  indexWorkspaceSearch,
   openWingsLoginWindow,
+  queryWorkspaceSearch,
   getBridgeSummary
 } from "../../services/bridgeClient";
 import { buildGeneratedBindingDraft, buildSheetRef, mergeBindingDraftWithSavedDecisions } from "../../services/bindingArtifacts";
@@ -21,7 +23,7 @@ import { buildJobStatusCards } from "../../services/jobRunner";
 import { buildProcessModules } from "../../services/processModules";
 import { getProviderCapabilityCards } from "../../services/providerRegistry";
 import { buildReservationAuditSnapshot } from "../../services/reservationAudit";
-import { runWorkspaceSearch } from "../../services/searchEngine";
+import { buildWorkspaceSearchIndexInput } from "../../services/searchEngine";
 import { saveAuthBundleSettingsSnapshot } from "../../services/settingsStorage";
 import { resolveBridgeIssue } from "../../services/bridgeStatus";
 import type {
@@ -48,7 +50,7 @@ function createInitialWorkspaceState(): WorkspaceMockState {
   const today = new Date();
   const inventoryCompare = {
     title: "재고 비교",
-    supportLevel: "unavailable" as const,
+    supportLevel: "fixture-fallback" as const,
     sourceLabel: "조회 전",
     lastRunAt: new Date().toISOString(),
     rows: [],
@@ -62,7 +64,7 @@ function createInitialWorkspaceState(): WorkspaceMockState {
   };
   const reservationAudit = {
     title: "예약 점검",
-    supportLevel: "unavailable" as const,
+    supportLevel: "fixture-fallback" as const,
     sourceLabel: "조회 전",
     lastRunAt: new Date().toISOString(),
     rows: [],
@@ -76,11 +78,12 @@ function createInitialWorkspaceState(): WorkspaceMockState {
     logs: []
   };
   const sheetRead: SheetReadSnapshot = {
-    supportLevel: "unavailable",
+    supportLevel: "fixture-fallback",
     sourceLabel: "조회 전",
     lastRunAt: new Date().toISOString(),
     summary: null,
     selectedRunId: null,
+    mappingArtifacts: [],
     visibleSlice: {
       runId: null,
       offset: 0,
@@ -191,6 +194,7 @@ function projectTaskState(state: WorkspaceMockState) {
 interface UiStore extends WorkspaceMockState {
   activeRightPanelTab: RightPanelTab;
   setActiveTask: (task: AppTaskId) => void;
+  setRuntimeMode: (mode: WorkspaceMockState["runtimeMode"]) => void;
   setActiveRightPanelTab: (tab: RightPanelTab) => void;
   setSelectedBranch: (branch: BranchSelection) => void;
   setSelectedRange: (range: { startDate: string; endDate: string }) => void;
@@ -237,6 +241,27 @@ async function rebuildBindingState(sheetRead: SheetReadSnapshot, branch: BranchS
   return mergeBindingDraftWithSavedDecisions(generatedBindingDraft, savedBindingDecisions, branch);
 }
 
+function findSectionKeyForUnresolved(state: WorkspaceMockState, anchorId: string) {
+  for (const artifact of state.sheetRead.mappingArtifacts) {
+    if (artifact.unresolved.some((item) => item.anchorId === anchorId)) {
+      return artifact.section.sectionKey;
+    }
+  }
+  return null;
+}
+
+async function refreshSearchResults(runId: string | null, query: string) {
+  const normalizedQuery = String(query || "").trim();
+  if (!runId || !normalizedQuery) return [];
+  const response = await queryWorkspaceSearch({
+    type: "search.queryWorkspace",
+    runId,
+    query: normalizedQuery,
+    limit: 12
+  }).catch(() => null);
+  return response?.ok ? response.hits : [];
+}
+
 export const useUiStore = create<UiStore>((set, get) => ({
   ...createInitialWorkspaceState(),
   activeRightPanelTab: "evidence",
@@ -253,9 +278,16 @@ export const useUiStore = create<UiStore>((set, get) => ({
         logs: taskProjection.logs,
         processModules: buildProcessModules(nextState),
         jobStatusCards: buildJobStatusCards(nextState),
-        searchResults: runWorkspaceSearch({ ...nextState, ...taskProjection }, state.searchQuery)
+        searchResults: state.searchResults
       };
     }),
+  setRuntimeMode: (runtimeMode) =>
+    set((state) => ({
+      runtimeMode,
+      hasPendingQueryChanges: true,
+      activeRunContext: null,
+      logs: [...state.logs, `runtime mode changed: ${runtimeMode}`]
+    })),
   setActiveRightPanelTab: (tab) => set({ activeRightPanelTab: tab }),
   setSelectedBranch: (branch) => set({ selectedBranch: branch, hasPendingQueryChanges: true }),
   setSelectedRange: (range) => {
@@ -264,11 +296,15 @@ export const useUiStore = create<UiStore>((set, get) => ({
     if (!startDate || !endDate || startDate > endDate) return;
     set({ selectedRange: { startDate, endDate }, hasPendingQueryChanges: true });
   },
-  setSearchQuery: (query) =>
-    set((state) => ({
-      searchQuery: query,
-      searchResults: runWorkspaceSearch({ ...state, searchQuery: query }, query)
-    })),
+  setSearchQuery: (query) => {
+    const nextQuery = String(query || "");
+    set({ searchQuery: nextQuery });
+    const currentRunId = get().sheetRead.selectedRunId;
+    void refreshSearchResults(currentRunId, nextQuery).then((hits) => {
+      if (get().searchQuery !== nextQuery) return;
+      set({ searchResults: hits });
+    });
+  },
   openWingsLogin: async () => {
     const result = await openWingsLoginWindow().catch(() => null);
     set((state) => ({
@@ -362,6 +398,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
           sheetId: sheetRef.sheetId,
           timezone: sheetRef.timezone
         },
+        sectionKey: findSectionKeyForUnresolved(currentState, unresolved.anchorId),
         anchorId: unresolved.anchorId,
         rawHeader: unresolved.rawHeader,
         termId,
@@ -470,6 +507,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
       providerRowResponses.some((response) => Boolean(response?.source && response.source !== "unsupported-provider"));
 
     const snapshot = buildInventoryCompareSnapshot({
+      mode: currentState.runtimeMode,
       sourceLabel: filteredLiveRows.length > 0 ? "실시간 데이터" : liveContextAvailable ? "연결 확인 중" : "조회 전",
       liveRows: filteredLiveRows,
       liveProvider: "naver-partner",
@@ -478,6 +516,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
       branch: selectedBranch
     });
     const reservationAudit = buildReservationAuditSnapshot({
+      mode: currentState.runtimeMode,
       sourceLabel: filteredLiveReservationRows.length > 0 ? "예약 데이터" : liveContextAvailable ? "연결 확인 중" : "조회 전",
       liveReservationRows: filteredLiveReservationRows,
       bridgeSummary: bridgeSummary || currentState.bridgeSummary,
@@ -490,6 +529,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
     const sheetPayload = liveSheetSnapshot?.payload || {
       runId: null,
       summary: null,
+      mappingArtifacts: [],
       visibleSlice: {
         runId: null,
         offset: 0,
@@ -505,7 +545,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
           ? "read-live"
           : liveContextAvailable
             ? "partial-live"
-            : "unavailable",
+            : "fixture-fallback",
       sourceLabel:
         sheetSummary && liveSheetSnapshot?.source === "sheet-api"
           ? "실시간 시트 데이터"
@@ -519,6 +559,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
       lastRunAt: new Date().toISOString(),
       summary: sheetSummary,
       selectedRunId: sheetPayload.runId,
+      mappingArtifacts: Array.isArray(sheetPayload.mappingArtifacts) ? sheetPayload.mappingArtifacts : [],
       visibleSlice: sheetPayload.visibleSlice
     };
     const loadedManualScanAnchor =
@@ -599,6 +640,19 @@ export const useUiStore = create<UiStore>((set, get) => ({
     if (nextWorkspaceState.authBundleSettingsSnapshot) {
       saveAuthBundleSettingsSnapshot(nextWorkspaceState.authBundleSettingsSnapshot);
     }
+    const searchInput = buildWorkspaceSearchIndexInput({
+      ...nextWorkspaceState,
+      ...projectedState
+    });
+    if (searchInput) {
+      await indexWorkspaceSearch({
+        type: "search.indexWorkspace",
+        payload: searchInput
+      }).catch(() => null);
+    }
+    const nextSearchResults = searchInput
+      ? await refreshSearchResults(searchInput.runId, currentState.searchQuery)
+      : [];
     set({
       inventoryCompareLoading: false,
       reservationAuditLoading: false,
@@ -623,7 +677,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
       providerCards: getProviderCapabilityCards(),
       processModules: buildProcessModules(nextWorkspaceState),
       jobStatusCards: buildJobStatusCards(nextWorkspaceState),
-      searchResults: runWorkspaceSearch({ ...nextWorkspaceState, ...projectedState }, currentState.searchQuery)
+      searchResults: nextSearchResults
     });
   }
 }));

@@ -22,10 +22,27 @@ async function main() {
     evidenceLines: ["Mismatch evidence: Urban 03-13 site=4 / sheet=6"],
     opsLines: ["Bridge contract path: bridge.getContext -> provider.fetchRows -> provider.domSnapshot"],
     validationLines: ["Validation gate: mismatch rows remain, apply blocked"],
+    selectedBranch: "GANGNAM",
+    activeRunContext: null,
     inventoryCompareLoading: false,
+    reservationAuditLoading: false,
     searchQuery: "",
     searchResults: [],
     processModules: [],
+    providerCards: [],
+    jobStatusCards: [],
+    bridgeSummary: {
+      authSummary: null,
+      infoSummary: null,
+      preview: null
+    },
+    authBundleSettingsSnapshot: null,
+    hasPendingQueryChanges: false,
+    manualScanAnchor: null,
+    manualScanAnchorDraft: {},
+    sheetTerms: [],
+    termBindings: [],
+    unresolvedBindings: [],
     inventoryCompare: {
       title: "Inventory Compare",
       supportLevel: "read-live",
@@ -52,12 +69,42 @@ async function main() {
       opsLines: [],
       validationLines: [],
       logs: []
+    },
+    sheetRead: {
+      selectedRunId: "sheet-run:test",
+      supportLevel: "read-live",
+      sourceLabel: "실시간 시트 데이터",
+      lastRunAt: "2026-03-10T08:00:00.000Z",
+      summary: null,
+      mappingArtifacts: [],
+      visibleSlice: {
+        runId: "sheet-run:test",
+        offset: 0,
+        limit: 12,
+        total: 1,
+        lines: ["section=GANGNAM | state=active | unresolved=0"]
+      }
+    },
+    reservationAudit: {
+      title: "Reservation Audit",
+      supportLevel: "read-live",
+      sourceLabel: "Bridge live rows",
+      lastRunAt: "2026-03-10T08:00:00.000Z",
+      rows: [],
+      anomalyCount: 0,
+      reviewCount: 0,
+      activeCount: 0,
+      canceledCount: 0,
+      evidenceLines: [],
+      opsLines: [],
+      validationLines: [],
+      logs: []
     }
   };
 
-  const results = searchEngine.runWorkspaceSearch(state, "urban");
-  assert.equal(results.length > 0, true);
-  assert.equal(results[0].kind, "inventory-row");
+  const searchInput = searchEngine.buildWorkspaceSearchIndexInput(state);
+  assert.equal(searchInput?.runId, "sheet-run:test");
+  assert.equal(searchInput?.inventoryRows[0].roomType, "Urban");
 
   const modules = processModules.buildProcessModules(state);
   assert.equal(modules.some((item) => item.id === "search-engine" && item.owner === "app"), true);
