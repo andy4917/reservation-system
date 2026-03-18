@@ -7,17 +7,17 @@
   const ns = (App.engine.rules = App.engine.rules || {});
   const C = App.constants || {};
   const {
-    FIXED_NAVER_BUSINESS_ID,
-    FIXED_STATION_BRANCH_ID,
+    POLICY_NAVER_BUSINESS_ID,
+    POLICY_STATION_BRANCH_ID,
     PREF_KEY,
     SYNC_CFG_KEY,
     SYNC_APPLY_KEY,
-    SYNC_FEATURE_KEY_LEGACY,
-    DEFAULT_SPREADSHEET_ID,
-    DEFAULT_SHEET_NAME,
-    DEFAULT_START_ROW,
-    DEFAULT_YEAR,
-    DEFAULT_GOOGLE_CLIENT_ID,
+    SYNC_FEATURE_KEY_COMPAT,
+    POLICY_SPREADSHEET_ID,
+    POLICY_SHEET_NAME,
+    POLICY_START_ROW,
+    POLICY_SHEET_YEAR,
+    POLICY_GOOGLE_CLIENT_ID,
     DEFAULT_SYNC_SLEEP_MS,
     SHEET_GRID_FAST_ROW_LIMIT,
     NAVER_SCHEDULE_FETCH_CONCURRENCY,
@@ -335,10 +335,11 @@
     let effectiveMax = fixedMax;
     let stationVacQualified = false;
     if (provider === "NAVER" && Number.isInteger(fixedMax)) {
-      const vacCap = safeInt(stat.vacancy ?? stat.vac);
-      if (Number.isInteger(vacCap) && vacCap >= 0) {
-        effectiveMax = Math.min(fixedMax, vacCap);
-      }
+      // NAVER row values are normalized against the provider fixed maximum
+      // (weekday 4 / Fri-Sat 3), and "닫음" is canonicalized to that closed cap.
+      // Do not shrink total to local vacancy here, or fully closed days become 0/0
+      // and no longer match the raw provider row.
+      effectiveMax = fixedMax;
     } else if (provider === "STATION" && Number.isInteger(fixedMax)) {
       const vacCap = safeInt(stat.vacancy ?? stat.vac);
       const sourceMaximum = safeInt(currentInv?.maximum);

@@ -49,6 +49,11 @@ async function main() {
           hasTypeMismatch: false,
           hasPartitionMismatch: false,
           hasInsufficientRows: false,
+          providerRow: 10,
+          providerValueRow: 11,
+          providerRowRole: "aggregate-only",
+          providerValueSourceKind: "typed-row",
+          providerValueSourceReason: "fallback_to_better_data_row",
           providerValueRawCount: 0,
           providerValueParsedCount: 0,
           issues: [
@@ -58,6 +63,17 @@ async function main() {
               message: "provider row missing"
             }
           ]
+        },
+        validationStructuralSummary: {
+          typedSlotRows: {
+            urban: 12,
+            doubleTwin: null,
+            grand: null
+          },
+          typedSlotComplete: false,
+          typedSlotDuplicate: false,
+          physicalOrderVariant: false,
+          branchSectionEvidence: ["branch:GANGNAM", "dateRow:4"]
         }
       }
     },
@@ -80,9 +96,15 @@ async function main() {
   assert.deepEqual(summary.retryTrace, ["credential-refresh", "assemble-full-range"]);
   assert.equal(summary.anchorSummary.metadataCount, 0);
   assert.equal(summary.anchorSummary.namedRangeCount, 0);
+  assert.equal(summary.anchorSummary.manualAnchorUsed, false);
+  assert.equal(summary.hintSummary.branchSectionEvidence.includes("branch:GANGNAM"), true);
   assert.equal(summary.coverage.dateCount, 1);
   assert.equal(summary.validationSummary.issueCodes.includes("PROVIDER_VALUE_ROW_MISSING"), true);
   assert.equal(summary.validationSummary.warningCount, 1);
+  assert.equal(summary.validationSummary.providerRow, 10);
+  assert.equal(summary.validationSummary.providerValueRow, 11);
+  assert.equal(summary.validationSummary.providerValueSourceKind, "typed-row");
+  assert.equal(summary.validationSummary.typedSlotRows.urban, 12);
   assert.equal(summary.failureDetail, "");
 
   console.log("regression_app_sheet_runtime_summary_builder: OK");

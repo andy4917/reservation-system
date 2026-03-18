@@ -11,8 +11,10 @@
     "app:build": "npm run app:build:renderer && npm run app:build:main",
     "app:preview": "vite preview --config app/vite.config.ts",
     "app:electron": "npm run app:build:main && electron .",
-    "app:check": "tsc -p tsconfig.json --noEmit",
+    "app:hygiene:check": "python3 scripts/check_contract_hygiene.py --cwd .",
+    "app:check": "tsc -p tsconfig.json --noEmit && npm run app:hygiene:check",
     "app:verify:sheet-live": "npm run app:build:main && node scripts/live_sheet_verify.mjs",
+    "app:verify:live-read": "npm run app:build:main && node scripts/live_read_verify.mjs",
     "extension:contracts:check": "tsc -p tsconfig.extension-contracts.json --noEmit",
     "extension:package": "./tasks/build_extension_unpacked.sh"
   },

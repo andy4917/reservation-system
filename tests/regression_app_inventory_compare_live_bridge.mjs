@@ -67,7 +67,7 @@ async function main() {
   assert.equal(snapshot.matchedCount, 1);
   assert.equal(snapshot.warningCount, 0);
   assert.equal(snapshot.rows.length, 2);
-  assert.match(snapshot.validationLines[1], /live bridge rows loaded/i);
+  assert.match(snapshot.validationLines[1], /live rows loaded for read-only compare/i);
   assert.equal(snapshot.rows[0].branch, "COEX");
   assert.equal(snapshot.rows[1].status, "match");
   assert.equal(snapshot.rows[1].diff, "0");
@@ -81,16 +81,21 @@ async function main() {
     liveRows: []
   });
   assert.equal(partial.supportLevel, "partial-live");
+  assert.equal(partial.rows.length, 0);
+  assert.equal(partial.sourceLabel, "partial-live");
+  assert.match(partial.validationLines[1], /partial-live context available/i);
 
   const fallback = inventoryCompare.buildInventoryCompareSnapshot({
     mode: "live",
-    sourceLabel: "fixture-fallback",
+    sourceLabel: "offline-preview",
     liveProvider: "naver-partner",
     liveContextAvailable: false,
     usedDomFallback: false,
     liveRows: []
   });
-  assert.equal(fallback.supportLevel, "fixture-fallback");
+  assert.equal(fallback.supportLevel, "offline-preview");
+  assert.equal(fallback.rows.length, 0);
+  assert.match(fallback.validationLines[1], /offline preview active/i);
 
   console.log("regression_app_inventory_compare_live_bridge: OK");
 }

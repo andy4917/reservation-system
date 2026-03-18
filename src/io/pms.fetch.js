@@ -8,18 +8,18 @@
   const ns = (App.io.pmsFetch = App.io.pmsFetch || {});
   const C = App.constants || {};
   const {
-    FIXED_NAVER_BUSINESS_ID,
-    FIXED_STATION_BRANCH_ID,
+    POLICY_NAVER_BUSINESS_ID,
+    POLICY_STATION_BRANCH_ID,
     PMS_ORIGINS,
     PREF_KEY,
     SYNC_CFG_KEY,
     SYNC_APPLY_KEY,
-    SYNC_FEATURE_KEY_LEGACY,
-    DEFAULT_SPREADSHEET_ID,
-    DEFAULT_SHEET_NAME,
-    DEFAULT_START_ROW,
-    DEFAULT_YEAR,
-    DEFAULT_GOOGLE_CLIENT_ID,
+    SYNC_FEATURE_KEY_COMPAT,
+    POLICY_SPREADSHEET_ID,
+    POLICY_SHEET_NAME,
+    POLICY_START_ROW,
+    POLICY_SHEET_YEAR,
+    POLICY_GOOGLE_CLIENT_ID,
     DEFAULT_SYNC_SLEEP_MS,
     SHEET_GRID_FAST_ROW_LIMIT,
     NAVER_SCHEDULE_FETCH_CONCURRENCY,
@@ -2547,7 +2547,7 @@
     ];
     const syncFallback = toPositiveNumericId(App.runtime?.syncConfigCache?.stationBranchId || "");
     const explicitFallback = toPositiveNumericId(fallback || "");
-    const defaultFallback = toPositiveNumericId(FIXED_STATION_BRANCH_ID);
+    const defaultFallback = toPositiveNumericId(POLICY_STATION_BRANCH_ID);
     return pickFirstPositiveNumericId(matches, explicitFallback || syncFallback || defaultFallback);
   }
 
@@ -2563,7 +2563,7 @@
     ];
     const syncFallback = toPositiveNumericId(App.runtime?.syncConfigCache?.naverBusinessId || "");
     const explicitFallback = toPositiveNumericId(fallback || "");
-    const defaultFallback = toPositiveNumericId(FIXED_NAVER_BUSINESS_ID);
+    const defaultFallback = toPositiveNumericId(POLICY_NAVER_BUSINESS_ID);
     return pickFirstPositiveNumericId(matches, explicitFallback || syncFallback || defaultFallback);
   }
 

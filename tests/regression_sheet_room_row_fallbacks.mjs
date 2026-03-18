@@ -100,6 +100,48 @@ function main() {
     ]
   );
 
+  const conflictingMatrix = createMatrix({
+    maxRow: 5,
+    cells: [
+      { row: 1, col: 0, formattedValue: "Grand City Spa Suite 스파 8인" },
+      { row: 1, col: 1, formattedValue: "401" },
+      { row: 1, col: 2, formattedValue: "닫음" },
+      { row: 2, col: 1, formattedValue: "501" },
+      { row: 2, col: 2, formattedValue: "닫음" },
+      { row: 3, col: 0, formattedValue: "Family City Suite 6인" },
+      { row: 3, col: 1, formattedValue: "1102" },
+      { row: 3, col: 2, formattedValue: "닫음" },
+      { row: 4, col: 0, formattedValue: "Private City Suite 4인" },
+      { row: 4, col: 1, formattedValue: "1101" },
+      { row: 4, col: 2, formattedValue: "닫음" }
+    ]
+  });
+
+  const conflictingRoomRows = blockBuilder.mapSheetRoomRows(
+    conflictingMatrix,
+    [{ col: 2, dateKey: "2026-03-15" }],
+    1,
+    {
+      "401": "Urban Spa Suite 6인",
+      "501": "Urban Spa Suite 6인",
+      "1101": "Urban Spa Suite 6인",
+      "1102": "Double Twin Spa Room 4인"
+    },
+    null,
+    4
+  );
+
+  assert.deepEqual(
+    conflictingRoomRows.map((row) => ({ roomNo: row.roomNo, roomType: row.roomType })),
+    [
+      { roomNo: "401", roomType: "Grand Spa Suite 8인" },
+      { roomNo: "501", roomType: "Grand Spa Suite 8인" },
+      { roomNo: "1102", roomType: "Urban Spa Suite 6인" },
+      { roomNo: "1101", roomType: "Double Twin Spa Room 4인" }
+    ],
+    "local sheet headers must override shared ROOM_MAP when the branch reuses room numbers"
+  );
+
   console.log("regression_sheet_room_row_fallbacks: OK");
 }
 

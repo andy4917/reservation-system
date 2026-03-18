@@ -1,15 +1,22 @@
 import { create } from "zustand";
 import {
+  fetchLiveReadBundle as fetchLiveReadBundleBridge,
   fetchSheetSnapshot as fetchSheetSnapshotBridge,
   fetchProviderRows,
   fetchProviderReservations,
   captureWingsSession,
+  buildOperatorExport as buildOperatorExportBridge,
+  exportOperatorHandoff as exportOperatorHandoffBridge,
+  repeatOperatorHandoff as repeatOperatorHandoffBridge,
+  updateOperatorHandoffStatus as updateOperatorHandoffStatusBridge,
   deleteBindingDecision,
   deleteManualScanAnchor,
   loadBindingDecisions,
+  loadRecommendationTraces,
   loadManualScanAnchor,
   saveBindingDecision,
   saveManualScanAnchor,
+  saveRecommendationTrace,
   getBridgeContext,
   getBridgeRuntime,
   indexWorkspaceSearch,
@@ -17,19 +24,30 @@ import {
   queryWorkspaceSearch,
   getBridgeSummary
 } from "../../services/bridgeClient";
+import type { OperatorExportHandoffFormat, OperatorExportHandoffStatus } from "../../contracts/index.js";
 import { buildGeneratedBindingDraft, buildSheetRef, mergeBindingDraftWithSavedDecisions } from "../../services/bindingArtifacts";
 import { buildInventoryCompareSnapshot } from "../../services/inventoryCompare";
 import { buildJobStatusCards } from "../../services/jobRunner";
 import { buildProcessModules } from "../../services/processModules";
+import { buildRecommendationTraceInput, matchesRecommendationTrace } from "../../services/recommendationRuntime";
 import { getProviderCapabilityCards } from "../../services/providerRegistry";
 import { buildReservationAuditSnapshot } from "../../services/reservationAudit";
 import { buildWorkspaceSearchIndexInput } from "../../services/searchEngine";
 import { saveAuthBundleSettingsSnapshot } from "../../services/settingsStorage";
 import { resolveBridgeIssue } from "../../services/bridgeStatus";
+
+function isLiveSourceAvailable(source: unknown) {
+  const normalized = typeof source === "string" ? source.trim() : "";
+  if (!normalized) return false;
+  return !["unsupported-provider", "unavailable", "bridge-unavailable", "pms-unconfigured", "sheet-unconfigured"].includes(
+    normalized
+  );
+}
 import type {
   AppRunContext,
   AppTaskId,
   BranchSelection,
+  HandoffHistoryFilter,
   RightPanelTab,
   SheetReadSnapshot,
   SummaryMetric,
@@ -50,7 +68,7 @@ function createInitialWorkspaceState(): WorkspaceMockState {
   const today = new Date();
   const inventoryCompare = {
     title: "재고 비교",
-    supportLevel: "fixture-fallback" as const,
+    supportLevel: "offline-preview" as const,
     sourceLabel: "조회 전",
     lastRunAt: new Date().toISOString(),
     rows: [],
@@ -64,7 +82,7 @@ function createInitialWorkspaceState(): WorkspaceMockState {
   };
   const reservationAudit = {
     title: "예약 점검",
-    supportLevel: "fixture-fallback" as const,
+    supportLevel: "offline-preview" as const,
     sourceLabel: "조회 전",
     lastRunAt: new Date().toISOString(),
     rows: [],
@@ -78,7 +96,7 @@ function createInitialWorkspaceState(): WorkspaceMockState {
     logs: []
   };
   const sheetRead: SheetReadSnapshot = {
-    supportLevel: "fixture-fallback",
+    supportLevel: "offline-preview",
     sourceLabel: "조회 전",
     lastRunAt: new Date().toISOString(),
     summary: null,
@@ -102,6 +120,7 @@ function createInitialWorkspaceState(): WorkspaceMockState {
       endDate: toDateKey(addDays(today, 3))
     },
     activeRunContext: null,
+    activeFocus: null,
     bridgeStatus: {
       connected: false,
       sessionAvailable: false,
@@ -132,6 +151,9 @@ function createInitialWorkspaceState(): WorkspaceMockState {
     sheetTerms: [],
     termBindings: [],
     unresolvedBindings: [],
+    recommendationTraces: [],
+    operatorExport: null,
+    handoffHistoryFilter: "all",
     reservationAudit,
     reservationAuditLoading: false,
     searchQuery: "",
@@ -196,6 +218,7 @@ interface UiStore extends WorkspaceMockState {
   setActiveTask: (task: AppTaskId) => void;
   setRuntimeMode: (mode: WorkspaceMockState["runtimeMode"]) => void;
   setActiveRightPanelTab: (tab: RightPanelTab) => void;
+  setHandoffHistoryFilter: (filter: HandoffHistoryFilter) => void;
   setSelectedBranch: (branch: BranchSelection) => void;
   setSelectedRange: (range: { startDate: string; endDate: string }) => void;
   setSearchQuery: (query: string) => void;
@@ -205,7 +228,13 @@ interface UiStore extends WorkspaceMockState {
   saveManualScanAnchorDraft: () => Promise<void>;
   deleteManualScanAnchorDraft: () => Promise<void>;
   saveManualBindingDecision: (anchorId: string, termId: string) => Promise<void>;
+  rejectRecommendationCandidate: (anchorId: string, candidateId: string) => Promise<void>;
   deleteManualBindingDecision: (decisionKey: string) => Promise<void>;
+  refreshOperatorExport: () => Promise<void>;
+  exportOperatorHandoff: (target: "clipboard" | "file", format: OperatorExportHandoffFormat) => Promise<void>;
+  repeatOperatorHandoff: (handoffId: string, target: "clipboard" | "file") => Promise<void>;
+  setOperatorHandoffStatus: (handoffId: string, status: OperatorExportHandoffStatus) => Promise<void>;
+  jumpToSearchResult: (docId: string) => void;
   runSelectedQuery: () => Promise<void>;
   refreshWorkspaceData: () => Promise<void>;
   refreshInventoryCompare: () => Promise<void>;
@@ -250,6 +279,25 @@ function findSectionKeyForUnresolved(state: WorkspaceMockState, anchorId: string
   return null;
 }
 
+function findUnresolvedBinding(state: WorkspaceMockState, anchorId: string) {
+  return state.unresolvedBindings.find((item) => item.anchorId === anchorId) || null;
+}
+
+async function loadRecommendationState(sheetRead: SheetReadSnapshot, branch: BranchSelection) {
+  const sheetRef = buildSheetRef(sheetRead.summary, branch);
+  if (!sheetRef) return [];
+  return loadRecommendationTraces({
+    type: "recommendation.loadTraces",
+    branch,
+    sheetRef: {
+      spreadsheetId: sheetRef.spreadsheetId,
+      sheetName: sheetRef.sheetName,
+      sheetId: sheetRef.sheetId,
+      timezone: sheetRef.timezone
+    }
+  }).catch(() => []);
+}
+
 async function refreshSearchResults(runId: string | null, query: string) {
   const normalizedQuery = String(query || "").trim();
   if (!runId || !normalizedQuery) return [];
@@ -260,6 +308,33 @@ async function refreshSearchResults(runId: string | null, query: string) {
     limit: 12
   }).catch(() => null);
   return response?.ok ? response.hits : [];
+}
+
+async function loadOperatorExport(state: WorkspaceMockState) {
+  const runId = String(state.sheetRead.selectedRunId || "").trim();
+  if (!runId) return null;
+  const response = await buildOperatorExportBridge({
+    type: "operator.buildExport",
+    runId,
+    branch: state.selectedBranch
+  }).catch(() => null);
+  return response?.ok ? response.exportBundle : null;
+}
+
+async function reindexWorkspaceSearch(state: WorkspaceMockState) {
+  const projection = projectTaskState(state);
+  const searchInput = buildWorkspaceSearchIndexInput({
+    ...state,
+    ...projection
+  });
+  if (!searchInput) {
+    return [];
+  }
+  await indexWorkspaceSearch({
+    type: "search.indexWorkspace",
+    payload: searchInput
+  }).catch(() => null);
+  return refreshSearchResults(searchInput.runId, state.searchQuery);
 }
 
 export const useUiStore = create<UiStore>((set, get) => ({
@@ -289,6 +364,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
       logs: [...state.logs, `runtime mode changed: ${runtimeMode}`]
     })),
   setActiveRightPanelTab: (tab) => set({ activeRightPanelTab: tab }),
+  setHandoffHistoryFilter: (handoffHistoryFilter) => set({ handoffHistoryFilter }),
   setSelectedBranch: (branch) => set({ selectedBranch: branch, hasPendingQueryChanges: true }),
   setSelectedRange: (range) => {
     const startDate = String(range.startDate || "").trim();
@@ -380,7 +456,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   },
   saveManualBindingDecision: async (anchorId, termId) => {
     const currentState = get();
-    const unresolved = currentState.unresolvedBindings.find((item) => item.anchorId === anchorId);
+    const unresolved = findUnresolvedBinding(currentState, anchorId);
     const sheetRef = buildSheetRef(currentState.sheetRead.summary, currentState.selectedBranch);
     if (!unresolved || !sheetRef || !unresolved.candidateTerms.includes(termId)) {
       set((state) => ({
@@ -411,13 +487,77 @@ export const useUiStore = create<UiStore>((set, get) => ({
       }));
       return;
     }
+    await saveRecommendationTrace({
+      type: "recommendation.saveTrace",
+      trace: buildRecommendationTraceInput({
+        branch: currentState.selectedBranch,
+        sheetRef: {
+          spreadsheetId: sheetRef.spreadsheetId,
+          sheetName: sheetRef.sheetName,
+          sheetId: sheetRef.sheetId,
+          timezone: sheetRef.timezone
+        },
+        runId: currentState.sheetRead.selectedRunId,
+        sectionKey: findSectionKeyForUnresolved(currentState, unresolved.anchorId),
+        unresolved,
+        candidateId: termId,
+        outcome: "accepted"
+      })
+    }).catch(() => null);
     const bindingDraft = await rebuildBindingState(currentState.sheetRead, currentState.selectedBranch);
+    const recommendationTraces = await loadRecommendationState(currentState.sheetRead, currentState.selectedBranch);
     set((state) => ({
       sheetTerms: bindingDraft.sheetTerms,
       termBindings: bindingDraft.termBindings,
       unresolvedBindings: bindingDraft.unresolvedBindings,
+      recommendationTraces,
       logs: [...state.logs, `binding saved: ${anchorId} -> ${termId}`]
     }));
+    const operatorExport = await loadOperatorExport(get());
+    const nextSearchResults = await reindexWorkspaceSearch(get());
+    set({ searchResults: nextSearchResults, operatorExport });
+  },
+  rejectRecommendationCandidate: async (anchorId, candidateId) => {
+    const currentState = get();
+    const unresolved = findUnresolvedBinding(currentState, anchorId);
+    const sheetRef = buildSheetRef(currentState.sheetRead.summary, currentState.selectedBranch);
+    if (!unresolved || !sheetRef || !unresolved.candidateTerms.includes(candidateId)) {
+      set((state) => ({
+        logs: [...state.logs, `recommendation reject skipped: ${anchorId} -> ${candidateId}`]
+      }));
+      return;
+    }
+    const saved = await saveRecommendationTrace({
+      type: "recommendation.saveTrace",
+      trace: buildRecommendationTraceInput({
+        branch: currentState.selectedBranch,
+        sheetRef: {
+          spreadsheetId: sheetRef.spreadsheetId,
+          sheetName: sheetRef.sheetName,
+          sheetId: sheetRef.sheetId,
+          timezone: sheetRef.timezone
+        },
+        runId: currentState.sheetRead.selectedRunId,
+        sectionKey: findSectionKeyForUnresolved(currentState, unresolved.anchorId),
+        unresolved,
+        candidateId,
+        outcome: "rejected"
+      })
+    }).catch(() => null);
+    if (!saved?.ok) {
+      set((state) => ({
+        logs: [...state.logs, `recommendation reject failed: ${anchorId} -> ${candidateId}`]
+      }));
+      return;
+    }
+    const recommendationTraces = await loadRecommendationState(currentState.sheetRead, currentState.selectedBranch);
+    set((state) => ({
+      recommendationTraces,
+      logs: [...state.logs, `recommendation rejected: ${anchorId} -> ${candidateId}`]
+    }));
+    const operatorExport = await loadOperatorExport(get());
+    const nextSearchResults = await reindexWorkspaceSearch(get());
+    set({ searchResults: nextSearchResults, operatorExport });
   },
   deleteManualBindingDecision: async (decisionKey) => {
     const currentState = get();
@@ -439,6 +579,118 @@ export const useUiStore = create<UiStore>((set, get) => ({
       unresolvedBindings: bindingDraft.unresolvedBindings,
       logs: [...state.logs, `binding deleted: ${decisionKey}`]
     }));
+    const operatorExport = await loadOperatorExport(get());
+    const nextSearchResults = await reindexWorkspaceSearch(get());
+    set({ searchResults: nextSearchResults, operatorExport });
+  },
+  refreshOperatorExport: async () => {
+    const operatorExport = await loadOperatorExport(get());
+    set({ operatorExport });
+  },
+  exportOperatorHandoff: async (target, format) => {
+    const currentState = get();
+    const runId = String(currentState.sheetRead.selectedRunId || "").trim();
+    if (!runId) {
+      set((state) => ({
+        logs: [...state.logs, "operator export handoff skipped: no selected run."]
+      }));
+      return;
+    }
+    const result = await exportOperatorHandoffBridge({
+      type: "operator.exportHandoff",
+      runId,
+      branch: currentState.selectedBranch,
+      target,
+      format
+    }).catch(() => null);
+    if (!result?.ok || !result.exported) {
+      set((state) => ({
+        logs: [...state.logs, `operator export handoff skipped: ${target} ${format}`]
+      }));
+      return;
+    }
+    set((state) => ({
+      logs: [
+        ...state.logs,
+        result.target === "clipboard"
+          ? `operator export copied: ${result.format} ${result.bytes} bytes`
+          : `operator export saved: ${result.filePath || result.fileName || result.format}`
+      ]
+    }));
+    const operatorExport = await loadOperatorExport(get());
+    set({ operatorExport });
+  },
+  repeatOperatorHandoff: async (handoffId, target) => {
+    const normalizedId = String(handoffId || "").trim();
+    if (!normalizedId) return;
+    const result = await repeatOperatorHandoffBridge({
+      type: "operator.repeatHandoff",
+      handoffId: normalizedId,
+      target
+    }).catch(() => null);
+    if (!result?.ok || !result.repeated) {
+      set((state) => ({
+        logs: [...state.logs, `operator handoff repeat failed: ${normalizedId}`]
+      }));
+      return;
+    }
+    set((state) => ({
+      logs: [
+        ...state.logs,
+        result.filePath ? `operator handoff repeat saved: ${result.filePath}` : `operator handoff repeat copied: ${normalizedId}`
+      ]
+    }));
+    const operatorExport = await loadOperatorExport(get());
+    set({ operatorExport });
+  },
+  setOperatorHandoffStatus: async (handoffId, status) => {
+    const normalizedId = String(handoffId || "").trim();
+    if (!normalizedId) return;
+    const result = await updateOperatorHandoffStatusBridge({
+      type: "operator.updateHandoffStatus",
+      handoffId: normalizedId,
+      status
+    }).catch(() => null);
+    if (!result?.ok || !result.handoff) {
+      set((state) => ({
+        logs: [...state.logs, `operator handoff status update failed: ${normalizedId}`]
+      }));
+      return;
+    }
+    set((state) => ({
+      logs: [...state.logs, `operator handoff status updated: ${normalizedId} -> ${status}`]
+    }));
+    const operatorExport = await loadOperatorExport(get());
+    set({ operatorExport });
+  },
+  jumpToSearchResult: (docId) => {
+    const currentState = get();
+    const hit = currentState.searchResults.find((item) => item.docId === docId);
+    if (!hit) return;
+    const nextTask = hit.jumpTarget.task;
+    set((state) => {
+      const nextState = {
+        ...state,
+        activeTask: nextTask
+      };
+      const projection = projectTaskState(nextState);
+      return {
+        activeTask: nextTask,
+        activeFocus: {
+          task: nextTask,
+          rowId: hit.jumpTarget.rowId || null,
+          anchorId: hit.jumpTarget.anchorId || null,
+          sectionKey: hit.jumpTarget.sectionKey || null,
+          lineIndex: typeof hit.jumpTarget.lineIndex === "number" ? hit.jumpTarget.lineIndex : null
+        },
+        activeRightPanelTab: hit.jumpTarget.panel || state.activeRightPanelTab,
+        metrics: projection.metrics,
+        evidenceLines: projection.evidenceLines,
+        opsLines: projection.opsLines,
+        validationLines: projection.validationLines,
+        logs: projection.logs
+      };
+    });
   },
   runSelectedQuery: async () => {
     set({ hasPendingQueryChanges: false });
@@ -457,12 +709,17 @@ export const useUiStore = create<UiStore>((set, get) => ({
       activeRunContext: initialRunContext
     });
 
-    const [liveSheetSnapshot, context, bridgeRuntime, bridgeSummary] = await Promise.all([
-      fetchSheetSnapshotBridge({
-        type: "provider.fetchSheetSnapshot",
-        query: {
-          ...selectedRange,
-          branch: selectedBranch
+    const [liveBundleResponse, context, bridgeRuntime, bridgeSummary] = await Promise.all([
+      fetchLiveReadBundleBridge({
+        type: "provider.fetchLiveReadBundle",
+        context: {
+          runId: initialRunContext.id,
+          branch: selectedBranch,
+          startDate: selectedRange.startDate,
+          endDate: selectedRange.endDate,
+          requestedAt: initialRunContext.requestedAt,
+          runtimeMode: initialRunContext.runtimeMode,
+          sourceProvider: initialRunContext.sourceProvider
         }
       }).catch(() => null),
       getBridgeContext().catch(() => null),
@@ -470,23 +727,51 @@ export const useUiStore = create<UiStore>((set, get) => ({
       getBridgeSummary().catch(() => null)
     ]);
 
-    const providerRowResponses = await Promise.all([
-      fetchProviderRows({
-        type: "provider.fetchRows",
-        provider: "naver-partner",
-        query: selectedRange
-      }).catch(() => null),
-      fetchProviderRows({
-        type: "provider.fetchRows",
-        provider: "admin-station",
-        query: selectedRange
-      }).catch(() => null)
-    ]);
-    const liveReservationResponse = await fetchProviderReservations({
-      type: "provider.fetchReservations",
-      provider: "wings-pms",
-      query: selectedRange
-    }).catch(() => null);
+    const liveBundle = liveBundleResponse?.payload || null;
+    const liveSheetSnapshot = liveBundle?.sheet
+      ? liveBundle.sheet
+      : await fetchSheetSnapshotBridge({
+          type: "provider.fetchSheetSnapshot",
+          query: {
+            ...selectedRange,
+            branch: selectedBranch,
+            runId: initialRunContext.id
+          }
+        }).catch(() => null);
+
+    const providerRowResponses = liveBundle
+      ? [liveBundle.providerRows["naver-partner"], liveBundle.providerRows["admin-station"]]
+      : await Promise.all([
+          fetchProviderRows({
+            type: "provider.fetchRows",
+            provider: "naver-partner",
+            query: {
+              ...selectedRange,
+              branch: selectedBranch,
+              runId: initialRunContext.id
+            }
+          }).catch(() => null),
+          fetchProviderRows({
+            type: "provider.fetchRows",
+            provider: "admin-station",
+            query: {
+              ...selectedRange,
+              branch: selectedBranch,
+              runId: initialRunContext.id
+            }
+          }).catch(() => null)
+        ]);
+    const liveReservationResponse = liveBundle
+      ? liveBundle.reservations
+      : await fetchProviderReservations({
+          type: "provider.fetchReservations",
+          provider: "wings-pms",
+          query: {
+            ...selectedRange,
+            branch: selectedBranch,
+            runId: initialRunContext.id
+          }
+        }).catch(() => null);
 
     const branchFilter = selectedBranch;
     const mergedLiveRows = providerRowResponses.flatMap((response) =>
@@ -504,7 +789,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
 
     const liveContextAvailable =
       Boolean(context?.sessionAvailable) ||
-      providerRowResponses.some((response) => Boolean(response?.source && response.source !== "unsupported-provider"));
+      providerRowResponses.some((response) => isLiveSourceAvailable(response?.source));
 
     const snapshot = buildInventoryCompareSnapshot({
       mode: currentState.runtimeMode,
@@ -522,8 +807,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
       bridgeSummary: bridgeSummary || currentState.bridgeSummary,
       liveContextAvailable:
         Boolean(context?.sessionAvailable) ||
-        (typeof liveReservationResponse?.source === "string" &&
-          !["pms-unconfigured", "unavailable", "bridge-unavailable"].includes(liveReservationResponse.source)),
+        isLiveSourceAvailable(liveReservationResponse?.source),
       branch: selectedBranch
     });
     const sheetPayload = liveSheetSnapshot?.payload || {
@@ -545,7 +829,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
           ? "read-live"
           : liveContextAvailable
             ? "partial-live"
-            : "fixture-fallback",
+            : "offline-preview",
       sourceLabel:
         sheetSummary && liveSheetSnapshot?.source === "sheet-api"
           ? "실시간 시트 데이터"
@@ -576,6 +860,14 @@ export const useUiStore = create<UiStore>((set, get) => ({
           }).catch(() => null)
         : null;
     const bindingDraft = await rebuildBindingState(sheetRead, selectedBranch);
+    const recommendationTraces = await loadRecommendationState(sheetRead, selectedBranch);
+    const operatorExport = await loadOperatorExport({
+      ...currentState,
+      sheetRead,
+      termBindings: bindingDraft.termBindings,
+      unresolvedBindings: bindingDraft.unresolvedBindings,
+      recommendationTraces
+    });
 
     const hasUpstreamAuth = Boolean(bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer);
     const bridgeIssue = resolveBridgeIssue({
@@ -604,7 +896,21 @@ export const useUiStore = create<UiStore>((set, get) => ({
 
     const nextWorkspaceState = {
       ...currentState,
-      activeRunContext: buildRunContext(currentState, context?.provider || null),
+      activeRunContext:
+        liveBundle?.context
+          ? {
+              id: liveBundle.context.runId,
+              branch: selectedBranch,
+              startDate: liveBundle.context.startDate,
+              endDate: liveBundle.context.endDate,
+              runtimeMode: currentState.runtimeMode,
+              requestedAt: liveBundle.context.requestedAt,
+              sourceProvider: liveBundle.context.sourceProvider || context?.provider || null
+            }
+          : {
+              ...initialRunContext,
+              sourceProvider: context?.provider || null
+            },
       inventoryCompare: snapshot,
       sheetRead,
       manualScanAnchor: loadedManualScanAnchor,
@@ -612,6 +918,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
       sheetTerms: bindingDraft.sheetTerms,
       termBindings: bindingDraft.termBindings,
       unresolvedBindings: bindingDraft.unresolvedBindings,
+      recommendationTraces,
+      operatorExport,
       bridgeStatus: nextBridgeStatus,
       bridgeSummary: {
         authSummary: bridgeSummary?.authSummary || currentState.bridgeSummary.authSummary,
@@ -662,6 +970,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
       sheetTerms: bindingDraft.sheetTerms,
       termBindings: bindingDraft.termBindings,
       unresolvedBindings: bindingDraft.unresolvedBindings,
+      recommendationTraces,
+      operatorExport,
       reservationAudit,
       metrics: projectedState.metrics,
       evidenceLines: projectedState.evidenceLines,

@@ -5,13 +5,25 @@ import type {
   DeleteBindingDecisionResponse,
   DeleteManualScanAnchorsRequest,
   DeleteManualScanAnchorsResponse,
+  FetchLiveReadBundleRequest,
+  FetchLiveReadBundleResponse,
   FetchSheetSnapshotSummary,
   FetchSheetSnapshotRequest,
   FetchSheetSnapshotResponse,
   FetchProviderRowsRequest,
   FetchProviderRowsResponse,
+  BuildOperatorExportRequest,
+  BuildOperatorExportResponse,
+  ExportOperatorHandoffRequest,
+  ExportOperatorHandoffResponse,
+  RepeatOperatorHandoffRequest,
+  RepeatOperatorHandoffResponse,
+  UpdateOperatorHandoffStatusRequest,
+  UpdateOperatorHandoffStatusResponse,
   IndexWorkspaceSearchRequest,
   IndexWorkspaceSearchResponse,
+  LoadRecommendationTracesRequest,
+  LoadRecommendationTracesResponse,
   LoadBindingDecisionsRequest,
   LoadBindingDecisionsResponse,
   LoadManualScanAnchorsRequest,
@@ -22,6 +34,9 @@ import type {
   SaveManualScanAnchorsResponse,
   SavedManualScanAnchor,
   ProviderInventoryCompareRow,
+  RecommendationTrace,
+  SaveRecommendationTraceRequest,
+  SaveRecommendationTraceResponse,
   SaveBindingDecisionRequest,
   SaveBindingDecisionResponse,
   BridgeRuntimeStatus,
@@ -141,12 +156,21 @@ declare global {
       loadBindingDecisions: (request: LoadBindingDecisionsRequest) => Promise<LoadBindingDecisionsResponse>;
       saveBindingDecision: (request: SaveBindingDecisionRequest) => Promise<SaveBindingDecisionResponse>;
       deleteBindingDecision: (request: DeleteBindingDecisionRequest) => Promise<DeleteBindingDecisionResponse>;
+      loadRecommendationTraces: (request: LoadRecommendationTracesRequest) => Promise<LoadRecommendationTracesResponse>;
+      saveRecommendationTrace: (request: SaveRecommendationTraceRequest) => Promise<SaveRecommendationTraceResponse>;
       loadManualScanAnchor: (request: LoadManualScanAnchorsRequest) => Promise<LoadManualScanAnchorsResponse>;
       saveManualScanAnchor: (request: SaveManualScanAnchorsRequest) => Promise<SaveManualScanAnchorsResponse>;
       deleteManualScanAnchor: (request: DeleteManualScanAnchorsRequest) => Promise<DeleteManualScanAnchorsResponse>;
       fetchSheetSnapshot: (request: FetchSheetSnapshotRequest) => Promise<FetchSheetSnapshotResponse>;
+      fetchLiveReadBundle: (request: FetchLiveReadBundleRequest) => Promise<FetchLiveReadBundleResponse>;
       indexWorkspaceSearch: (request: IndexWorkspaceSearchRequest) => Promise<IndexWorkspaceSearchResponse>;
       queryWorkspaceSearch: (request: QueryWorkspaceSearchRequest) => Promise<QueryWorkspaceSearchResponse>;
+      buildOperatorExport: (request: BuildOperatorExportRequest) => Promise<BuildOperatorExportResponse>;
+      exportOperatorHandoff: (request: ExportOperatorHandoffRequest) => Promise<ExportOperatorHandoffResponse>;
+      repeatOperatorHandoff: (request: RepeatOperatorHandoffRequest) => Promise<RepeatOperatorHandoffResponse>;
+      updateOperatorHandoffStatus: (
+        request: UpdateOperatorHandoffStatusRequest
+      ) => Promise<UpdateOperatorHandoffStatusResponse>;
       fetchProviderRows: (
         request: FetchProviderRowsRequest
       ) => Promise<FetchProviderRowsResponse<ProviderInventoryCompareRow>>;
@@ -256,6 +280,48 @@ export async function fetchSheetSnapshot(
   };
 }
 
+export async function fetchLiveReadBundle(
+  request: FetchLiveReadBundleRequest
+): Promise<FetchLiveReadBundleResponse | null> {
+  if (window.desktopBridge?.fetchLiveReadBundle) {
+    return window.desktopBridge.fetchLiveReadBundle(request);
+  }
+  return null;
+}
+
+export async function buildOperatorExport(
+  request: BuildOperatorExportRequest
+): Promise<BuildOperatorExportResponse> {
+  if (window.desktopBridge?.buildOperatorExport) {
+    return window.desktopBridge.buildOperatorExport(request);
+  }
+  return {
+    ok: true,
+    exportBundle: null
+  };
+}
+
+export async function exportOperatorHandoff(
+  request: ExportOperatorHandoffRequest
+): Promise<ExportOperatorHandoffResponse | null> {
+  if (!window.desktopBridge?.exportOperatorHandoff) return null;
+  return window.desktopBridge.exportOperatorHandoff(request);
+}
+
+export async function repeatOperatorHandoff(
+  request: RepeatOperatorHandoffRequest
+): Promise<RepeatOperatorHandoffResponse | null> {
+  if (!window.desktopBridge?.repeatOperatorHandoff) return null;
+  return window.desktopBridge.repeatOperatorHandoff(request);
+}
+
+export async function updateOperatorHandoffStatus(
+  request: UpdateOperatorHandoffStatusRequest
+): Promise<UpdateOperatorHandoffStatusResponse | null> {
+  if (!window.desktopBridge?.updateOperatorHandoffStatus) return null;
+  return window.desktopBridge.updateOperatorHandoffStatus(request);
+}
+
 export async function indexWorkspaceSearch(
   request: IndexWorkspaceSearchRequest
 ): Promise<IndexWorkspaceSearchResponse> {
@@ -306,6 +372,21 @@ export async function deleteBindingDecision(
 ): Promise<DeleteBindingDecisionResponse | null> {
   if (!window.desktopBridge?.deleteBindingDecision) return null;
   return window.desktopBridge.deleteBindingDecision(request);
+}
+
+export async function loadRecommendationTraces(
+  request: LoadRecommendationTracesRequest
+): Promise<RecommendationTrace[]> {
+  if (!window.desktopBridge?.loadRecommendationTraces) return [];
+  const response = await window.desktopBridge.loadRecommendationTraces(request);
+  return response.traces;
+}
+
+export async function saveRecommendationTrace(
+  request: SaveRecommendationTraceRequest
+): Promise<SaveRecommendationTraceResponse | null> {
+  if (!window.desktopBridge?.saveRecommendationTrace) return null;
+  return window.desktopBridge.saveRecommendationTrace(request);
 }
 
 export async function loadManualScanAnchor(

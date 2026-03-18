@@ -648,7 +648,16 @@
       const knownRoomNo = Boolean(explicitRoomType);
       if (!knownRoomNo && !rangedRoomType && (!inferredRoomType || !hasRoomSignal)) continue;
 
-      const roomType = rangedRoomType || explicitRoomType || inferredRoomType || currentRoomType || "UNKNOWN_ROOM_TYPE";
+      // When the sheet itself provides a stable local room-type header, prefer it over
+      // the shared fallback ROOM_MAP. This avoids cross-branch collisions such as
+      // Gangnam rows reusing COEX room numbers (401/501/1101/1102).
+      const preferLocalHeaderType = !hasManualTypeRanges && Boolean(inferredRoomType) && hasRoomSignal;
+      const roomType = rangedRoomType ||
+        (preferLocalHeaderType ? inferredRoomType : "") ||
+        explicitRoomType ||
+        inferredRoomType ||
+        currentRoomType ||
+        "UNKNOWN_ROOM_TYPE";
       rows.push({
         row,
         roomType,
@@ -1183,6 +1192,24 @@
     };
   }
 
+  function buildRoomTypeMapFromSheetLocalHeaders(
+    matrix,
+    dateCols,
+    scanRowStart,
+    roomTypeRanges = null,
+    scanRowEnd = null
+  ) {
+    const rows = mapSheetRoomRows(matrix, dateCols, scanRowStart, {}, roomTypeRanges, scanRowEnd);
+    const out = {};
+    (rows || []).forEach((row) => {
+      const roomNoKey = normalizeRoomNoKey(row?.roomNo || "");
+      const roomType = normalizeText(row?.roomType || "");
+      if (!roomNoKey || !roomType) return;
+      out[roomNoKey] = roomType;
+    });
+    return out;
+  }
+
   Object.assign(ns, {
     parseSheetCell,
     buildSheetMatrix,
@@ -1201,5 +1228,6 @@
     summarizeDetectedPartitionCounts,
     extractReservationBlocksByDate,
     buildDerivedRoomValuesFromSheetState,
+    buildRoomTypeMapFromSheetLocalHeaders,
   });
 })();

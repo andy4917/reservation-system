@@ -20,10 +20,5 @@ export const TASK_META: Record<AppTaskId, { title: string; summary: string; acti
     title: "설정",
     summary: "확장 연결, 시트 연결, 추천 기능 상태를 확인합니다.",
     action: "필요한 연결 상태만 간단히 점검하세요."
-  },
-  "dry-run": {
-    title: "테스트 모드",
-    summary: "실제 사이트 연결 없이 예시 데이터로 화면을 확인합니다.",
-    action: "실제 운영 전 화면 흐름을 점검하세요."
   }
 };

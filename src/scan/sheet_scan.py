@@ -198,6 +198,7 @@ def branch_from_row(row_index: int) -> str:
 BRANCH_LABEL_RULES: Tuple[Tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?:^|\b)gangnam(?:\b|$)|강남", flags=re.I), BRANCH_GANGNAM),
     (re.compile(r"(?:^|\b)coex(?:\b|$)|코엑스", flags=re.I), BRANCH_COEX),
+    (re.compile(r"(?:^|\b)samseong(?:\b|$)|삼성", flags=re.I), "BRANCH_THE_SAMSEONG"),
 )
 BRANCH_MARKER_HINT_RE = re.compile(r"(?:\bthe\b|더\s*|지점|branch)", flags=re.I)
 ROOM_NO_LIKE_RE = re.compile(r"^(?:A\d{3,4}|\d{3,4})$", flags=re.I)

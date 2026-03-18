@@ -48,9 +48,9 @@ export function resolveBridgeIssue(params: {
     };
   }
 
-  if (runtimeMode === "live" && supportLevel === "fixture-fallback") {
+  if (runtimeMode === "live" && supportLevel === "offline-preview") {
     return {
-      code: "FIXTURE_FALLBACK_ACTIVE",
+      code: "OFFLINE_PREVIEW_ACTIVE",
       recoveryAction: "Attach the extension session or use the in-app Wings login window, then capture provider authentication before retrying live mode."
     };
   }

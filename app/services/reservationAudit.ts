@@ -3,7 +3,7 @@ import type { BridgeSummary } from "../renderer/types";
 import type { ReservationAuditRow, ReservationAuditSnapshot } from "../renderer/types";
 
 const FIXTURE_ROWS: Record<RuntimeMode, ReservationAuditRow[]> = {
-  "dry-run": [
+  preview: [
     {
       id: "rsvn-240312-kim",
       reservationNo: "240312-001",
@@ -41,9 +41,9 @@ const FIXTURE_ROWS: Record<RuntimeMode, ReservationAuditRow[]> = {
       action: "keep"
     }
   ],
-  replay: [
+  history: [
     {
-      id: "replay-240312-kim",
+      id: "history-240312-kim",
       reservationNo: "240312-001",
       guestName: "김지연",
       channel: "NAVER",
@@ -51,11 +51,11 @@ const FIXTURE_ROWS: Record<RuntimeMode, ReservationAuditRow[]> = {
       checkout: "2026-03-13",
       status: "ACTIVE",
       auditStatus: "review",
-      reason: "replay artifact에서 anomaly가 줄었지만 remark hash가 아직 남아 있습니다.",
+      reason: "history artifact에서 anomaly가 줄었지만 remark hash가 아직 남아 있습니다.",
       action: "fresh PMS read와 대조"
     },
     {
-      id: "replay-240315-yoon",
+      id: "history-240315-yoon",
       reservationNo: "240315-021",
       guestName: "윤아린",
       channel: "STATION",
@@ -63,24 +63,11 @@ const FIXTURE_ROWS: Record<RuntimeMode, ReservationAuditRow[]> = {
       checkout: "2026-03-16",
       status: "ACTIVE",
       auditStatus: "ok",
-      reason: "replay artifact 기준 OTA/PMS 주요 식별자가 일치합니다.",
+      reason: "history artifact 기준 OTA/PMS 주요 식별자가 일치합니다.",
       action: "keep"
     }
   ],
-  live: [
-    {
-      id: "live-audit-pending",
-      reservationNo: "pending",
-      guestName: "bridge pending",
-      channel: "WINGS",
-      checkin: "2026-03-12",
-      checkout: "2026-03-15",
-      status: "ACTIVE",
-      auditStatus: "review",
-      reason: "Wings runtime material이 아직 없어 audit fixture 상태만 표시합니다.",
-      action: "attach Wings bridge auth or HAR-backed sync config"
-    }
-  ]
+  live: []
 };
 
 function normalizeText(value: unknown) {
@@ -88,18 +75,18 @@ function normalizeText(value: unknown) {
 }
 
 function hasLiveRows(rows: ReservationAuditRow[]) {
-  return rows.length > 0 && rows[0]?.reservationNo !== "pending";
+  return rows.length > 0;
 }
 
 function getSupportLevel(
   mode: RuntimeMode,
   options?: { liveContextAvailable?: boolean; hasUpstreamAuth?: boolean; hasReservationRows?: boolean }
 ): LiveSupportLevel {
-  if (mode !== "live") return "dry-run-only";
-  if (!options?.liveContextAvailable) return "fixture-fallback";
+  if (mode !== "live") return "preview-only";
+  if (!options?.liveContextAvailable) return "offline-preview";
   if (options.hasReservationRows) return "read-live";
   if (options.hasUpstreamAuth) return "partial-live";
-  return "fixture-fallback";
+  return "offline-preview";
 }
 
 function getSourceLabel(
@@ -107,7 +94,7 @@ function getSourceLabel(
   options?: { liveContextAvailable?: boolean; hasUpstreamAuth?: boolean; hasReservationRows?: boolean; sourceLabel?: string }
 ) {
   if (mode !== "live") {
-    return options?.sourceLabel || (mode === "replay" ? "Replay audit fixture" : "Dry-run audit fixture");
+    return options?.sourceLabel || (mode === "history" ? "History audit snapshot" : "Preview audit snapshot");
   }
   return options?.sourceLabel || getSupportLevel(mode, options);
 }
@@ -197,6 +184,13 @@ function buildLines(
   const authSummary = options?.bridgeSummary?.authSummary;
   const infoSummary = options?.bridgeSummary?.infoSummary;
   const branch = String(options?.branch || "ALL").trim() || "ALL";
+  const hasUpstreamAuth = Boolean(authSummary?.cookieCount || authSummary?.hasBearer);
+  const hasReservationRows = hasLiveRows(rows);
+  const supportLevel = getSupportLevel(mode, {
+    liveContextAvailable: options?.liveContextAvailable,
+    hasUpstreamAuth,
+    hasReservationRows
+  });
   const liveBranches = rows.map((row) => normalizeText(row.branch)).filter(Boolean);
   const liveSources = rows.map((row) => normalizeText(row.sourceCode)).filter(Boolean);
 
@@ -205,23 +199,29 @@ function buildLines(
       `Audit source: ${sourceLabel}`,
       `Branch scope: ${branch}`,
       `Audit anomalies: ${anomalies.length}`,
-      rows.length > 0 && hasLiveRows(rows)
+      mode === "live" && rows.length > 0 && hasReservationRows
         ? `Live rows: ${rows.length} / branches ${Array.from(new Set(liveBranches)).join(", ") || "unknown"} / sources ${Array.from(new Set(liveSources)).join(", ") || "unknown"}`
-        : `Fixture rows: ${rows.length}`,
+        : mode === "live" && rows.length === 0
+          ? supportLevel === "read-live"
+            ? "Live context ready but no rows returned for selected window"
+            : supportLevel === "partial-live"
+              ? "Live auth connected, rows not yet materialized"
+              : "Live context unavailable for this run"
+          : `Preview rows: ${rows.length}`,
       ...anomalies.slice(0, 3).map((row) => `${row.reservationNo} ${row.guestName} ${row.channel} ${row.reason}`)
     ],
     opsLines: [
       "Reservation retention: reservation_no, ota, date, nights, room, guest, phone tail, token hash",
-      `Support level: ${getSupportLevel(mode, {
-        liveContextAvailable: options?.liveContextAvailable,
-        hasUpstreamAuth: Boolean(authSummary?.cookieCount || authSummary?.hasBearer),
-        hasReservationRows: hasLiveRows(rows)
-      })}`,
+      `Support level: ${supportLevel}`,
       mode === "live"
-        ? `Live workspace materials: ${authSummary?.cookieCount || authSummary?.hasBearer ? "available" : "unavailable"}`
+        ? `Live workspace materials: ${hasUpstreamAuth ? "available" : "unavailable"}`
         : "Live workspace materials: fixture n/a",
       mode === "live"
-        ? `Live provider summary: rows ${infoSummary?.count ?? 0} / channels ${(infoSummary?.channels || []).join(", ") || "none"}`
+        ? supportLevel === "read-live"
+          ? `Live provider summary: rows ${infoSummary?.count ?? 0} / channels ${(infoSummary?.channels || []).join(", ") || "none"}`
+          : supportLevel === "partial-live"
+            ? "Live provider summary: auth connected, row hydration pending"
+            : "Live provider summary: unavailable in offline-preview state"
         : `Manual review candidates: ${reviews.length}`
     ],
     validationLines: [
@@ -231,21 +231,25 @@ function buildLines(
           ? "Validation gate: anomaly cleared, review items remain"
           : "Validation gate: audit anomalies clear",
       mode === "live"
-        ? hasLiveRows(rows)
+        ? hasReservationRows
           ? "Validation gate: reservation rows connected through provider.fetchReservations"
-          : options?.liveContextAvailable
-            ? "Validation gate: bridge auth summary connected, reservation rows still on fixture fallback"
-            : "Validation gate: bridge auth missing, reservation audit fixture fallback active"
-        : "Validation gate: reservation audit fixture loaded"
+          : supportLevel === "partial-live"
+            ? "Validation gate: partial-live context available, reservation rows not materialized"
+            : "Validation gate: reservation audit offline preview active"
+        : "Validation gate: reservation audit preview loaded"
     ],
     logs: [
       `Reservation audit loaded for ${sourceLabel}.`,
       `Audit rows prepared: ${rows.length}`,
-      hasLiveRows(rows)
+      hasReservationRows
         ? `Live reservation hydration active: ${rows.length} rows`
-        : anomalies.length > 0
-          ? `Audit anomaly summary built: ${anomalies.length}`
-          : "No audit anomalies detected in current set."
+        : supportLevel === "partial-live"
+          ? "Live auth available, awaiting reservation hydration"
+          : rows.length === 0
+            ? "No live reservation rows available"
+            : anomalies.length > 0
+              ? `Audit anomaly summary built: ${anomalies.length}`
+              : "No audit anomalies detected in current set."
     ]
   };
 }
@@ -321,28 +325,9 @@ export function buildReservationAuditSnapshot(params: {
   }
 
   const liveRows = buildLiveAuditRows(Array.isArray(liveReservationRows) ? liveReservationRows : []);
-  if (liveRows.length > 0) {
-    return buildSnapshot("live", liveRows, {
-      sourceLabel: sourceLabel || "read-live",
-      bridgeSummary,
-      liveContextAvailable,
-      branch
-    });
-  }
-
-  const rows =
-    liveContextAvailable && (bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer)
-      ? FIXTURE_ROWS.live.map((row) => ({
-          ...row,
-          reason:
-            bridgeSummary?.infoSummary?.count && bridgeSummary.infoSummary.count > 0
-              ? `live provider summary is connected, but reservation rows are still using fallback. rows=${bridgeSummary.infoSummary.count}`
-              : row.reason
-        }))
-      : FIXTURE_ROWS.live;
-
-  return buildSnapshot("live", rows, {
-    sourceLabel: sourceLabel || "fixture-fallback",
+  const supportLevelRows = sourceLabel || (liveRows.length > 0 ? "read-live" : "offline-preview");
+  return buildSnapshot("live", liveRows, {
+    sourceLabel: supportLevelRows,
     bridgeSummary,
     liveContextAvailable,
     branch

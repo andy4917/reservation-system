@@ -1,81 +1,35 @@
 # TASK STATE
 
-- updated_at: 2026-03-17T14:57:31+09:00
+- updated_at: 2026-03-18T22:34:21+09:00
 - status: verified
-- goal: Stage C minimal bounded search assist / repo-local live verification close-out
-- current_milestone: main-owned bounded search index와 `live_sheet_verify.mjs` 추가 완료
-- next_step: Stage 3/4 경계에서 recommendation/evidence 확장 범위를 다시 고정합니다.
+- goal: Stage 1 `Live Read 최소 경로`와 Stage 2 `Truth-Aligned Mapping Core` completion을 위해 실제 시트/PMS 기반 alias/identity auto binding과 precision/soft-triage surface를 반영
+- current_milestone: operator/search/UI surface까지 precision gate와 soft triage를 연결하고 targeted regressions로 검증 완료
+- next_step: 환경 세션이 준비되면 `offline-preview`를 넘어 실제 `read-live` smoke를 다시 확인
 
 ## Completed
-- `memory-bootstrap` 절차를 실행해 continuation 작업 컨텍스트를 다시 정리했습니다.
-- `src/io/sheets.fetch.js`의 section detection을 `branch title -> nearby TYPE/ROOM header -> room/inventory scan` 흐름으로 재구성했습니다.
-- `TYPE/ROOM` 헤더 자체가 독립 section으로 승격되지 않도록 branch marker 탐지를 known branch 라벨로 제한하고, header가 없는 후보를 제거했습니다.
-- `SectionRef`에 `state: active | preopen`를 추가하고 `app/services/bindingArtifacts.ts`, `app/main/runArtifactStore.ts`에 반영했습니다.
-- `삼성`은 `BRANCH_THE_SAMSEONG`으로 별도 유지되며, live 시트 기준 `headerRow`는 있으나 `roomStartRow`가 없어 `preopen`으로 분류됩니다.
-- `선릉`은 live 시트 기준 `titleRow/headerRow/roomStartRow/inventoryStartRow`가 모두 검출되어 `active`로 분류됩니다.
-- `tests/regression_sheets_fetch_boundaries.mjs`, `tests/regression_app_binding_artifacts.mjs`, `tests/regression_app_run_artifact_store.mjs`, `tests/regression_sync_config_defaults.mjs`, `tests/regression_sheet_scan_py.py`로 회귀를 보강했습니다.
-- `app/services/bindingArtifacts.ts`에서 saved decision replay를 stable sort로 고정하고, section-scoped unresolved anchor가 legacy decision anchor와도 호환되도록 merge 조건을 확장했습니다.
-- `app/main/bindingStore.ts`, `app/contracts/provider.ts`, `app/renderer/state/uiStore.ts`에 `sectionKey`를 추가해 saved decision persist/load 경로도 section-aware로 고정했습니다.
-- 삼성점은 live `scan.sections`에는 남기되, operational `mappingArtifacts`에서는 제외해 현재 운영 경로에서 사실상 비활성화했습니다.
-- `app/main/searchRuntime.ts`를 추가해 run별 bounded `SearchDocument` 인덱스를 main에 적재하고, renderer는 IPC로 query/hit만 소비하도록 연결했습니다.
-- 검색 corpus에는 inventory row, audit row, unresolved binding, artifact line, evidence/ops/validation/log line을 함께 포함했습니다.
-- `scripts/live_sheet_verify.mjs`와 `npm run app:verify:sheet-live`를 추가해 저장소 내부에서 시트 런타임을 직접 재검증할 수 있게 했습니다.
-- `tests/regression_app_search_runtime.mjs`를 추가하고, 기존 search/process regression을 main-owned bounded search 흐름에 맞게 갱신했습니다.
+- `memory-bootstrap` 절차를 다시 실행하고 continuation 작업 상태를 최신화했습니다.
+- `app/main/liveReadRuntime.ts`, `app/main/ipc.ts`, `app/renderer/state/uiStore.ts`를 기준으로 shared run contract와 main-owned branch/date scope를 제품 코드에 반영했습니다.
+- `app/main/truthCatalogRuntime.ts`를 truth dataset loader 단일 원본으로 확장하고, `app/main/mappingTruthRuntime.ts`의 중복 파일 로딩/캐시를 제거했습니다.
+- `app/services/bindingArtifacts.ts`에서 `branch_the_samseong` 하드코드 필터를 제거하고, preopen section도 artifact로 유지되게 조정했습니다.
+- `app/contracts/provider.ts`, `app/renderer/types.ts`에 canonical binding 보존용 optional field(`resolvedCanonicalId`)를 추가했습니다.
+- `app/services/operatingProgress.ts`를 최신 구현 상태 기준으로 갱신했습니다.
+- 관련 회귀 테스트와 smoke script를 최신 구현 기준으로 재실행했습니다.
+- `app/main/mappingAutoBindingRuntime.ts`를 추가하고, `app/main/ipc.ts`의 `buildSheetSnapshotBridgeResponse`에서 시트 snapshot + PMS reservation rows를 함께 사용해 auto binding을 생성하도록 연결했습니다.
+- room alias는 `snapshot.readHints.roomTypeByRoomNo/localRoomTypeByRoomNo`와 truth alias graph를 기준으로 auto binding하고, reservation identity는 `snapshot.reservationBlocks`와 PMS reservation rows를 기준으로 exact pair만 auto binding, soft pair는 unresolved로 남기도록 구현했습니다.
+- 새 회귀 테스트 `tests/regression_app_mapping_auto_binding_runtime.mjs`를 추가했습니다.
+- `app/main/operatorExportRuntime.ts`와 `app/contracts/provider.ts`에서 exact auto binding / soft triage / precision gate를 bundle-level manifest, metrics, copy text, csv, preview, operator loop에 노출했습니다.
+- `app/main/searchRuntime.ts`에 `binding-summary` 문서를 추가하고, unresolved binding search document에 confidence/domain/severity/rule/evidence signal을 보강했습니다.
+- `app/renderer/components/RightPanel.tsx`, `app/renderer/components/surfaces/SettingsSurface.tsx`에서 exact auto binding, soft triage, precision gate/score를 최소 UI 변경으로 surface에 반영했습니다.
+- `tests/regression_app_binding_artifacts.mjs`, `tests/regression_app_operator_export_runtime.mjs`, `tests/regression_app_search_runtime.mjs`를 completion 기준으로 갱신했습니다.
+- `npm run app:check`, `npm run app:build:main`, `node tests/regression_app_binding_artifacts.mjs`, `node tests/regression_app_mapping_auto_binding_runtime.mjs`, `node tests/regression_app_operator_export_runtime.mjs`, `node tests/regression_app_search_runtime.mjs`, `node --experimental-vm-modules tests/regression_app_ui_store_live_wings_flow.mjs`, `node scripts/live_read_verify.mjs --json`를 통과했습니다.
 
-## Verification
-- 통과: `npm run app:check`
-- 통과: `npm run app:build:main`
-- 통과: `node tests/regression_sheets_fetch_boundaries.mjs`
-- 통과: `node tests/regression_app_binding_artifacts.mjs`
-- 통과: `node tests/regression_app_binding_store.mjs`
-- 통과: `node tests/regression_app_run_artifact_store.mjs`
-- 통과: `node tests/regression_sheet_room_row_fallbacks.mjs`
-- 통과: `node tests/regression_inventory_rows_and_color_map.mjs`
-- 통과: `node tests/regression_app_sheet_runtime_summary_builder.mjs`
-- 통과: `node tests/regression_sync_config_defaults.mjs`
-- 통과: `python3 tests/regression_sheet_scan_py.py`
-- 통과: `npm run app:build`
-- 통과: live `COEX/GANGNAM` snapshot 재검증
-  - `sectionCount=4`
-  - `GANGNAM/COEX/BRANCH_THE_SEOLLEUNG = active`
-  - `BRANCH_THE_SAMSEONG = preopen`
-  - `scan.sections`에는 삼성점이 남고 `mappingArtifacts`에서는 제외됨
-- 통과: `npm run app:check`
-- 통과: `npm run app:build:main`
-- 통과: `node tests/regression_app_search_runtime.mjs`
-- 통과: `node tests/regression_app_search_process_modules.mjs`
-- 통과: `node tests/regression_app_sheet_runtime_summary.mjs`
-- 통과: `node scripts/live_sheet_verify.mjs --start-date 2026-03-12 --end-date 2026-03-12 --branch GANGNAM`
-  - 현재 기본 결과는 `sheet-unconfigured`이며, 저장소 내부 verify command가 시트 런타임 경로와 failure classification을 그대로 노출함
+## Current Findings
+- Stage 1의 `sheet/provider/wings`는 이제 하나의 main-owned live bundle과 coverage 요약으로 묶이지만, 실제 live 성공 여부는 환경 설정/브라우저 세션 가용성에 계속 의존합니다.
+- Stage 2의 `truthSignals`, `metrics`, `resolvedCanonicalId`는 이제 artifact 경로에 연결됐고, exact room/reservation auto binding이 생성됩니다.
+- reservation identity soft match는 자동 채택하지 않고 unresolved로만 남기되, operator export/search/UI에서 잔량과 precision gate를 직접 드러냅니다.
+- `preopen` section은 더 이상 숨기지 않고 artifact로 유지되어 운영 상태를 드러냅니다.
+- UI store 회귀는 기본 Node 환경에서는 `vm` 모듈 미지원으로 skip 처리되며, `--experimental-vm-modules` 경로에서 실제 동작을 확인했습니다.
 
 ## Risks
-- 삼성점은 아직 room row가 비어 있어 `inventoryStartRow`만 있고 `roomStartRow`는 `null`입니다. 실제 객실 운영이 시작되면 anchor를 다시 검증해야 합니다.
-- 현재 저장소 schema는 decision key에 별도 `sectionKey` 필드를 두지 않고 anchorId scope 호환으로 처리합니다. 나중에 section별 decision 조회가 필요해지면 schema version 상승이 필요할 수 있습니다.
-- 현재 operator UI와 baseline 문서는 아직 `GANGNAM/COEX` 중심이므로, 선릉/삼성을 운영 UI에 올리려면 별도 onboarding 단계가 필요합니다.
-- AGENTS 원본 경로는 사용자 지시문을 기준으로 따랐고, 저장소 로컬 `AGENTS.md`에는 별도 수정이 없었습니다.
-- `SHEET_MAPPING_SEARCH_EXECUTION_CHECKLIST.md`의 기존 Stage C 표현은 넓은 search runtime 재구성으로 읽힐 수 있으므로, 실제 구현 시에는 계속 `IMPLEMENT.md`를 우선 적용해야 합니다.
-- 이번 bounded search는 main-owned minimal assist 범위입니다. full workerization, broader lexical/structured ranking, jump UI 고도화는 아직 후속 범위입니다.
-
-### Checkpoint 2026-03-17T04:34:30Z
-- status: verified
-- completed: Milestone 2 section segmentation active/preopen separation + live COEX/GANGNAM verification
-- next_step: Milestone 3 proposal/decision merge를 section artifact 기준으로 고정
-- risks: none
-
-### Checkpoint 2026-03-17T04:44:58Z
-- status: verified
-- completed: Milestone 3 stable decision replay + Samsung mappingArtifacts disable
-- next_step: Milestone 3 persist/replay 경로를 추가 검증하고 section artifact 기준으로 고정
-- risks: none
-
-### Checkpoint 2026-03-17T04:52:30Z
-- status: verified
-- completed: Milestone 3 section-aware persist/replay complete; contract compliance rechecked
-- next_step: Milestone 4 bounded search assist와 repo-local live verification command 구현
-- risks: none
-
-### Checkpoint 2026-03-17T05:57:31Z
-- status: verified
-- completed: main-owned bounded search assist + repo-local live verification command 구현 및 회귀 검증
-- next_step: Stage 3/4 경계의 recommendation/evidence 확장 범위를 다시 고정
-- risks: live verify는 `UHS_SYNC_CONFIG_JSON`이 없으면 `sheet-unconfigured`로 끝나므로, 실제 라이브 검증에는 로컬 비공개 sync config가 계속 필요
+- 현재 환경의 `live_read_verify` 결과는 `offline-preview`이며, 운영 세션이 없는 상태를 명시적으로 보여 줍니다.
+- UI store 회귀는 실험적 `vm` 모듈 플래그에 의존하므로, 기본 Node 실행만으로는 full-path 검증이 닫히지 않습니다.

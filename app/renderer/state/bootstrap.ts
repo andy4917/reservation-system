@@ -40,7 +40,7 @@ export async function bootstrapUiState() {
       const hasUpstreamAuth = Boolean(bridgeSummary?.authSummary?.cookieCount || bridgeSummary?.authSummary?.hasBearer);
       const bridgeIssue = resolveBridgeIssue({
         runtimeMode: "live",
-        supportLevel: context.sessionAvailable ? "partial-live" : "unavailable",
+        supportLevel: context.sessionAvailable ? "partial-live" : "offline-preview",
         provider: context.provider,
         sessionAvailable: context.sessionAvailable,
         hasUpstreamAuth,

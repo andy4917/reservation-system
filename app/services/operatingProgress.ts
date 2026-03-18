@@ -19,14 +19,14 @@ export function getOperatingStageProgress(): {
     {
       id: "stage-1",
       title: "Live Read 최소 경로",
-      percent: 35,
-      summary: "브라우저 세션 우선 구조와 Wings read-only contract는 연결됐지만, 실제 live JSON read는 아직 닫히지 않았다."
+      percent: 60,
+      summary: "main-owned live bundle, branch/date scoped read, coverage 요약, read-only smoke 경로가 연결됐고 남은 공백은 운영 세션/시트 설정 검증입니다."
     },
     {
       id: "stage-2",
       title: "Truth-Aligned Mapping Core",
-      percent: 25,
-      summary: "taxonomy/graph/scaffold는 생겼지만 실제 운영 샘플을 반영한 mapping 완성도는 아직 낮다."
+      percent: 45,
+      summary: "domain-aware unresolved, artifact metrics, truth signal 연결은 반영됐고 실제 canonical auto binding과 precision gate가 남아 있습니다."
     },
     {
       id: "stage-3",

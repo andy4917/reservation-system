@@ -1,3 +1,4 @@
+import { matchesRecommendationTrace } from "../../../services/recommendationRuntime";
 import { useUiStore } from "../../state/uiStore";
 import { PanelHeading, SectionCard } from "../SurfacePrimitives";
 
@@ -12,6 +13,9 @@ export function SettingsSurface() {
   const manualScanAnchorDraft = useUiStore((state) => state.manualScanAnchorDraft);
   const termBindings = useUiStore((state) => state.termBindings);
   const unresolvedBindings = useUiStore((state) => state.unresolvedBindings);
+  const recommendationTraces = useUiStore((state) => state.recommendationTraces);
+  const operatorExport = useUiStore((state) => state.operatorExport);
+  const activeFocus = useUiStore((state) => state.activeFocus);
   const inventoryCompare = useUiStore((state) => state.inventoryCompare);
   const reservationAudit = useUiStore((state) => state.reservationAudit);
   const authBundleSettingsSnapshot = useUiStore((state) => state.authBundleSettingsSnapshot);
@@ -21,7 +25,58 @@ export function SettingsSurface() {
   const saveManualScanAnchorDraft = useUiStore((state) => state.saveManualScanAnchorDraft);
   const deleteManualScanAnchorDraft = useUiStore((state) => state.deleteManualScanAnchorDraft);
   const saveManualBindingDecision = useUiStore((state) => state.saveManualBindingDecision);
+  const rejectRecommendationCandidate = useUiStore((state) => state.rejectRecommendationCandidate);
   const deleteManualBindingDecision = useUiStore((state) => state.deleteManualBindingDecision);
+  const refreshOperatorExport = useUiStore((state) => state.refreshOperatorExport);
+  const setActiveRightPanelTab = useUiStore((state) => state.setActiveRightPanelTab);
+  const fallbackMetrics = sheetRead.mappingArtifacts.reduce(
+    (acc, artifact) => {
+      acc.exactAutoBindingCount += Number(artifact.metrics?.exactAutoBindingCount || 0);
+      acc.roomAliasBindingCount += Number(artifact.metrics?.roomAliasBindingCount || 0);
+      acc.reservationIdentityBindingCount += Number(artifact.metrics?.reservationIdentityBindingCount || 0);
+      acc.softTriageCount += Number(artifact.metrics?.softTriageCount || 0);
+      if ((artifact.metrics?.precisionGate || "not-applicable") === "needs-review") {
+        acc.precisionGate = "needs-review";
+      } else if (acc.precisionGate !== "needs-review" && (artifact.metrics?.precisionGate || "not-applicable") === "ready") {
+        acc.precisionGate = "ready";
+      }
+      return acc;
+    },
+    {
+      exactAutoBindingCount: 0,
+      roomAliasBindingCount: 0,
+      reservationIdentityBindingCount: 0,
+      softTriageCount: 0,
+      precisionGate: "not-applicable" as "ready" | "needs-review" | "not-applicable"
+    }
+  );
+  const fallbackPrecisionBase = fallbackMetrics.exactAutoBindingCount + fallbackMetrics.softTriageCount;
+  const fallbackPrecisionScore =
+    fallbackPrecisionBase > 0 ? Number((fallbackMetrics.exactAutoBindingCount / fallbackPrecisionBase).toFixed(3)) : 0;
+  const exportMetrics = operatorExport?.metrics;
+  const exactAutoBindingCount = exportMetrics?.exactAutoBindingCount ?? fallbackMetrics.exactAutoBindingCount;
+  const roomAliasBindingCount =
+    sheetRead.mappingArtifacts.reduce((count, artifact) => count + Number(artifact.metrics?.roomAliasBindingCount || 0), 0);
+  const reservationIdentityBindingCount =
+    sheetRead.mappingArtifacts.reduce((count, artifact) => count + Number(artifact.metrics?.reservationIdentityBindingCount || 0), 0);
+  const softTriageCount = exportMetrics?.softTriageCount ?? fallbackMetrics.softTriageCount;
+  const precisionScore = exportMetrics?.precisionScore ?? fallbackPrecisionScore;
+  const precisionGate = exportMetrics?.precisionGate ?? fallbackMetrics.precisionGate;
+
+  function findRecommendationOutcome(anchorId: string, rawHeader: string, candidateId: string) {
+    const sectionKey =
+      sheetRead.mappingArtifacts.find((artifact) => artifact.unresolved.some((item) => item.anchorId === anchorId))?.section.sectionKey || null;
+    const matchedTraces = recommendationTraces.filter((trace) =>
+      matchesRecommendationTrace(trace, {
+        anchorId,
+        rawHeader,
+        candidateId,
+        sectionKey
+      })
+    );
+    const match = matchedTraces[matchedTraces.length - 1];
+    return match?.outcome || null;
+  }
   return (
     <div className="settings-surface">
       <SectionCard>
@@ -98,11 +153,31 @@ export function SettingsSurface() {
                 <strong>{termBindings.filter((item) => item.method === "manual").length}건</strong>
                 <p>{termBindings[0]?.termId || "현재 없음"}</p>
               </article>
+              <article className="simple-status-card">
+                <span>추천 기록</span>
+                <strong>{recommendationTraces.length}건</strong>
+                <p>{recommendationTraces[recommendationTraces.length - 1]?.outcome || "현재 없음"}</p>
+              </article>
+              <article className="simple-status-card">
+                <span>자동 바인딩</span>
+                <strong>{exactAutoBindingCount}건</strong>
+                <p>{`room ${roomAliasBindingCount} / reservation ${reservationIdentityBindingCount}`}</p>
+              </article>
+              <article className="simple-status-card">
+                <span>Precision Gate</span>
+                <strong>{precisionGate}</strong>
+                <p>{`score ${precisionScore} | soft triage ${softTriageCount}`}</p>
+              </article>
             </div>
             {sheetRead.visibleSlice.lines.length > 0 ? (
               <div className="data-list">
                 {sheetRead.visibleSlice.lines.map((line, index) => (
-                  <div key={`${sheetRead.visibleSlice.offset + index}:${line}`} className="data-row">
+                  <div
+                    key={`${sheetRead.visibleSlice.offset + index}:${line}`}
+                    className={`data-row ${
+                      activeFocus?.task === "settings" && activeFocus.lineIndex === sheetRead.visibleSlice.offset + index ? "is-focused-row" : ""
+                    }`}
+                  >
                     <span>{line}</span>
                   </div>
                 ))}
@@ -111,20 +186,38 @@ export function SettingsSurface() {
             {unresolvedBindings.length > 0 ? (
               <div className="data-list">
                 {unresolvedBindings.slice(0, 3).map((item) => (
-                  <div key={item.anchorId} className="data-row">
+                  <div
+                    key={item.anchorId}
+                    className={`data-row ${
+                      activeFocus?.task === "settings" && activeFocus.anchorId === item.anchorId ? "is-focused-row" : ""
+                    }`}
+                  >
                     <div>
                       <span>{`${item.reason} | ${item.rawHeader}`}</span>
                       <div className="settings-actions">
-                        {item.candidateTerms.map((termId) => (
-                          <button
-                            key={`${item.anchorId}:${termId}`}
-                            type="button"
-                            className="action-button"
-                            onClick={() => void saveManualBindingDecision(item.anchorId, termId)}
-                          >
-                            {termId}
-                          </button>
-                        ))}
+                        {item.candidateTerms.map((termId) => {
+                          const outcome = findRecommendationOutcome(item.anchorId, item.rawHeader, termId);
+                          return (
+                            <div key={`${item.anchorId}:${termId}`} className="settings-actions" style={{ gap: "0.35rem" }}>
+                              <button
+                                type="button"
+                                className="action-button"
+                                disabled={outcome === "accepted"}
+                                onClick={() => void saveManualBindingDecision(item.anchorId, termId)}
+                              >
+                                {outcome === "accepted" ? `채택됨 ${termId}` : termId}
+                              </button>
+                              <button
+                                type="button"
+                                className="action-button"
+                                disabled={outcome === "rejected"}
+                                onClick={() => void rejectRecommendationCandidate(item.anchorId, termId)}
+                              >
+                                {outcome === "rejected" ? "거절됨" : "거절"}
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -137,7 +230,12 @@ export function SettingsSurface() {
                   .filter((item) => item.method === "manual")
                   .slice(0, 3)
                   .map((item) => (
-                    <div key={item.decisionKey || `${item.anchorId}:${item.termId}`} className="data-row">
+                    <div
+                      key={item.decisionKey || `${item.anchorId}:${item.termId}`}
+                      className={`data-row ${
+                        activeFocus?.task === "settings" && activeFocus.anchorId === item.anchorId ? "is-focused-row" : ""
+                      }`}
+                    >
                       <div>
                         <span>{`${item.termId} | ${item.rawHeader || item.anchorId}`}</span>
                         {item.decisionKey ? (
@@ -162,8 +260,25 @@ export function SettingsSurface() {
                 <strong>{manualScanAnchor ? "적용 중" : "없음"}</strong>
                 <p>{manualScanAnchor?.updatedAt || "auto scan only"}</p>
               </article>
+              <article className="process-card tone-default">
+                <span>운영 요약</span>
+                <strong>{operatorExport ? operatorExport.verifyEvidence.classification : "없음"}</strong>
+                <p>{operatorExport ? `자동 ${exactAutoBindingCount} / soft triage ${softTriageCount} / precision ${precisionScore}` : "run 선택 후 생성"}</p>
+              </article>
             </div>
             <div className="settings-actions" style={{ flexWrap: "wrap" }}>
+              <button type="button" className="action-button" onClick={() => void refreshOperatorExport()}>
+                운영 요약 새로 고침
+              </button>
+              <button
+                type="button"
+                className="action-button"
+                onClick={() => {
+                  setActiveRightPanelTab("handoff");
+                }}
+              >
+                전달물 패널 열기
+              </button>
               <label>
                 날짜 행
                 <input

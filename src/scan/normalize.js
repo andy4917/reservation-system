@@ -7,12 +7,16 @@
   const ns = (App.scan.normalize = App.scan.normalize || {});
   const C = App.constants || {};
   const {
-    configuredProviderIds,
+    configuredProviderIds: rawConfiguredProviderIds,
     NAVER_COOKIE_EXPORT_URLS,
     PREF_KEY,
     SYNC_CFG_KEY,
     SYNC_APPLY_KEY,
-    syncSheetDefaults,
+    POLICY_SPREADSHEET_ID,
+    POLICY_SHEET_NAME,
+    POLICY_START_ROW,
+    POLICY_SHEET_YEAR,
+    POLICY_GOOGLE_CLIENT_ID,
     DEFAULT_SYNC_SLEEP_MS,
     SHEET_GRID_FAST_ROW_LIMIT,
     NAVER_SCHEDULE_FETCH_CONCURRENCY,
@@ -41,6 +45,13 @@
     NAVER_BIZ_ITEMS_CACHE_TTL_MS,
     DEFAULT_SCAN_CONFIG,
   } = C;
+  const syncSheetDefaults = {
+    spreadsheetId: POLICY_SPREADSHEET_ID || "",
+    sheetName: POLICY_SHEET_NAME || "",
+    startRow: Number(POLICY_START_ROW) || 1,
+    year: Number(POLICY_SHEET_YEAR) || 2000,
+    clientId: POLICY_GOOGLE_CLIENT_ID || ""
+  };
   App.runtime = App.runtime || {};
   const dateRangeCache = App.runtime.dateRangeCache || (App.runtime.dateRangeCache = new Map());
   const valueCellIndexCache = App.runtime.valueCellIndexCache || (App.runtime.valueCellIndexCache = new WeakMap());
@@ -558,7 +569,8 @@
     const raw = normalizeText(value || "");
     const lowered = raw.toLowerCase();
     if (!lowered) return "";
-    if (/(^|[^a-z])coex([^a-z]|$)|코엑스|삼성/.test(lowered)) return "COEX";
+    if (/(^|[^a-z])coex([^a-z]|$)|코엑스/.test(lowered)) return "COEX";
+    if (/(^|[^a-z])samseong([^a-z]|$)|삼성/.test(lowered)) return "BRANCH_THE_SAMSEONG";
     if (/(^|[^a-z])gangnam([^a-z]|$)|강남/.test(lowered)) return "GANGNAM";
     if (/(^|[^a-z])seolleung([^a-z]|$)|선릉/.test(lowered)) return "BRANCH_THE_SEOLLEUNG";
     return raw.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -1790,6 +1802,8 @@
 
   function sanitizeSyncConfig(raw) {
     const config = raw && typeof raw === "object" ? raw : {};
+    const configuredProviderIds =
+      rawConfiguredProviderIds && typeof rawConfiguredProviderIds === "object" ? rawConfiguredProviderIds : {};
     const spreadsheetRaw = normalizeSpreadsheetInput(config.spreadsheet || syncSheetDefaults.spreadsheetId);
     const spreadsheetId = extractSpreadsheetId(spreadsheetRaw);
     const stationBranchId = sanitizePositiveNumericId(
@@ -1854,14 +1868,33 @@
     return normalized;
   }
 
-
-  async function refreshGoogleAccessToken(syncConfig) {
-    if (!syncConfig.refreshToken || !syncConfig.clientId || !syncConfig.clientSecret) {
-      throw new Error("Google token refresh requires refreshToken/clientId/clientSecret.");
+  function readProcessEnv(name) {
+    try {
+      if (typeof process === "undefined" || !process?.env) return "";
+      return normalizeText(process.env[name] || "");
+    } catch (_) {
+      return "";
     }
+  }
+
+  function resolveGoogleClientSecretCandidates(syncConfig) {
+    const values = [
+      normalizeText(syncConfig?.clientSecret || ""),
+      readProcessEnv("UHS_GOOGLE_CLIENT_SECRET"),
+      readProcessEnv("GOOGLE_CLIENT_SECRET")
+    ].filter(Boolean);
+    const seen = new Set();
+    return values.filter((value) => {
+      if (seen.has(value)) return false;
+      seen.add(value);
+      return true;
+    });
+  }
+
+  async function requestGoogleTokenRefresh(syncConfig, clientSecret) {
     const body = new URLSearchParams();
     body.set("client_id", syncConfig.clientId);
-    body.set("client_secret", syncConfig.clientSecret);
+    body.set("client_secret", clientSecret);
     body.set("grant_type", "refresh_token");
     body.set("refresh_token", syncConfig.refreshToken);
 
@@ -1874,10 +1907,40 @@
       const text = await response.text();
       throw new Error(`Google token refresh failed (${response.status}): ${text.slice(0, 300)}`);
     }
-    const payload = await response.json();
+    return response.json();
+  }
+
+
+  async function refreshGoogleAccessToken(syncConfig) {
+    if (!syncConfig.refreshToken || !syncConfig.clientId) {
+      throw new Error("Google token refresh requires refreshToken/clientId/clientSecret.");
+    }
+    const secretCandidates = resolveGoogleClientSecretCandidates(syncConfig);
+    if (!secretCandidates.length) {
+      throw new Error("Google token refresh requires refreshToken/clientId/clientSecret.");
+    }
+    let payload = null;
+    let lastError = null;
+    let usedSecret = secretCandidates[0];
+    for (const secretCandidate of secretCandidates) {
+      usedSecret = secretCandidate;
+      try {
+        payload = await requestGoogleTokenRefresh(syncConfig, secretCandidate);
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const message = String(lastError?.message || "").toLowerCase();
+        if (!message.includes("invalid_client")) break;
+      }
+    }
+    if (!payload) {
+      throw lastError || new Error("Google token refresh failed.");
+    }
     const nextToken = normalizeText(payload.access_token || "");
     if (!nextToken) throw new Error("Google token refresh response does not include access_token.");
 
+    syncConfig.clientSecret = usedSecret;
     syncConfig.accessToken = nextToken;
     if (payload.refresh_token) syncConfig.refreshToken = normalizeText(payload.refresh_token);
     if (payload.expires_in) {
@@ -1892,7 +1955,7 @@
     return Boolean(
       normalizeText(syncConfig?.refreshToken || "") &&
         normalizeText(syncConfig?.clientId || "") &&
-        normalizeText(syncConfig?.clientSecret || "")
+        resolveGoogleClientSecretCandidates(syncConfig).length > 0
     );
   }
 

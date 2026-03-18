@@ -40,26 +40,6 @@ function todayDateKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function formatSummary(summary, source, error) {
-  const mappingSections = [];
-  if (Array.isArray(summary?.hintSummary?.branchSectionEvidence) && summary.hintSummary.branchSectionEvidence.length > 0) {
-    mappingSections.push(`primary=${summary.hintSummary.branch || "-"}`);
-  }
-  return [
-    `source=${source || "unknown"}`,
-    `sheet=${summary?.sheetName || "-"} (${summary?.spreadsheetId || "-"})`,
-    `range=${summary?.startDate || "-"}..${summary?.endDate || "-"}`,
-    `mode=${summary?.readMode || "-"} failure=${summary?.failureCategory || "-"}`,
-    `branch=${summary?.hintSummary?.branch || "-"} sections=${mappingSections.join(" ") || "-"}`,
-    `manualAnchor=${summary?.anchorSummary?.manualAnchorUsed ? "yes" : "no"} namedRange=${summary?.anchorSummary?.namedRangeCount ?? 0} metadata=${summary?.anchorSummary?.metadataCount ?? 0}`,
-    `provider=${summary?.validationSummary?.providerKey || "-"} valueSource=${summary?.validationSummary?.providerValueSourceKind || "-"}:${summary?.validationSummary?.providerValueRow ?? "-"}`,
-    `typedSlots=${summary?.validationSummary?.typedSlotComplete ? "complete" : "partial"} duplicate=${summary?.validationSummary?.typedSlotDuplicate ? "yes" : "no"}`,
-    `providerDays=NAVER ${summary?.providerValueDays?.NAVER ?? 0} / STATION ${summary?.providerValueDays?.STATION ?? 0}`,
-    `issues=${summary?.validationSummary?.issueCount ?? 0} warnings=${summary?.validationSummary?.warningCount ?? 0} errors=${summary?.validationSummary?.errorCount ?? 0}`,
-    error ? `error=${error}` : null
-  ].filter(Boolean);
-}
-
 async function main() {
   const root = process.cwd();
   const options = parseArgs(process.argv.slice(2));
@@ -68,7 +48,9 @@ async function main() {
   const branch = options.branch || process.env.UHS_VERIFY_BRANCH || "GANGNAM";
 
   const runtimeModuleUrl = pathToFileURL(path.join(root, "dist-app/main/sheetRuntime.js")).href;
+  const verifySummaryModuleUrl = pathToFileURL(path.join(root, "dist-app/services/sheetVerifySummary.js")).href;
   const sheetRuntime = await import(`${runtimeModuleUrl}?t=${Date.now()}`);
+  const { formatSheetVerifySummary } = await import(`${verifySummaryModuleUrl}?t=${Date.now()}`);
 
   const result = await sheetRuntime.fetchSheetSnapshot({
     startDate,
@@ -89,7 +71,7 @@ async function main() {
     return;
   }
 
-  for (const line of formatSummary(result.summary, result.source, result.error)) {
+  for (const line of formatSheetVerifySummary(result.summary, result.source, result.error, branch)) {
     console.log(line);
   }
 }

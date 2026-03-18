@@ -33,6 +33,26 @@ function main() {
   // Clamp higher parsed maximum to provider base max.
   const clamped = rules.applyProviderMaximumRule(rules.parseStockValue("0/5"), "NAVER", "2026-02-26");
   assert.equal(clamped.maximum, 4);
+  // Derived closed rows must stay aligned with NAVER fixed maximum even when local vacancy is zero.
+  assert.deepEqual(
+    rules.resolveExpectedCountsFromStat(
+      { expectedTotal: 7, total: 7, sold: 7, vacancy: 0 },
+      "NAVER",
+      "2026-02-26",
+      { raw: "닫음", current: 4, maximum: 4 }
+    ),
+    { total: 4, sold: 4, available: 0, sourceTotal: 7, stationVacQualified: false }
+  );
+  assert.equal(
+    rules.formatExpectedInventoryRaw(
+      "fraction",
+      { expectedTotal: 7, total: 7, sold: 7, vacancy: 0 },
+      "NAVER",
+      "2026-02-26",
+      { raw: "닫음", current: 4, maximum: 4 }
+    ),
+    "4/4"
+  );
 
   // STATION: raw max >1 alone is not applied.
   assert.equal(

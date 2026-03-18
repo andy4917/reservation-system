@@ -19,6 +19,7 @@ function main() {
   const normalize = globalThis.App?.scan?.normalize;
   const constants = globalThis.App?.constants || {};
   assert.ok(normalize, "App.scan.normalize is required");
+  delete globalThis.App.constants.configuredProviderIds;
 
   const cfg = normalize.sanitizeSyncConfig({});
   const readOnly = constants.READ_ONLY_TOOL_MODE === true;
@@ -27,6 +28,8 @@ function main() {
   assert.equal(cfg.opsUiCollapsed, true);
   assert.equal(cfg.goldenExportRedaction, "default");
   assert.equal(cfg.reservationPolicyVersion, 1);
+  assert.equal(cfg.stationBranchId, "");
+  assert.equal(cfg.naverBusinessId, "");
 
   const override = normalize.sanitizeSyncConfig({
     providerApply: {

@@ -7,6 +7,8 @@ import type {
   DeleteManualScanAnchorsResponse,
   DomSnapshotRequest,
   DomSnapshotResponse,
+  FetchLiveReadBundleRequest,
+  FetchLiveReadBundleResponse,
   FetchSheetSnapshotRequest,
   FetchSheetSnapshotResponse,
   FetchProviderRowsRequest,
@@ -77,6 +79,7 @@ export type BridgeRequest =
   | SaveManualScanAnchorsRequest
   | DeleteManualScanAnchorsRequest
   | FetchSheetSnapshotRequest
+  | FetchLiveReadBundleRequest
   | FetchProviderRowsRequest
   | FetchReservationsRequest
   | FetchWingsLiveContractRequest
@@ -94,6 +97,7 @@ export type BridgeSuccessResponse =
   | SaveManualScanAnchorsResponse
   | DeleteManualScanAnchorsResponse
   | FetchSheetSnapshotResponse
+  | FetchLiveReadBundleResponse
   | FetchProviderRowsResponse
   | FetchReservationsResponse
   | FetchWingsLiveContractResponse

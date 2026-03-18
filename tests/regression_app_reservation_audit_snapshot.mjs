@@ -91,6 +91,27 @@ async function main() {
   assert.match(snapshot.rows[1].reason, /evidence needs review/i);
   assert.match(snapshot.validationLines[1], /provider\.fetchReservations/i);
 
+  const partial = reservationAudit.buildReservationAuditSnapshot({
+    mode: "live",
+    sourceLabel: "partial-live",
+    liveContextAvailable: true,
+    liveReservationRows: [],
+    bridgeSummary: {
+      authSummary: {
+        cookieCount: 1,
+        domains: ["pms.sanhait.com"],
+        hasBearer: false,
+        hasCsrf: true,
+        hasRole: true
+      },
+      infoSummary: null
+    }
+  });
+
+  assert.equal(partial.supportLevel, "partial-live");
+  assert.equal(partial.rows.length, 0);
+  assert.match(partial.validationLines[1], /partial-live context available/i);
+
   console.log("regression_app_reservation_audit_snapshot: OK");
 }
 

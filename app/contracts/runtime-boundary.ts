@@ -1,4 +1,4 @@
-export type RuntimeMode = "dry-run" | "replay" | "live";
+export type RuntimeMode = "preview" | "history" | "live";
 
 export type AppOwnedCapability =
   | "workspace-shell"
@@ -21,9 +21,10 @@ export type BridgeCapability =
   | "auth.capture"
   | "auth.restore"
   | "provider.fetchSheetSnapshot"
+  | "provider.fetchLiveReadBundle"
   | "provider.fetchRows"
   | "provider.fetchReservations"
   | "provider.fetchWingsLiveContract"
   | "provider.domSnapshot";
 
-export type LiveSupportLevel = "dry-run-only" | "fixture-fallback" | "partial-live" | "read-live" | "apply-live";
+export type LiveSupportLevel = "preview-only" | "offline-preview" | "partial-live" | "read-live" | "apply-live";

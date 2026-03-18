@@ -6,6 +6,7 @@ export function ReservationAuditSurface() {
   const reservationAudit = useUiStore((state) => state.reservationAudit);
   const reservationAuditLoading = useUiStore((state) => state.reservationAuditLoading);
   const refreshWorkspaceData = useUiStore((state) => state.refreshWorkspaceData);
+  const activeFocus = useUiStore((state) => state.activeFocus);
 
   return (
     <div className="settings-surface">
@@ -98,7 +99,10 @@ export function ReservationAuditSurface() {
             </thead>
             <tbody>
               {reservationAudit.rows.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  className={activeFocus?.task === "reservation-audit" && activeFocus.rowId === row.id ? "is-focused-row" : ""}
+                >
                   <td>{row.reservationNo}</td>
                   <td>{row.guestName}</td>
                   <td>{row.channel}</td>

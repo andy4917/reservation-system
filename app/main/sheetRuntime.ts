@@ -209,6 +209,11 @@ function countRows(value: unknown) {
   return Array.isArray(value) ? value.filter((entry) => Number.isInteger(entry)).length : 0;
 }
 
+function toSummaryRowNumber(value: unknown) {
+  const num = Number(value);
+  return Number.isInteger(num) && num > 0 ? num : null;
+}
+
 function normalizeIssueCodes(validationIssues: unknown[]) {
   return validationIssues
     .map((issue) => (isRecord(issue) ? normalizeText(issue.code || "") : ""))
@@ -283,14 +288,18 @@ function createSummaryBase(query: { startDate: string; endDate: string }, overri
       metadataCount: 0,
       hasScanConfigNamedRange: false,
       hasRoomMapNamedRange: false,
-      hasMetadataScanConfig: false
+      hasMetadataScanConfig: false,
+      manualAnchorUsed: false,
+      manualAnchorFields: []
     },
     hintSummary: {
       fingerprint: "",
       roomMapCount: 0,
       scanMode: "unknown",
       manualMode: false,
-      hasRoomTypeMap: false
+      hasRoomTypeMap: false,
+      branch: "",
+      branchSectionEvidence: []
     },
     validationSummary: {
       providerKey: "",
@@ -302,7 +311,20 @@ function createSummaryBase(query: { startDate: string; endDate: string }, overri
       hasPartitionMismatch: false,
       hasInsufficientRows: false,
       providerValueRawCount: 0,
-      providerValueParsedCount: 0
+      providerValueParsedCount: 0,
+      providerRow: null,
+      providerValueRow: null,
+      providerRowRole: "none",
+      providerValueSourceKind: "none",
+      providerValueSourceReason: "",
+      typedSlotRows: {
+        urban: null,
+        doubleTwin: null,
+        grand: null
+      },
+      typedSlotComplete: false,
+      typedSlotDuplicate: false,
+      physicalOrderVariant: false
     },
     coverage: {
       dateCount: 0,
@@ -338,6 +360,8 @@ function buildSheetSnapshotSummary(
   const inventoryDataRows = isRecord(scan.inventoryDataRows) ? scan.inventoryDataRows : {};
   const readHints = isRecord(snapshot?.readHints) ? snapshot.readHints : {};
   const anchorSummary = isRecord(readHints.anchorSummary) ? readHints.anchorSummary : {};
+  const manualScanAnchor = isRecord(snapshot?.manualScanAnchor) ? snapshot.manualScanAnchor : {};
+  const structuralSummary = isRecord(scan.validationStructuralSummary) ? scan.validationStructuralSummary : {};
   const trace = isRecord(snapshot?.trace) ? snapshot.trace : {};
   const retryTrace = Array.isArray(trace.retryTrace)
     ? trace.retryTrace.filter((entry): entry is string => typeof entry === "string" && Boolean(entry.trim()))
@@ -371,14 +395,25 @@ function buildSheetSnapshotSummary(
       metadataCount: Number(anchorSummary.metadataCount || 0) || 0,
       hasScanConfigNamedRange: anchorSummary.hasScanConfigNamedRange === true,
       hasRoomMapNamedRange: anchorSummary.hasRoomMapNamedRange === true,
-      hasMetadataScanConfig: anchorSummary.hasMetadataScanConfig === true
+      hasMetadataScanConfig: anchorSummary.hasMetadataScanConfig === true,
+      manualAnchorUsed: Object.keys(manualScanAnchor).length > 0 || anchorSummary.manualAnchorUsed === true,
+      manualAnchorFields: Object.keys(isRecord(manualScanAnchor.scan) ? manualScanAnchor.scan : {})
+        .filter((key) => {
+          const source = isRecord(manualScanAnchor.scan) ? manualScanAnchor.scan : {};
+          return source[key] !== null && source[key] !== undefined && source[key] !== "";
+        })
+        .sort()
     },
     hintSummary: {
       fingerprint: normalizeText(readHints.fingerprint || ""),
       roomMapCount: Number(readHints.roomMapCount || 0) || 0,
       scanMode: normalizeText(scan.mode || "unknown"),
       manualMode: normalizeText(scan.mode || "").toLowerCase() === "manual",
-      hasRoomTypeMap: Number(readHints.roomMapCount || 0) > 0
+      hasRoomTypeMap: Number(readHints.roomMapCount || 0) > 0,
+      branch: normalizeText(snapshot?.branch || ""),
+      branchSectionEvidence: Array.isArray(structuralSummary.branchSectionEvidence)
+        ? structuralSummary.branchSectionEvidence.filter((entry): entry is string => typeof entry === "string" && Boolean(entry.trim()))
+        : []
     },
     validationSummary: {
       providerKey: normalizeText(scanValidation.providerKey || ""),
@@ -390,7 +425,32 @@ function buildSheetSnapshotSummary(
       hasPartitionMismatch: scanValidation.hasPartitionMismatch === true,
       hasInsufficientRows: scanValidation.hasInsufficientRows === true,
       providerValueRawCount: Number(scanValidation.providerValueRawCount || 0) || 0,
-      providerValueParsedCount: Number(scanValidation.providerValueParsedCount || 0) || 0
+      providerValueParsedCount: Number(scanValidation.providerValueParsedCount || 0) || 0,
+      providerRow: toSummaryRowNumber(scanValidation.providerRow),
+      providerValueRow: toSummaryRowNumber(scanValidation.providerValueRow),
+      providerRowRole:
+        normalizeText(scanValidation.providerRowRole || "") === "aggregate+typed-slot"
+          ? "aggregate+typed-slot"
+          : normalizeText(scanValidation.providerRowRole || "") === "aggregate-only"
+            ? "aggregate-only"
+            : "none",
+      providerValueSourceKind:
+        normalizeText(scanValidation.providerValueSourceKind || "") === "provider-row"
+          ? "provider-row"
+          : normalizeText(scanValidation.providerValueSourceKind || "") === "typed-row"
+            ? "typed-row"
+            : "none",
+      providerValueSourceReason: normalizeText(scanValidation.providerValueSourceReason || ""),
+      typedSlotRows: {
+        urban: toSummaryRowNumber(isRecord(structuralSummary.typedSlotRows) ? structuralSummary.typedSlotRows.urban : null),
+        doubleTwin: toSummaryRowNumber(
+          isRecord(structuralSummary.typedSlotRows) ? structuralSummary.typedSlotRows.doubleTwin : null
+        ),
+        grand: toSummaryRowNumber(isRecord(structuralSummary.typedSlotRows) ? structuralSummary.typedSlotRows.grand : null)
+      },
+      typedSlotComplete: structuralSummary.typedSlotComplete === true,
+      typedSlotDuplicate: structuralSummary.typedSlotDuplicate === true,
+      physicalOrderVariant: structuralSummary.physicalOrderVariant === true
     },
     coverage: {
       dateCount: Number(scan.dateCount || 0) || 0,
@@ -429,7 +489,9 @@ function buildFailedSheetSummary(
       roomMapCount: 0,
       scanMode: "unknown",
       manualMode: false,
-      hasRoomTypeMap: false
+      hasRoomTypeMap: false,
+      branch: "",
+      branchSectionEvidence: []
     }
   });
 }
@@ -514,6 +576,12 @@ export async function fetchSheetSnapshot(query: { startDate: string; endDate: st
       summary: buildFailedSheetSummary(query, config, "sheet-api-error", message),
       error: message
     };
+  }
+  if (effectiveConfig?.manualScanAnchor) {
+    snapshot.manualScanAnchor = effectiveConfig.manualScanAnchor;
+    snapshot.branch = normalizeText(query.branch || effectiveConfig.manualScanAnchor.branch || "");
+  } else {
+    snapshot.branch = normalizeText(query.branch || "");
   }
   return {
     source: "sheet-api",

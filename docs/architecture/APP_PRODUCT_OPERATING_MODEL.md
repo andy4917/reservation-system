@@ -303,13 +303,24 @@ HAR를 다음 용도로 쓰면 안 된다.
 
 목표:
 
-- search와 recommendation이 실제 triage 시간을 줄이게 한다.
+- search와 recommendation이 unresolved triage, validation trace, evidence jump를 실제로 줄여 운영자의 다음 행동 결정을 빠르게 만든다.
 
 완료 조건:
 
-- lexical + structured search 완성
-- embedding runtime를 실제 evidence 입력에 연결
-- recommendation acceptance를 측정 가능
+- lexical + structured search가 `unresolved / evidence / validation / audit` line에 대해 실제 jump를 제공
+- recommendation이 `unresolved alias` 또는 `SheetTerm` 후보 triage에만 1차 적용됨
+- recommendation acceptance / reject가 evidence lineage와 함께 측정 가능
+- recommendation이 없어도 `read / compare / search` 경로는 완결됨
+- repo-local verify 결과가 failure classification과 함께 evidence source로 재사용 가능
+
+이번 Stage 3에서 제외:
+
+- broad search runtime 대개편
+- full workerization 선행 착수
+- broad search UI expansion
+- renderer에 raw rows, raw snapshot, 대형 matrix 재도입
+- embedding을 mapping core보다 먼저 주 경로에 연결하는 변경
+- recommendation을 canonical 확정값처럼 보이게 만드는 UI/저장 방식
 
 ### Stage 4. Evidence / Export / Operator Loop 완성
 
@@ -322,6 +333,11 @@ HAR를 다음 용도로 쓰면 안 된다.
 - copy/export format 고정
 - run manifest/evidence lineage 포함
 - branch/date/source coverage 표시
+
+현재 시작점:
+
+- operator export의 main-owned minimal bundle과 measured loop summary는 이미 존재함
+- 다음은 external handoff(file/clipboard)와 operator replay 전달물 포맷을 닫는 단계임
 
 ### Stage 5. Apply 분리 여부 판단
 
@@ -364,11 +380,10 @@ HAR를 다음 용도로 쓰면 안 된다.
 - Stage 0. 기준선 재정렬: `100%`
 - Stage 1. Live Read 최소 경로: `35%`
 - Stage 2. Truth-Aligned Mapping Core: `25%`
-- Stage 3. Audit / Evidence E2E: `40%`
-- Stage 4. Search / Recommendation: `20%`
-- Stage 5. Operator Export / Handoff: `30%`
-- Stage 6. Apply 판단: `0%`
+- Stage 3. Search / Recommendation 실제화: `100%` (좁은 Stage 3 계약 기준)
+- Stage 4. Evidence / Export / Operator Loop: `35%`
+- Stage 5. Apply 판단: `0%`
 
-전체 진행률은 보수적으로 `약 36%`로 본다.
+전체 진행률은 보수적으로 `약 41%`로 본다.
 
 이 수치는 코드량이 아니라 `실제 운영자가 앱으로 업무를 수행할 수 있는 정도`를 기준으로 한다.

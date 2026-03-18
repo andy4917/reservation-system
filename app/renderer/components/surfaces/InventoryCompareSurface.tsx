@@ -7,6 +7,7 @@ export function InventoryCompareSurface() {
   const refreshWorkspaceData = useUiStore((state) => state.refreshWorkspaceData);
   const sheetRead = useUiStore((state) => state.sheetRead);
   const bridgeStatus = useUiStore((state) => state.bridgeStatus);
+  const activeFocus = useUiStore((state) => state.activeFocus);
 
   return (
     <>
@@ -90,7 +91,10 @@ export function InventoryCompareSurface() {
             </thead>
             <tbody>
               {inventoryCompare.rows.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  className={activeFocus?.task === "inventory-compare" && activeFocus.rowId === row.id ? "is-focused-row" : ""}
+                >
                   <td>{row.date}</td>
                   <td>{row.roomType}</td>
                   <td>{row.channel}</td>

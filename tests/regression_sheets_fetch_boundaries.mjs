@@ -41,13 +41,19 @@ async function main() {
     .forEach(loadScript);
 
   const sheetsFetch = globalThis.App?.io?.sheetsFetch;
+  const blockBuilder = globalThis.App?.scan?.blockBuilder;
+  const normalize = globalThis.App?.scan?.normalize;
   assert.ok(sheetsFetch, "App.io.sheetsFetch is required");
+  assert.ok(blockBuilder, "App.scan.blockBuilder is required");
+  assert.ok(normalize, "App.scan.normalize is required");
   assert.ok(sheetsFetch.validationSupport, "validationSupport boundary export is required");
   assert.ok(sheetsFetch.inventorySelection, "inventorySelection boundary export is required");
   assert.ok(sheetsFetch.sheetReadRuntime, "sheetReadRuntime boundary export is required");
   assert.equal(typeof sheetsFetch.sheetReadRuntime.buildSheetReadPlan, "function");
   assert.equal(typeof sheetsFetch.sheetReadRuntime.executeSheetRead, "function");
   assert.equal(typeof sheetsFetch.sheetReadRuntime.assembleSnapshotFromSheetRead, "function");
+  assert.equal(typeof sheetsFetch.sheetReadRuntime.detectSheetSections, "function");
+  assert.equal(normalize.normalizeBranchLabel("더 삼성"), "BRANCH_THE_SAMSEONG");
 
   const validationIssues = sheetsFetch.validationSupport.buildScanValidationIssues(
     { urban: 2, doubleTwin: 1, grand: 1 },
@@ -68,6 +74,18 @@ async function main() {
     relaxedSlotIssues.some((issue) => issue.code === "INVENTORY_DATA_ROW_PHYSICAL_ORDER_VARIANT" && issue.severity === "warn"),
     true,
     "minimal manual anchors must surface physical order variance as warning instead of a hard slot-order failure"
+  );
+
+  const toleratedRelaxedSlotIssues = sheetsFetch.validationSupport.buildInventoryDataRowSlotIssues(
+    "NAVER",
+    [24, 25, 23],
+    null,
+    { mode: "manual", hasCompleteManualTypeRanges: false, providerRow: 23, selectedValueRow: 23 }
+  );
+  assert.equal(
+    toleratedRelaxedSlotIssues.some((issue) => issue.code === "INVENTORY_DATA_ROW_PHYSICAL_ORDER_VARIANT"),
+    false,
+    "when the provider row is itself the selected typed slot source, relaxed mode may tolerate physical order variance"
   );
 
   const strictSlotIssues = sheetsFetch.validationSupport.buildInventoryDataRowSlotIssues(
@@ -91,6 +109,71 @@ async function main() {
 
   const readonlyCheck = sheetsFetch.sheetReadRuntime.assertReadonlySheetsRequest;
   assert.throws(() => readonlyCheck("POST", "https://sheets.googleapis.com/test"), /read-only constraint/i);
+
+  const makeCell = (formattedValue = "") => ({ formattedValue });
+  const matrix = blockBuilder.buildSheetMatrix(
+    {
+      startRow: 0,
+      startColumn: 0,
+      rowData: Array.from({ length: 16 }, (_, rowIndex) => {
+        const rows = {
+          0: [makeCell("더 강남")],
+          3: [makeCell("TYPE"), makeCell("ROOM")],
+          5: [makeCell("Urban Spa Suite 6인"), makeCell("401")],
+          8: [makeCell("NAVER")],
+          10: [makeCell("더 코엑스")],
+          13: [makeCell("TYPE"), makeCell("ROOM")],
+          15: [makeCell("Urban Spa Suite 6인"), makeCell("A301")]
+        };
+        return { values: rows[rowIndex] || [] };
+      })
+    },
+    1
+  );
+  const sections = sheetsFetch.sheetReadRuntime.detectSheetSections(matrix, {
+    branch: "GANGNAM",
+    dateRow: 3,
+    roomStartRow: 5,
+    inventorySearchStartRow: 8
+  });
+  assert.equal(sections.length, 2);
+  assert.equal(sections[0].sectionKey, "GANGNAM");
+  assert.equal(sections[0].titleRow, 0);
+  assert.equal(sections[0].headerRow, 3);
+  assert.equal(sections[0].state, "active");
+  assert.equal(sections[0].roomStartRow, 5);
+  assert.equal(sections[0].inventoryStartRow, 8);
+  assert.equal(sections[1].sectionKey, "COEX");
+  assert.equal(sections[1].titleRow, 10);
+  assert.equal(sections[1].headerRow, 13);
+  assert.equal(sections[1].state, "active");
+  assert.equal(sections[1].roomStartRow, 15);
+
+  const preopenMatrix = blockBuilder.buildSheetMatrix(
+    {
+      startRow: 0,
+      startColumn: 0,
+      rowData: Array.from({ length: 8 }, (_, rowIndex) => {
+        const rows = {
+          0: [makeCell("삼성점")],
+          2: [makeCell("TYPE"), makeCell("ROOM")]
+        };
+        return { values: rows[rowIndex] || [] };
+      })
+    },
+    1
+  );
+  const preopenSections = sheetsFetch.sheetReadRuntime.detectSheetSections(preopenMatrix, {
+    branch: "BRANCH_THE_SAMSEONG",
+    dateRow: 2,
+    roomStartRow: null,
+    inventorySearchStartRow: null
+  });
+  assert.equal(preopenSections.length, 1);
+  assert.equal(preopenSections[0].sectionKey, "BRANCH_THE_SAMSEONG");
+  assert.equal(preopenSections[0].state, "preopen");
+  assert.equal(preopenSections[0].roomStartRow, null);
+  assert.equal(preopenSections[0].inventoryStartRow, null);
 
   let builderFetchCalled = false;
   globalThis.fetch = async () => {

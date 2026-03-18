@@ -1,6 +1,9 @@
 import type {
   FetchSheetSnapshotSummary,
   ManualScanAnchorValues,
+  OperatorExportBundle,
+  OperatorExportHandoffFormat,
+  RecommendationTrace,
   SavedManualScanAnchor,
   SearchHit,
   SheetArtifactVisibleSlice,
@@ -14,7 +17,8 @@ export type AppTaskId =
   | "apply-review"
   | "settings";
 
-export type RightPanelTab = "evidence" | "ops" | "validation" | "logs";
+export type RightPanelTab = "evidence" | "ops" | "validation" | "logs" | "handoff";
+export type HandoffHistoryFilter = "all" | "pending" | "needs-follow-up" | "confirmed";
 export type BranchSelection = "GANGNAM" | "COEX";
 
 export interface BridgeStatus {
@@ -40,6 +44,14 @@ export interface AppRunContext {
   sourceProvider: string | null;
 }
 
+export interface ActiveFocusTarget {
+  task: AppTaskId;
+  rowId?: string | null;
+  anchorId?: string | null;
+  sectionKey?: string | null;
+  lineIndex?: number | null;
+}
+
 export interface SummaryMetric {
   label: string;
   value: string;
@@ -53,6 +65,9 @@ export interface SheetRef {
   branch: string | null;
   timezone: string | null;
 }
+
+export type MappingDomain = "inventory" | "provider" | "validation" | "mapping" | "reservation" | "anchor";
+export type MappingSeverity = "critical" | "high" | "medium" | "low";
 
 export interface Anchor {
   anchorId: string;
@@ -75,8 +90,15 @@ export interface TermBinding {
   confidence: number;
   method: "rule" | "manual" | "embedding";
   decidedAt: string;
+  resolvedCanonicalId?: string | null;
+  mappingDomain?: MappingDomain;
+  severity?: MappingSeverity;
   decisionKey?: string | null;
   rawHeader?: string | null;
+  evidenceSource?: string;
+  evidenceSignals?: string[];
+  ruleId?: string | null;
+  evidenceLineage?: string[];
 }
 
 export interface UnresolvedBinding {
@@ -86,6 +108,12 @@ export interface UnresolvedBinding {
   candidateTerms: string[];
   reason: string;
   status: "open" | "reviewed" | "resolved";
+  mappingDomain?: MappingDomain;
+  severity?: MappingSeverity;
+  confidence?: number;
+  evidenceSource?: string;
+  evidenceSignals?: string[];
+  ruleId?: string;
 }
 
 export interface SectionRef {
@@ -137,6 +165,34 @@ export interface StructuralVariant {
   detail: string;
 }
 
+export interface MappingArtifactMetrics {
+  autoBindingCount: number;
+  manualBindingCount: number;
+  unresolvedByDomain: Partial<Record<MappingDomain, number>>;
+  exactAutoBindingCount: number;
+  roomAliasBindingCount: number;
+  reservationIdentityBindingCount: number;
+  softTriageCount: number;
+  targetedUnresolvedCount: number;
+  precisionScore: number;
+  precisionGate: "ready" | "needs-review" | "not-applicable";
+  confidenceBands: {
+    high: number;
+    medium: number;
+    low: number;
+  };
+}
+
+export interface MappingTruthArtifactLink {
+  kind: "room-alias-graph" | "reservation-identity-graph" | "provider-taxonomy" | "branch-provider-mapping";
+  version: string;
+  source: string;
+  available: boolean;
+  confidence: number;
+  detail: string;
+  signals: string[];
+}
+
 export interface MappingArtifact {
   runId: string | null;
   section: SectionRef;
@@ -146,6 +202,8 @@ export interface MappingArtifact {
   providerValueSource: ProviderValueSource;
   structuralSummary: StructuralVariant[];
   validationSummary: FetchSheetSnapshotSummary["validationSummary"];
+  metrics?: MappingArtifactMetrics;
+  truthSignals?: MappingTruthArtifactLink[];
 }
 
 export interface ProcessModule {
@@ -292,6 +350,7 @@ export interface WorkspaceMockState {
     endDate: string;
   };
   activeRunContext: AppRunContext | null;
+  activeFocus: ActiveFocusTarget | null;
   bridgeStatus: BridgeStatus;
   metrics: SummaryMetric[];
   logs: string[];
@@ -306,6 +365,9 @@ export interface WorkspaceMockState {
   sheetTerms: SheetTerm[];
   termBindings: TermBinding[];
   unresolvedBindings: UnresolvedBinding[];
+  recommendationTraces: RecommendationTrace[];
+  operatorExport: OperatorExportBundle | null;
+  handoffHistoryFilter: HandoffHistoryFilter;
   reservationAudit: ReservationAuditSnapshot;
   reservationAuditLoading: boolean;
   searchQuery: string;

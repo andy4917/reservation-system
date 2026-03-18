@@ -70,21 +70,25 @@ async function quarantineCorruptBindingStore(filePath: string) {
 function buildDecisionKey(input: {
   branch: string;
   sheetRef: BindingDecisionSheetRef;
+  sectionKey?: string | null;
   anchorId: string;
   rawHeader: string;
 }) {
-  return [
+  const keyParts = [
     normalizeKeyPart(input.branch),
     normalizeKeyPart(input.sheetRef.spreadsheetId),
     normalizeKeyPart(input.sheetRef.sheetName),
-    normalizeKeyPart(input.anchorId),
-    normalizeKeyPart(input.rawHeader)
-  ].join("|");
+  ];
+  const normalizedSectionKey = normalizeKeyPart(input.sectionKey);
+  if (normalizedSectionKey) keyParts.push(normalizedSectionKey);
+  keyParts.push(normalizeKeyPart(input.anchorId), normalizeKeyPart(input.rawHeader));
+  return keyParts.join("|");
 }
 
 function normalizeSavedBindingDecision(input: SaveBindingDecisionInput): SavedBindingDecision {
   const sheetRef = normalizeSheetRef(input.sheetRef);
   const branch = normalizeText(input.branch);
+  const sectionKey = normalizeText(input.sectionKey) || null;
   const anchorId = normalizeText(input.anchorId);
   const rawHeader = normalizeText(input.rawHeader);
   const termId = normalizeText(input.termId);
@@ -92,9 +96,10 @@ function normalizeSavedBindingDecision(input: SaveBindingDecisionInput): SavedBi
     throw new Error("Binding decision is missing required fields.");
   }
   return {
-    decisionKey: buildDecisionKey({ branch, sheetRef, anchorId, rawHeader }),
+    decisionKey: buildDecisionKey({ branch, sheetRef, sectionKey, anchorId, rawHeader }),
     branch,
     sheetRef,
+    sectionKey,
     anchorId,
     rawHeader,
     termId,
@@ -115,6 +120,7 @@ function normalizePersistedDecision(value: unknown): SavedBindingDecision | null
       })
     : null;
   const branch = normalizeText(value.branch);
+  const sectionKey = normalizeText(value.sectionKey) || null;
   const anchorId = normalizeText(value.anchorId);
   const rawHeader = normalizeText(value.rawHeader);
   const termId = normalizeText(value.termId);
@@ -125,9 +131,10 @@ function normalizePersistedDecision(value: unknown): SavedBindingDecision | null
     return null;
   }
   return {
-    decisionKey: buildDecisionKey({ branch, sheetRef, anchorId, rawHeader }),
+    decisionKey: buildDecisionKey({ branch, sheetRef, sectionKey, anchorId, rawHeader }),
     branch,
     sheetRef,
+    sectionKey,
     anchorId,
     rawHeader,
     termId,

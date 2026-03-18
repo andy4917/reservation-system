@@ -29,7 +29,7 @@ async function main() {
 
   const bindFailure = bridgeStatus.resolveBridgeIssue({
     runtimeMode: "live",
-    supportLevel: "fixture-fallback",
+    supportLevel: "offline-preview",
     sessionAvailable: false,
     hasUpstreamAuth: false,
     bridgeRuntimeCode: "BRIDGE_PORT_BIND_FAILED",
@@ -50,13 +50,13 @@ async function main() {
 
   const fallback = bridgeStatus.resolveBridgeIssue({
     runtimeMode: "live",
-    supportLevel: "fixture-fallback",
+    supportLevel: "offline-preview",
     sessionAvailable: false,
     hasUpstreamAuth: false,
     bridgeRuntimeCode: null,
     bridgeRuntimeRecoveryAction: null
   });
-  assert.equal(fallback.code, "FIXTURE_FALLBACK_ACTIVE");
+  assert.equal(fallback.code, "OFFLINE_PREVIEW_ACTIVE");
 
   console.log("regression_app_bridge_issue_resolution: OK");
 }

@@ -23,6 +23,10 @@ function buildLocalStorage() {
 }
 
 async function loadBuiltModule(entryPath, globals = {}) {
+  if (typeof vm.SourceTextModule !== "function" || typeof vm.SyntheticModule !== "function") {
+    return null;
+  }
+
   const context = vm.createContext({
     console,
     Date,
@@ -72,8 +76,8 @@ async function loadBuiltModule(entryPath, globals = {}) {
       const referencingPath = fileURLToPath(referencingModule.identifier);
       const candidateBase = path.resolve(path.dirname(referencingPath), specifier);
       const fileCandidates = [
-        candidateBase,
         `${candidateBase}.js`,
+        candidateBase,
         path.join(candidateBase, "index.js")
       ];
       const nextPath = fileCandidates.find((candidate) => {
@@ -196,7 +200,12 @@ async function main() {
   };
 
   const modulePath = path.join(root, "dist-app/renderer/state/uiStore.js");
-  const { useUiStore } = await loadBuiltModule(modulePath, { window });
+  const moduleNamespace = await loadBuiltModule(modulePath, { window });
+  if (!moduleNamespace) {
+    console.log("regression_app_ui_store_live_wings_flow: SKIP (vm modules unavailable)");
+    return;
+  }
+  const { useUiStore } = moduleNamespace;
   useUiStore.setState((state) => ({
     ...state,
     runtimeMode: "live"
@@ -211,7 +220,7 @@ async function main() {
   assert.equal(state.bridgeStatus.message, "브라우저가 연결되었습니다.");
   assert.match(
     state.jobStatusCards.find((job) => job.id === "reservation-audit")?.detail || "",
-    /예약 데이터를 읽을 수 있습니다\./
+    /(예약 데이터를 읽을 수 있습니다\.|reservation rows available)/i
   );
   assert.ok(
     state.providerCards

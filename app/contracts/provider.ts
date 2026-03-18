@@ -5,6 +5,19 @@ export interface DateRangeQuery {
   endDate: string;
 }
 
+export interface LiveReadQuery extends DateRangeQuery {
+  branch?: string;
+  runId?: string | null;
+}
+
+export interface LiveReadRunContext extends LiveReadQuery {
+  runId: string;
+  branch: string;
+  requestedAt: string;
+  runtimeMode?: string;
+  sourceProvider?: string | null;
+}
+
 export interface ProviderInventoryCompareRow {
   provider?: ProviderType;
   branch?: string;
@@ -36,7 +49,7 @@ export interface ProviderInventoryCompareRow {
 export interface FetchProviderRowsRequest {
   type: "provider.fetchRows";
   provider: ProviderType;
-  query: DateRangeQuery;
+  query: LiveReadQuery;
 }
 
 export interface FetchProviderRowsResponse<T = unknown> {
@@ -58,13 +71,47 @@ export interface FetchProviderRowsResponse<T = unknown> {
 export interface FetchReservationsRequest {
   type: "provider.fetchReservations";
   provider: ProviderType;
-  query: DateRangeQuery;
+  query: LiveReadQuery;
 }
 
 export interface FetchSheetSnapshotRequest {
   type: "provider.fetchSheetSnapshot";
-  query: DateRangeQuery & {
-    branch?: string;
+  query: LiveReadQuery;
+}
+
+export type LiveReadSourceStatus =
+  | "read-live"
+  | "partial-live"
+  | "empty"
+  | "unconfigured"
+  | "unavailable"
+  | "error"
+  | "unsupported";
+
+export interface LiveReadSourceCoverage {
+  provider: "sheet" | ProviderType;
+  status: LiveReadSourceStatus;
+  source: string;
+  rowCount: number;
+  branchScoped: boolean;
+  readOnly: true;
+  usedFallback: boolean;
+  error: string;
+  endpointCapability?: string;
+}
+
+export interface LiveReadCoverage {
+  runId: string;
+  branch: string;
+  startDate: string;
+  endDate: string;
+  requestedAt: string;
+  overallStatus: "read-live" | "partial-live" | "offline-preview";
+  sources: {
+    sheet: LiveReadSourceCoverage;
+    naverPartner: LiveReadSourceCoverage;
+    adminStation: LiveReadSourceCoverage;
+    wingsPms: LiveReadSourceCoverage;
   };
 }
 
@@ -152,6 +199,9 @@ export interface BindingDecisionSheetRef {
   timezone: string | null;
 }
 
+export type MappingDomain = "inventory" | "provider" | "validation" | "mapping" | "reservation" | "anchor";
+export type MappingSeverity = "critical" | "high" | "medium" | "low";
+
 export interface SectionRef {
   spreadsheetId: string;
   sheetName: string;
@@ -185,8 +235,15 @@ export interface MappingTermBinding {
   confidence: number;
   method: "rule" | "manual" | "embedding";
   decidedAt: string;
+  resolvedCanonicalId?: string | null;
+  mappingDomain?: MappingDomain;
+  severity?: MappingSeverity;
   decisionKey?: string | null;
   rawHeader?: string | null;
+  evidenceSource?: string;
+  evidenceSignals?: string[];
+  ruleId?: string | null;
+  evidenceLineage?: string[];
 }
 
 export interface MappingUnresolvedBinding {
@@ -196,6 +253,12 @@ export interface MappingUnresolvedBinding {
   candidateTerms: string[];
   reason: string;
   status: "open" | "reviewed" | "resolved";
+  mappingDomain?: MappingDomain;
+  severity?: MappingSeverity;
+  confidence?: number;
+  evidenceSource?: string;
+  evidenceSignals?: string[];
+  ruleId?: string;
 }
 
 export interface ProviderValueSource {
@@ -220,6 +283,34 @@ export interface StructuralVariant {
   detail: string;
 }
 
+export interface MappingArtifactMetrics {
+  autoBindingCount: number;
+  manualBindingCount: number;
+  unresolvedByDomain: Partial<Record<MappingDomain, number>>;
+  exactAutoBindingCount: number;
+  roomAliasBindingCount: number;
+  reservationIdentityBindingCount: number;
+  softTriageCount: number;
+  targetedUnresolvedCount: number;
+  precisionScore: number;
+  precisionGate: "ready" | "needs-review" | "not-applicable";
+  confidenceBands: {
+    high: number;
+    medium: number;
+    low: number;
+  };
+}
+
+export interface MappingTruthArtifactLink {
+  kind: "room-alias-graph" | "reservation-identity-graph" | "provider-taxonomy" | "branch-provider-mapping";
+  version: string;
+  source: string;
+  available: boolean;
+  confidence: number;
+  detail: string;
+  signals: string[];
+}
+
 export interface MappingArtifact {
   runId: string | null;
   section: SectionRef;
@@ -229,34 +320,41 @@ export interface MappingArtifact {
   providerValueSource: ProviderValueSource;
   structuralSummary: StructuralVariant[];
   validationSummary: FetchSheetValidationSummary;
+  metrics?: MappingArtifactMetrics;
+  truthSignals?: MappingTruthArtifactLink[];
 }
 
 export type SearchDocumentKind =
-  | "inventory-row"
-  | "audit-row"
-  | "unresolved"
-  | "artifact-line"
-  | "evidence"
-  | "ops"
-  | "validation"
-  | "log";
+  | "inventory-explanation"
+  | "reservation-explanation"
+  | "settings-explanation"
+  | "binding-summary"
+  | "unresolved-binding"
+  | "decision-trace"
+  | "validation-summary"
+  | "structural-summary"
+  | "verify-output"
+  | "acceptance-trace";
 
 export interface SearchDocument {
   docId: string;
   runId: string;
   kind: SearchDocumentKind;
-  sourceSystem: string;
+  sectionKey: string | null;
+  source: string;
   sourceLineIndex: number | null;
   rawText: string;
   canonicalFields: string[];
   candidateBasis: string[];
   signals: string[];
   tags: string[];
+  evidenceLineage: string[];
   jumpTarget: {
     runId: string;
     task: "inventory-compare" | "reservation-audit" | "settings";
     panel?: "evidence" | "ops" | "validation" | "logs";
     rowId?: string | null;
+    anchorId?: string | null;
     sectionKey?: string | null;
     lineIndex?: number | null;
   };
@@ -265,9 +363,13 @@ export interface SearchDocument {
 export interface SearchHit {
   docId: string;
   kind: SearchDocumentKind;
+  sectionKey: string | null;
+  source: string;
   score: number;
   matchReason: string;
   excerpt: string;
+  candidateBasis: string[];
+  evidenceLineage: string[];
   jumpTarget: SearchDocument["jumpTarget"];
 }
 
@@ -298,6 +400,7 @@ export interface WorkspaceSearchReservationRow {
 export interface WorkspaceSearchIndexInput {
   runId: string;
   branch: string;
+  activeTask: "inventory-compare" | "reservation-audit" | "settings";
   inventoryRows: WorkspaceSearchInventoryRow[];
   reservationRows: WorkspaceSearchReservationRow[];
   evidenceLines: string[];
@@ -306,6 +409,11 @@ export interface WorkspaceSearchIndexInput {
   logs: string[];
   mappingArtifacts: MappingArtifact[];
   artifactLines: string[];
+  sheetSource: string;
+  sheetError: string;
+  sheetSummary: FetchSheetSnapshotSummary | null;
+  savedDecisions: SavedBindingDecision[];
+  recommendationTraces: RecommendationTrace[];
 }
 
 export interface IndexWorkspaceSearchRequest {
@@ -395,6 +503,27 @@ export interface FetchSheetSnapshotResponse {
   error?: string;
 }
 
+export interface FetchLiveReadBundleRequest {
+  type: "provider.fetchLiveReadBundle";
+  context: LiveReadRunContext;
+}
+
+export interface FetchLiveReadBundlePayload {
+  context: LiveReadRunContext;
+  sheet: FetchSheetSnapshotResponse;
+  providerRows: {
+    "naver-partner": FetchProviderRowsResponse<ProviderInventoryCompareRow>;
+    "admin-station": FetchProviderRowsResponse<ProviderInventoryCompareRow>;
+  };
+  reservations: FetchReservationsResponse<ProviderReservationRow>;
+  coverage: LiveReadCoverage;
+}
+
+export interface FetchLiveReadBundleResponse {
+  ok: true;
+  payload: FetchLiveReadBundlePayload;
+}
+
 export interface LoadBindingDecisionsRequest {
   type: "binding.loadDecisions";
   branch: string;
@@ -414,6 +543,236 @@ export interface SaveBindingDecisionRequest {
 export interface SaveBindingDecisionResponse {
   ok: true;
   decision: SavedBindingDecision;
+}
+
+export interface RecommendationTrace {
+  referenceKey: string;
+  traceKey: string;
+  branch: string;
+  sheetRef: BindingDecisionSheetRef;
+  runId: string | null;
+  sectionKey: string | null;
+  anchorId: string;
+  rawHeader: string;
+  candidateId: string;
+  candidateBasis: string[];
+  evidenceLineage: string[];
+  modelVersion: string;
+  outcome: "accepted" | "rejected";
+  decidedAt: string;
+}
+
+export interface SaveRecommendationTraceInput {
+  branch: string;
+  sheetRef: BindingDecisionSheetRef;
+  runId?: string | null;
+  sectionKey?: string | null;
+  anchorId: string;
+  rawHeader: string;
+  candidateId: string;
+  candidateBasis: string[];
+  evidenceLineage: string[];
+  modelVersion: string;
+  outcome: "accepted" | "rejected";
+}
+
+export interface LoadRecommendationTracesRequest {
+  type: "recommendation.loadTraces";
+  branch: string;
+  sheetRef: BindingDecisionSheetRef;
+}
+
+export interface LoadRecommendationTracesResponse {
+  ok: true;
+  traces: RecommendationTrace[];
+}
+
+export interface SaveRecommendationTraceRequest {
+  type: "recommendation.saveTrace";
+  trace: SaveRecommendationTraceInput;
+}
+
+export interface SaveRecommendationTraceResponse {
+  ok: true;
+  trace: RecommendationTrace;
+}
+
+export type OperatorExportVerifyClassification = "live-success" | "sheet-unconfigured" | "failure" | "unavailable";
+
+export interface OperatorExportVerifyEvidence {
+  source: string;
+  classification: OperatorExportVerifyClassification;
+  failureCategory: SheetReadFailureCategory;
+  failureDetail: string;
+  summaryLines: string[];
+}
+
+export interface OperatorExportSectionSummary {
+  sectionKey: string;
+  state: "active" | "preopen";
+  bindingCount: number;
+  unresolvedCount: number;
+  exactAutoBindingCount: number;
+  softTriageCount: number;
+  precisionScore: number;
+  precisionGate: "ready" | "needs-review" | "not-applicable";
+  latestAcceptedCount: number;
+  latestRejectedCount: number;
+}
+
+export type OperatorExportHandoffFormat = "copy-text" | "json" | "csv";
+export type OperatorExportHandoffStatus = "sent" | "confirmed" | "needs-follow-up";
+export type OperatorExportImpactScope = "operations" | "implementation" | "mixed";
+
+export interface OperatorExportManifest {
+  runId: string;
+  branch: string;
+  generatedAt: string;
+  source: string;
+  verifyClassification: OperatorExportVerifyClassification;
+  spreadsheetId: string;
+  sheetName: string;
+  startDate: string;
+  endDate: string;
+  sectionCount: number;
+  unresolvedCount: number;
+  exactAutoBindingCount: number;
+  softTriageCount: number;
+  precisionScore: number;
+  precisionGate: "ready" | "needs-review" | "not-applicable";
+  triageCoverage: number;
+  traceCount: number;
+  latestAcceptedCount: number;
+  latestRejectedCount: number;
+}
+
+export interface OperatorExportHandoffPayload {
+  format: OperatorExportHandoffFormat;
+  fileName: string;
+  mimeType: string;
+  content: string;
+}
+
+export interface OperatorExportHandoffHistoryItem {
+  handoffId: string;
+  runId: string;
+  branch: string;
+  sheetRef: BindingDecisionSheetRef;
+  target: "clipboard" | "file";
+  format: OperatorExportHandoffFormat;
+  exportedAt: string;
+  fileName: string | null;
+  filePath: string | null;
+  bytes: number;
+  verifyClassification: OperatorExportVerifyClassification;
+  source: string;
+  startDate: string;
+  endDate: string;
+  evidenceLineage: string[];
+  status: OperatorExportHandoffStatus;
+  impactScope: OperatorExportImpactScope;
+  impactReasons: string[];
+  repeatedFromHandoffId?: string | null;
+  payload: OperatorExportHandoffPayload;
+}
+
+export interface OperatorExportBundle {
+  runId: string;
+  branch: string;
+  generatedAt: string;
+  sheetRef: BindingDecisionSheetRef;
+  dateRange: {
+    startDate: string;
+    endDate: string;
+  };
+  verifyEvidence: OperatorExportVerifyEvidence;
+  metrics: {
+    sectionCount: number;
+    manualDecisionCount: number;
+    unresolvedCount: number;
+    exactAutoBindingCount: number;
+    softTriageCount: number;
+    precisionScore: number;
+    precisionGate: "ready" | "needs-review" | "not-applicable";
+    latestAcceptedCount: number;
+    latestRejectedCount: number;
+    triagedCandidateCount: number;
+    triageCoverage: number;
+    supersededTraceCount: number;
+    traceCount: number;
+  };
+  sections: OperatorExportSectionSummary[];
+  traces: RecommendationTrace[];
+  manifest: OperatorExportManifest;
+  evidenceLineage: string[];
+  operatorLoopLines: string[];
+  handoffSummary: {
+    totalCount: number;
+    pendingCount: number;
+    needsFollowUpCount: number;
+    confirmedCount: number;
+    hiddenNeedsFollowUpCount: number;
+  };
+  handoffHistory: OperatorExportHandoffHistoryItem[];
+  followUpQueue: OperatorExportHandoffHistoryItem[];
+  handoff: {
+    copyText: string;
+    files: OperatorExportHandoffPayload[];
+  };
+  previewLines: string[];
+}
+
+export interface BuildOperatorExportRequest {
+  type: "operator.buildExport";
+  runId: string;
+  branch: string;
+}
+
+export interface BuildOperatorExportResponse {
+  ok: true;
+  exportBundle: OperatorExportBundle | null;
+}
+
+export interface ExportOperatorHandoffRequest {
+  type: "operator.exportHandoff";
+  runId: string;
+  branch: string;
+  format: OperatorExportHandoffFormat;
+  target: "clipboard" | "file";
+}
+
+export interface ExportOperatorHandoffResponse {
+  ok: true;
+  exported: boolean;
+  target: "clipboard" | "file";
+  format: OperatorExportHandoffFormat;
+  filePath: string | null;
+  fileName: string | null;
+  bytes: number;
+}
+
+export interface RepeatOperatorHandoffRequest {
+  type: "operator.repeatHandoff";
+  handoffId: string;
+  target: "clipboard" | "file";
+}
+
+export interface RepeatOperatorHandoffResponse {
+  ok: true;
+  repeated: boolean;
+  handoff: OperatorExportHandoffHistoryItem | null;
+  filePath: string | null;
+}
+
+export interface UpdateOperatorHandoffStatusRequest {
+  type: "operator.updateHandoffStatus";
+  handoffId: string;
+  status: OperatorExportHandoffStatus;
+}
+
+export interface UpdateOperatorHandoffStatusResponse {
+  ok: true;
+  handoff: OperatorExportHandoffHistoryItem | null;
 }
 
 export interface DeleteBindingDecisionRequest {

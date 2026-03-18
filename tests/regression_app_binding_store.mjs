@@ -17,6 +17,7 @@ async function main() {
       sheetId: null,
       timezone: "Asia/Seoul"
     },
+    sectionKey: "GANGNAM",
     anchorId: "spreadsheet-123:운영시트:grid-hash:NAVER:value-row",
     rawHeader: "PROVIDER_VALUE_ROW_MISSING",
     termId: "inventory.provider-value-row",
@@ -25,6 +26,8 @@ async function main() {
 
   assert.equal(saved.termId, "inventory.provider-value-row");
   assert.equal(saved.method, "manual");
+  assert.equal(saved.sectionKey, "GANGNAM");
+  assert.match(saved.decisionKey, /gangnam\|spreadsheet-123\|운영시트\|gangnam\|/i);
 
   const loaded = await bindingStore.loadBindingDecisions({
     branch: "GANGNAM",
@@ -37,9 +40,26 @@ async function main() {
   });
   assert.equal(loaded.length, 1);
   assert.equal(loaded[0].decisionKey, saved.decisionKey);
+  assert.equal(loaded[0].sectionKey, "GANGNAM");
+
+  const legacySaved = await bindingStore.saveBindingDecision({
+    branch: "GANGNAM",
+    sheetRef: {
+      spreadsheetId: "spreadsheet-123",
+      sheetName: "운영시트",
+      sheetId: null,
+      timezone: "Asia/Seoul"
+    },
+    anchorId: "spreadsheet-123:운영시트:grid-hash:scan-config",
+    rawHeader: "scanConfig",
+    termId: "sheet.scan-config",
+    confidence: 1
+  });
+  assert.equal(legacySaved.sectionKey, null);
 
   const deleted = await bindingStore.deleteBindingDecision(saved.decisionKey);
   assert.equal(deleted, true);
+  await bindingStore.deleteBindingDecision(legacySaved.decisionKey);
   const afterDelete = await bindingStore.loadBindingDecisions({
     branch: "GANGNAM",
     sheetRef: {

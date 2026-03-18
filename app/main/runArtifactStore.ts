@@ -1,4 +1,5 @@
 import type {
+  MappingArtifact,
   FetchSheetSnapshotSummary,
   SheetArtifactVisibleSlice
 } from "../contracts/provider.js";
@@ -8,12 +9,14 @@ interface SheetRunArtifactInput {
   error: string;
   summary: FetchSheetSnapshotSummary | null;
   snapshot: Record<string, unknown> | null;
+  mappingArtifacts?: MappingArtifact[];
 }
 
 interface SheetRunArtifactRecord extends SheetRunArtifactInput {
   runId: string;
   createdAt: string;
   lines: string[];
+  mappingArtifacts: MappingArtifact[];
 }
 
 const MAX_SHEET_RUN_ARTIFACTS = 20;
@@ -41,13 +44,26 @@ function buildArtifactLines(record: SheetRunArtifactInput) {
     return [record.error || record.source || "sheet snapshot unavailable"];
   }
 
+  const mappingArtifacts = Array.isArray(record.mappingArtifacts) ? record.mappingArtifacts : [];
+  const bindingCount = mappingArtifacts.reduce((count, artifact) => count + artifact.bindings.length, 0);
+  const unresolvedCount = mappingArtifacts.reduce((count, artifact) => count + artifact.unresolved.length, 0);
+
   const lines = [
     `시트 ${summary.sheetName || "미설정"} ${summary.startDate}..${summary.endDate}`,
     `mode=${summary.readMode || "unknown"} | failure=${summary.failureCategory}`,
-    `anchor=NR ${summary.anchorSummary.namedRangeCount} / MD ${summary.anchorSummary.metadataCount}`,
+    `anchor=NR ${summary.anchorSummary.namedRangeCount} / MD ${summary.anchorSummary.metadataCount} / manual=${summary.anchorSummary.manualAnchorUsed ? "yes" : "no"}`,
     `validation=${summary.validationSummary.issueCount} | reservationBlocks=${summary.reservationBlockCount}`,
-    `providerDays=NAVER ${summary.providerValueDays.NAVER} / STATION ${summary.providerValueDays.STATION}`
+    `value-source=${summary.validationSummary.providerValueSourceKind}:${summary.validationSummary.providerValueRow ?? "-"} (${summary.validationSummary.providerRowRole})`,
+    `typed-slots=${summary.validationSummary.typedSlotComplete ? "complete" : "partial"} / duplicate=${summary.validationSummary.typedSlotDuplicate ? "yes" : "no"} / order-variant=${summary.validationSummary.physicalOrderVariant ? "yes" : "no"}`,
+    `providerDays=NAVER ${summary.providerValueDays.NAVER} / STATION ${summary.providerValueDays.STATION}`,
+    `mapping-sections=${mappingArtifacts.length} | bindings=${bindingCount} | unresolved=${unresolvedCount}`
   ];
+
+  for (const artifact of mappingArtifacts) {
+    lines.push(
+      `section=${artifact.section.sectionKey} | state=${artifact.section.state} | anchors=${artifact.anchors.length} | bindings=${artifact.bindings.length} | unresolved=${artifact.unresolved.length} | exactAuto=${artifact.metrics?.exactAutoBindingCount ?? 0} | softTriage=${artifact.metrics?.softTriageCount ?? 0} | precision=${artifact.metrics?.precisionScore ?? 0}`
+    );
+  }
 
   if (summary.retryReason) {
     lines.push(`retry=${summary.retryReason}`);
@@ -76,11 +92,25 @@ export function createEmptyVisibleSlice(): SheetArtifactVisibleSlice {
 
 export function storeSheetRunArtifact(input: SheetRunArtifactInput) {
   const runId = nextRunId();
+  const mappingArtifacts = Array.isArray(input.mappingArtifacts)
+    ? input.mappingArtifacts.map((artifact) => ({
+        ...artifact,
+        runId,
+        bindings: [...artifact.bindings],
+        unresolved: [...artifact.unresolved],
+        anchors: [...artifact.anchors],
+        structuralSummary: [...artifact.structuralSummary]
+      }))
+    : [];
   const record: SheetRunArtifactRecord = {
     ...input,
     runId,
     createdAt: new Date().toISOString(),
-    lines: buildArtifactLines(input)
+    mappingArtifacts,
+    lines: buildArtifactLines({
+      ...input,
+      mappingArtifacts
+    })
   };
   sheetRunArtifacts.set(runId, record);
   pruneArtifacts();
