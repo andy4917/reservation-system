@@ -39,6 +39,12 @@
 - 앱에서 실제 live inventory/audit rows가 보인다.
 - HAR fallback 없이 브라우저 세션 기준 조회가 성공한다.
 
+현재 상태:
+
+- main-owned `LiveReadRunContext`와 `coverage` bundle까지는 구현 완료
+- 현재 환경에서는 `sheet-unconfigured / provider unavailable / wings unavailable`로 `offline-preview`
+- 즉 코드 경로는 닫혔고, 남은 것은 운영 환경 smoke다
+
 ## Stage 2. Truth-Aligned Mapping Core
 
 목표:
@@ -56,6 +62,12 @@
 
 - branch-aware join precision을 추적할 수 있다.
 - unresolved mapping이 명시적으로 분리된다.
+
+현재 상태:
+
+- exact room alias / reservation identity auto binding 구현 완료
+- soft-triage, precision score, precision gate까지 artifact/export/search/UI에 노출 완료
+- mapping core v1은 닫혔고, 후속은 recommendation 고도화 또는 운영 환경 실증이다
 
 ## Stage 3. Search / Recommendation 실제화
 
@@ -82,8 +94,8 @@
 
 현재 상태:
 
-- 2026-03-17 기준 좁은 Stage 3 계약은 닫혔다.
-- 다음 단계는 broad UI expansion이 아니라 `Stage 4. Evidence / Export / Operator Loop`의 external handoff contract와 operator replay loop 설계/구현이다.
+- bounded search, recommendation trace 저장, evidence jump는 구현 완료
+- 다음 단계는 broad search 확장이 아니라 운영 환경 재검증과 triage 정밀화다
 
 제외 범위:
 
@@ -110,10 +122,10 @@
 
 - 운영자가 앱 화면과 export만으로 업무를 마칠 수 있다.
 
-현재 시작점:
+현재 상태:
 
-- operator export의 main-owned minimal bundle, verify classification, measured loop summary는 이미 존재한다.
-- 아직 없는 것은 external file/clipboard handoff, replay-friendly operator view, 전달물 format 고정이다.
+- external file/clipboard handoff, operator history, follow-up queue, 전달물 format 고정까지 구현 완료
+- precision / soft-triage summary도 handoff surface에 포함된다
 
 ## Stage 5. Apply 판단
 
@@ -129,6 +141,11 @@
 완료 기준:
 
 - apply가 범위 안인지 범위 밖인지 명시적으로 결정된다.
+
+현재 상태:
+
+- 아직 결정 전
+- read-only 운영 가치 검증이 우선이다
 
 ## 검증 원칙
 

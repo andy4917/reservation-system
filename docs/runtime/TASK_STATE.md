@@ -1,9 +1,9 @@
 # TASK STATE
 
-- updated_at: 2026-03-18T22:34:21+09:00
+- updated_at: 2026-03-18T22:50:13+09:00
 - status: verified
 - goal: Stage 1 `Live Read 최소 경로`와 Stage 2 `Truth-Aligned Mapping Core` completion을 위해 실제 시트/PMS 기반 alias/identity auto binding과 precision/soft-triage surface를 반영
-- current_milestone: operator/search/UI surface까지 precision gate와 soft triage를 연결하고 targeted regressions로 검증 완료
+- current_milestone: stage/v1 checklist, repo handoff, active memory, archive 정리까지 현재 상태 기준으로 동기화
 - next_step: 환경 세션이 준비되면 `offline-preview`를 넘어 실제 `read-live` smoke를 다시 확인
 
 ## Completed
@@ -22,6 +22,8 @@
 - `app/renderer/components/RightPanel.tsx`, `app/renderer/components/surfaces/SettingsSurface.tsx`에서 exact auto binding, soft triage, precision gate/score를 최소 UI 변경으로 surface에 반영했습니다.
 - `tests/regression_app_binding_artifacts.mjs`, `tests/regression_app_operator_export_runtime.mjs`, `tests/regression_app_search_runtime.mjs`를 completion 기준으로 갱신했습니다.
 - `npm run app:check`, `npm run app:build:main`, `node tests/regression_app_binding_artifacts.mjs`, `node tests/regression_app_mapping_auto_binding_runtime.mjs`, `node tests/regression_app_operator_export_runtime.mjs`, `node tests/regression_app_search_runtime.mjs`, `node --experimental-vm-modules tests/regression_app_ui_store_live_wings_flow.mjs`, `node scripts/live_read_verify.mjs --json`를 통과했습니다.
+- `docs/runtime/STAGE_V1_CHECKLIST.md`, `docs/runtime/HANDOFF.md`, `docs/runtime/ACTIVE_MEMORY.md`를 추가했습니다.
+- 완료된 stage 설계 문서와 옛 handoff는 `docs/archive/stage-history/`로 이동했습니다.
 
 ## Current Findings
 - Stage 1의 `sheet/provider/wings`는 이제 하나의 main-owned live bundle과 coverage 요약으로 묶이지만, 실제 live 성공 여부는 환경 설정/브라우저 세션 가용성에 계속 의존합니다.
@@ -29,6 +31,7 @@
 - reservation identity soft match는 자동 채택하지 않고 unresolved로만 남기되, operator export/search/UI에서 잔량과 precision gate를 직접 드러냅니다.
 - `preopen` section은 더 이상 숨기지 않고 artifact로 유지되어 운영 상태를 드러냅니다.
 - UI store 회귀는 기본 Node 환경에서는 `vm` 모듈 미지원으로 skip 처리되며, `--experimental-vm-modules` 경로에서 실제 동작을 확인했습니다.
+- 현재 active 문서는 `docs/runtime/*`이고, 이전 stage memo는 archive로 분리됐습니다.
 
 ## Risks
 - 현재 환경의 `live_read_verify` 결과는 `offline-preview`이며, 운영 세션이 없는 상태를 명시적으로 보여 줍니다.
