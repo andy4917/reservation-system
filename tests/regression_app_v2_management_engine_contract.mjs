@@ -14,6 +14,8 @@ function main() {
   const runner = read(root, "app_v2/main/reservationActionRunner.ts");
   const appSource = read(root, "app_v2/renderer/App.tsx");
 
+  assert.doesNotMatch(contracts, /\bmock\b/);
+  assert.doesNotMatch(runner, /\bmock\b/);
   assert.match(contracts, /planToken/);
   assert.match(contracts, /requiresApproval/);
   assert.match(contracts, /applyAllowed/);

@@ -97,7 +97,7 @@ Expected: FAIL because only continuation candidates inside validate/edit are sco
 Extend the read-only runner to:
 - score live ops rows for `order-list` and `arrival`
 - annotate validate/edit rows with stronger evidence labels
-- keep `compare`, `reconcile`, and `apply` in read-only/mock mode
+- keep `compare`, `reconcile`, and `apply` in read-only placeholder mode
 
 - [ ] **Step 4: Run test to verify it passes**
 

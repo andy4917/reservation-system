@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the `compare`, `reconcile`, and `apply` mock paths in `app_v2` with a real read-only reservation-management engine that uses existing reconciliation logic and a dry-run apply planner without executing writes.
+**Goal:** Replace the `compare`, `reconcile`, and `apply` placeholder paths in `app_v2` with a real read-only reservation-management engine that uses existing reconciliation logic and a dry-run apply planner without executing writes.
 
 **Architecture:** Add a Python bridge dedicated to reservation-management actions. The bridge will load sheet blocks, optionally load source-record fixtures or future live source bundles, run `cross_validate_sheet_vs_sources`, summarize rows for compare/reconcile, and generate a dry-run apply patch plan with approval token output. TypeScript will call this bridge from `reservationActionRunner.ts` and keep write execution disabled.
 
@@ -114,7 +114,7 @@ assert.match(runner, /planToken/);
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node tests/regression_app_v2_management_engine_contract.mjs`  
-Expected: FAIL because the runner still returns mock summaries.
+Expected: FAIL because the runner still returns placeholder summaries.
 
 - [ ] **Step 3: Write minimal implementation**
 

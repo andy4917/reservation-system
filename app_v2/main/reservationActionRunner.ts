@@ -395,7 +395,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
         evidence: [`error:${error instanceof Error ? error.message : String(error)}`],
         rows: buildMockRows(input),
         outputPath: null,
-        engineStatus: "mock",
+        engineStatus: "fallback",
         issueCount: 0,
         planToken: "",
         requiresApproval: false,

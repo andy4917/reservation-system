@@ -21,7 +21,7 @@ export type AppSheetReadinessStatus = "ready" | "needs-settings" | "invalid-sett
 export type AppLiveReadStatus = "idle" | "loading" | "done" | "error";
 export type AppBgeM3Runtime = "local-path" | "download-if-missing";
 export type AppBgeInstallStatus = "ready" | "installed" | "error";
-export type AppReservationEngineStatus = "mock" | "pending-source" | "planned";
+export type AppReservationEngineStatus = "fallback" | "pending-source" | "planned";
 
 export interface AppSheetTabSettings {
   coexMain: string;
