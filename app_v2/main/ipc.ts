@@ -36,6 +36,30 @@ function normalizeSettingsPayload(input: unknown): Partial<AppSettings> {
   return {
     spreadsheet: typeof payload.spreadsheet === "string" ? payload.spreadsheet : "",
     sheetName: typeof payload.sheetName === "string" ? payload.sheetName : "",
+    sheetTabs:
+      payload.sheetTabs && typeof payload.sheetTabs === "object"
+        ? {
+            coexMain:
+              typeof (payload.sheetTabs as Record<string, unknown>).coexMain === "string"
+                ? String((payload.sheetTabs as Record<string, unknown>).coexMain)
+                : "",
+            coexAnnex:
+              typeof (payload.sheetTabs as Record<string, unknown>).coexAnnex === "string"
+                ? String((payload.sheetTabs as Record<string, unknown>).coexAnnex)
+                : "",
+            gangnam:
+              typeof (payload.sheetTabs as Record<string, unknown>).gangnam === "string"
+                ? String((payload.sheetTabs as Record<string, unknown>).gangnam)
+                : "",
+          }
+        : null,
+    opsView:
+      payload.opsView && typeof payload.opsView === "object"
+        ? {
+            excludeRoomMakeup: (payload.opsView as Record<string, unknown>).excludeRoomMakeup === true,
+            flagContinuationCandidates: (payload.opsView as Record<string, unknown>).flagContinuationCandidates !== false,
+          }
+        : null,
     bgeM3:
       payload.bgeM3 && typeof payload.bgeM3 === "object"
         ? {
@@ -109,7 +133,9 @@ function parseReservationActionInput(input: unknown): AppReservationActionInput 
     action: parseReservationAction(payload.action),
     branch: parseBranch(payload.branch),
     startDate: parseDateInput(payload.startDate, "startDate"),
-    endDate: parseDateInput(payload.endDate, "endDate")
+    endDate: parseDateInput(payload.endDate, "endDate"),
+    excludeRoomMakeup: payload.excludeRoomMakeup === true,
+    flagContinuationCandidates: payload.flagContinuationCandidates !== false,
   };
 }
 

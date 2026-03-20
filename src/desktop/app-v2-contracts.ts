@@ -21,6 +21,12 @@ export type AppSheetReadinessStatus = "ready" | "needs-settings" | "invalid-sett
 export type AppLiveReadStatus = "idle" | "loading" | "done" | "error";
 export type AppBgeM3Runtime = "local-path" | "download-if-missing";
 
+export interface AppSheetTabSettings {
+  coexMain: string;
+  coexAnnex: string;
+  gangnam: string;
+}
+
 export interface AppBgeM3Settings {
   enabled: boolean;
   modelId: string;
@@ -30,9 +36,16 @@ export interface AppBgeM3Settings {
   scoreThreshold: number;
 }
 
+export interface AppOpsViewSettings {
+  excludeRoomMakeup: boolean;
+  flagContinuationCandidates: boolean;
+}
+
 export interface AppSettings {
   spreadsheet: string;
   sheetName: string;
+  sheetTabs?: AppSheetTabSettings | null;
+  opsView?: AppOpsViewSettings | null;
   reportWindowDays?: number;
   bgeM3?: AppBgeM3Settings | null;
 }
@@ -146,6 +159,8 @@ export interface AppReservationActionInput {
   branch: AppBranch;
   startDate: string;
   endDate: string;
+  excludeRoomMakeup?: boolean;
+  flagContinuationCandidates?: boolean;
 }
 
 export interface AppReservationActionRow {
@@ -153,6 +168,7 @@ export interface AppReservationActionRow {
   primary: string;
   secondary: string;
   statusLabel: string;
+  detail?: string;
 }
 
 export interface AppReservationActionSnapshot {

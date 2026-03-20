@@ -18,6 +18,7 @@ export interface ActionOutputRow {
   primary: string;
   secondary: string;
   statusLabel: string;
+  detail?: string;
 }
 
 export interface ReservationActionState {

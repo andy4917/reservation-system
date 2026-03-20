@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+import path from "node:path";
 import type {
   AppBranch,
   AppLiveReadInput,
@@ -8,61 +10,28 @@ import type {
 import { getProviderBrowserState } from "./providerWorkspaceManager.js";
 import { loadSettingsSnapshot } from "./settingsStore.js";
 
-const BRANCH_ROOM_LABELS: Record<AppBranch, string[]> = {
-  COEX: ["디럭스 더블", "패밀리 스위트", "스탠다드 트윈"],
-  GANGNAM: ["프리미어 더블", "시티 트윈", "레지던스 스위트"],
-};
+const PYTHON_COMMAND = process.env.PYTHON_BIN || "python3";
+
+interface LiveSheetBridgePayload {
+  branch: AppBranch;
+  checkedAt: string;
+  recordsImported: number;
+  summary: string;
+  items: AppLiveReadPreviewItem[];
+  evidence: string[];
+  error?: string;
+}
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-function countWindowDays(startDate: string, endDate: string) {
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate}T00:00:00`);
-  const diff = Math.round((end.getTime() - start.getTime()) / 86400000);
-  return Number.isFinite(diff) ? Math.max(diff + 1, 1) : 1;
-}
-
-async function buildSettingsEvidence() {
-  const settings = await loadSettingsSnapshot();
-  return [
-    `spreadsheet:${settings.config?.spreadsheet ? "set" : "missing"}`,
-    `sheetName:${settings.config?.sheetName ? "set" : "missing"}`,
-    `windowDays:${settings.config?.reportWindowDays ?? 5}`,
-    `bgeM3:${settings.config?.bgeM3?.enabled ? "on" : "off"}`,
-    `bgeModelPath:${settings.config?.bgeM3?.modelPath ? "set" : "missing"}`,
-    `bgeRuntime:${settings.config?.bgeM3?.runtime ?? "local-path"}`,
-  ];
-}
-
-function buildItems(source: AppLiveReadSnapshot["source"], branch: AppBranch): AppLiveReadPreviewItem[] {
-  const rooms = BRANCH_ROOM_LABELS[branch];
-  if (source === "pms") {
-    return rooms.map((room, index) => ({
-      id: `${source}-${branch}-${index}`,
-      title: room,
-      subtitle: `${branch} / PMS 예약 ${index + 3}건`,
-      statusLabel: "LIVE",
-    }));
-  }
-  if (source === "ota") {
-    return ["NAVER", "STATION", "BOOKING"].map((channel, index) => ({
-      id: `${source}-${branch}-${index}`,
-      title: `${channel} 조회`,
-      subtitle: `${branch} / 판매 데이터 ${index + 4}건`,
-      statusLabel: "SYNC",
-    }));
-  }
-  return rooms.map((room, index) => ({
-    id: `${source}-${branch}-${index}`,
-    title: room,
-    subtitle: `${branch} / 예약 시트 블록 ${index + 2}건`,
-    statusLabel: "SHEET",
-  }));
-}
-
-function buildError(source: AppLiveReadSnapshot["source"], branch: AppBranch, blockedReason: string, evidence: string[]): AppLiveReadSnapshot {
+function buildError(
+  source: AppLiveReadSnapshot["source"],
+  branch: AppBranch,
+  blockedReason: string,
+  evidence: string[],
+): AppLiveReadSnapshot {
   return {
     source,
     branch,
@@ -99,75 +68,161 @@ async function ensureProviderReadable(provider: AppProvider, summaryLabel: strin
   };
 }
 
+function runPythonJson(args: string[], cwd: string) {
+  return new Promise<string>((resolve, reject) => {
+    const child = spawn(PYTHON_COMMAND, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(stdout);
+        return;
+      }
+      reject(new Error(stderr.trim() || stdout.trim() || `python exited with ${code}`));
+    });
+  });
+}
+
+function resolveSheetNames(branch: AppBranch, settings: Awaited<ReturnType<typeof loadSettingsSnapshot>>) {
+  const tabs = settings.config?.sheetTabs;
+  if (tabs) {
+    if (branch === "COEX") {
+      return [tabs.coexMain, tabs.coexAnnex].filter(Boolean);
+    }
+    return [tabs.gangnam].filter(Boolean);
+  }
+  return settings.config?.sheetName ? [settings.config.sheetName] : [];
+}
+
+async function buildSettingsEvidence() {
+  const settings = await loadSettingsSnapshot();
+  return [
+    `spreadsheet:${settings.config?.spreadsheet ? "set" : "missing"}`,
+    `sheetName:${settings.config?.sheetName ? "set" : "missing"}`,
+    `sheetTabs:${settings.config?.sheetTabs ? "set" : "missing"}`,
+    `windowDays:${settings.config?.reportWindowDays ?? 5}`,
+    `bgeM3:${settings.config?.bgeM3?.enabled ? "on" : "off"}`,
+    `bgeModelPath:${settings.config?.bgeM3?.modelPath ? "set" : "missing"}`,
+    `bgeRuntime:${settings.config?.bgeM3?.runtime ?? "local-path"}`,
+  ];
+}
+
+async function runLiveSheetBridge(input: AppLiveReadInput): Promise<LiveSheetBridgePayload> {
+  const settings = await loadSettingsSnapshot();
+  const spreadsheet = settings.config?.spreadsheet?.trim() ?? "";
+  const sheetNames = resolveSheetNames(input.branch, settings);
+  if (!spreadsheet || sheetNames.length === 0) {
+    throw new Error("예약 시트 설정이 비어 있습니다.");
+  }
+  const cwd = process.cwd();
+  const scriptPath = path.join(cwd, "scripts", "app_v2_live_sheet_bridge.py");
+  const args = [
+    scriptPath,
+    "sheet-read",
+    "--spreadsheet",
+    spreadsheet,
+    "--branch",
+    input.branch,
+    "--start-date",
+    input.startDate,
+    "--end-date",
+    input.endDate,
+  ];
+  for (const sheetName of sheetNames) {
+    args.push("--sheet-name", sheetName);
+  }
+  const stdout = await runPythonJson(args, cwd);
+  const payload = JSON.parse(stdout) as LiveSheetBridgePayload;
+  if (payload.error) throw new Error(payload.error);
+  return payload;
+}
+
 export async function runPmsRead(input: AppLiveReadInput): Promise<AppLiveReadSnapshot> {
-  const branch = input.branch;
-  const windowDays = countWindowDays(input.startDate, input.endDate);
   const readiness = await ensureProviderReadable("wings-pms", "PMS");
   if (!readiness.ok) {
-    return buildError("pms", branch, readiness.reason, readiness.evidence);
+    return buildError("pms", input.branch, readiness.reason, readiness.evidence);
   }
   const settingsEvidence = await buildSettingsEvidence();
   return {
     source: "pms",
-    branch,
+    branch: input.branch,
     checkedAt: nowIso(),
     status: "done",
-    summary: `${branch} PMS 예약 데이터를 읽었습니다. (${input.startDate} ~ ${input.endDate})`,
-    recordsImported: windowDays * 2 + 1,
+    summary: `${input.branch} PMS 조회는 현재 세션 준비 상태만 확인합니다.`,
+    recordsImported: 0,
     blockedReason: null,
-    items: buildItems("pms", branch),
+    items: [
+      {
+        id: `pms-ready:${input.branch}`,
+        title: "WINGS 세션 준비",
+        subtitle: `${input.startDate} ~ ${input.endDate} 실조회 연결 전 readiness 확인`,
+        statusLabel: "READY",
+      },
+    ],
     evidence: [...readiness.evidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
   };
 }
 
 export async function runOtaRead(input: AppLiveReadInput): Promise<AppLiveReadSnapshot> {
-  const branch = input.branch;
-  const windowDays = countWindowDays(input.startDate, input.endDate);
   const naver = await ensureProviderReadable("naver-partner", "OTA");
   const station = await ensureProviderReadable("admin-station", "OTA");
   if (!naver.ok && !station.ok) {
-    return buildError("ota", branch, "OTA 세션이 준비되지 않았습니다.", [...naver.evidence, ...station.evidence]);
+    return buildError("ota", input.branch, "OTA 세션이 준비되지 않았습니다.", [...naver.evidence, ...station.evidence]);
   }
   const settingsEvidence = await buildSettingsEvidence();
   return {
     source: "ota",
-    branch,
+    branch: input.branch,
     checkedAt: nowIso(),
     status: "done",
-    summary: `${branch} OTA 판매 데이터를 읽었습니다. (${input.startDate} ~ ${input.endDate})`,
-    recordsImported: windowDays * 2 + 2,
+    summary: `${input.branch} OTA 조회는 현재 세션 준비 상태만 확인합니다.`,
+    recordsImported: 0,
     blockedReason: null,
-    items: buildItems("ota", branch),
+    items: [
+      {
+        id: `ota-ready:${input.branch}`,
+        title: "OTA 세션 준비",
+        subtitle: `${input.startDate} ~ ${input.endDate} live adapter 연결 전 readiness 확인`,
+        statusLabel: "READY",
+      },
+    ],
     evidence: [...naver.evidence, ...station.evidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
   };
 }
 
 export async function runSheetRead(input: AppLiveReadInput): Promise<AppLiveReadSnapshot> {
-  const branch = input.branch;
-  const windowDays = countWindowDays(input.startDate, input.endDate);
   const settings = await loadSettingsSnapshot();
   if (!settings.isConfigured) {
-    return buildError("sheet", branch, "예약 시트 설정을 먼저 저장해 주세요.", [
+    return buildError("sheet", input.branch, "예약 시트 설정을 먼저 저장해 주세요.", [
       `spreadsheet:${settings.config?.spreadsheet ? "set" : "missing"}`,
       `sheetName:${settings.config?.sheetName ? "set" : "missing"}`,
+      `sheetTabs:${settings.config?.sheetTabs ? "set" : "missing"}`,
     ]);
   }
-  return {
-    source: "sheet",
-    branch,
-    checkedAt: nowIso(),
-    status: "done",
-    summary: `${branch} 예약 시트 데이터를 읽었습니다. (${input.startDate} ~ ${input.endDate})`,
-    recordsImported: windowDays + 2,
-    blockedReason: null,
-    items: buildItems("sheet", branch),
-    evidence: [
-      `spreadsheet:${settings.config?.spreadsheet ? "set" : "missing"}`,
-      `sheetName:${settings.config?.sheetName ? "set" : "missing"}`,
-      `window:${input.startDate}..${input.endDate}`,
-      `windowDays:${settings.config?.reportWindowDays ?? 5}`,
-      `bgeM3:${settings.config?.bgeM3?.enabled ? "on" : "off"}`,
-      `bgeModelPath:${settings.config?.bgeM3?.modelPath ? "set" : "missing"}`,
-    ],
-  };
+  try {
+    const payload = await runLiveSheetBridge(input);
+    const settingsEvidence = await buildSettingsEvidence();
+    return {
+      source: "sheet",
+      branch: input.branch,
+      checkedAt: payload.checkedAt,
+      status: "done",
+      summary: `${payload.summary} (${input.startDate} ~ ${input.endDate})`,
+      recordsImported: payload.recordsImported,
+      blockedReason: null,
+      items: payload.items,
+      evidence: [...payload.evidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
+    };
+  } catch (error) {
+    return buildError("sheet", input.branch, "예약 시트 라이브 조회에 실패했습니다.", [
+      `error:${error instanceof Error ? error.message : String(error)}`,
+    ]);
+  }
 }

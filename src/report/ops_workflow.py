@@ -7,6 +7,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.domain.ops_sheet_policy import normalize_ops_sheet_spreadsheet
+from src.domain.report_policy import (
+    DEFAULT_ARRIVAL_ARTIFACT_POLICY,
+    DEFAULT_ORDERLIST_POLICY,
+    ArrivalArtifactPolicy,
+    OrderlistPolicy,
+)
 from src.domain.sheet_domain import AuditError, ReservationBlock, try_parse_iso_date
 from src.io.sheets_api import GoogleSheetsReadonlyClient
 from src.report.ops_artifact_report import (
@@ -52,6 +58,8 @@ def build_ops_artifacts(
     report_end: str = "",
     client: Optional[GoogleSheetsReadonlyClient] = None,
     ops_sheet_spreadsheet: str = "",
+    orderlist_policy: OrderlistPolicy = DEFAULT_ORDERLIST_POLICY,
+    arrival_policy: ArrivalArtifactPolicy = DEFAULT_ARRIVAL_ARTIFACT_POLICY,
 ) -> Dict[str, Any]:
     report_window = resolve_report_window(
         blocks,
@@ -60,10 +68,10 @@ def build_ops_artifacts(
         report_end=report_end,
     )
     orderlist_artifact = build_orderlist_artifact(
-        blocks, report_window["start_date"], report_window["end_date"]
+        blocks, report_window["start_date"], report_window["end_date"], policy=orderlist_policy
     )
     arrival_artifact = build_arrival_artifact(
-        blocks, report_window["start_date"], report_window["end_date"]
+        blocks, report_window["start_date"], report_window["end_date"], policy=arrival_policy
     )
     ops_sheet_bundle = build_ops_sheet_export_bundle(
         orderlist_artifact["rows"],

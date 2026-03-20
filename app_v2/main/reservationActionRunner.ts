@@ -3,22 +3,49 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type {
+  AppBranch,
   AppReservationActionInput,
   AppReservationActionRow,
   AppReservationActionSnapshot,
+  AppSettingsSnapshot,
 } from "../../src/desktop/app-v2-contracts.js";
+import { describeEmbeddingAvailability, scoreTextPairs } from "./embeddingRuntime.js";
 import { loadSettingsSnapshot } from "./settingsStore.js";
 
 const PYTHON_COMMAND = process.env.PYTHON_BIN || "python3";
+
+interface ContinuationCandidate {
+  id: string;
+  date: string;
+  roomNo: string;
+  basis: string;
+  departureText: string;
+  arrivalText: string;
+  noteHead: string;
+}
+
+interface OpsBridgePayload {
+  branch: AppBranch;
+  checkedAt: string;
+  reservationBlocks: number;
+  orderlistRows: number;
+  arrivalRows: number;
+  continuationCandidates: ContinuationCandidate[];
+  items: Array<{ id: string; title: string; subtitle: string; statusLabel: string }>;
+  evidence: string[];
+  error?: string;
+}
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-function makeEvidence(settingsSummary: Awaited<ReturnType<typeof loadSettingsSnapshot>>) {
+function makeEvidence(settingsSummary: AppSettingsSnapshot, excludeRoomMakeup: boolean) {
   const bge = settingsSummary.config?.bgeM3;
   return [
     `windowDays:${settingsSummary.config?.reportWindowDays ?? 5}`,
+    `sheetTabs:${settingsSummary.config?.sheetTabs ? "set" : "missing"}`,
+    `excludeRoomMakeup:${excludeRoomMakeup ? "on" : "off"}`,
     `bgeM3:${bge?.enabled ? "on" : "off"}`,
     `bgeRuntime:${bge?.runtime ?? "local-path"}`,
     `bgeModelPath:${bge?.modelPath ? "set" : "missing"}`,
@@ -63,15 +90,16 @@ function parseTabularRows(raw: string, action: AppReservationActionInput["action
   const lines = raw.trim().split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
   const headers = lines[0].split("\t");
-  return lines.slice(1, 7).map((line, index) => {
+  return lines.slice(1, 11).map((line, index) => {
     const values = line.split("\t");
     const row = Object.fromEntries(headers.map((header, headerIndex) => [header, values[headerIndex] ?? ""]));
     if (action === "order-list") {
       return {
         id: `order-${index}`,
         primary: `${row.room_no || "-"} / ${row.task_label || "작업"}`,
-        secondary: [row.date, row.note_head, row.arrival_reservation_nos].filter(Boolean).join(" · ") || "오더리스트",
+        secondary: [row.date, row.note_heads || row.note_head, row.arrival_reservation_nos].filter(Boolean).join(" · ") || "오더리스트",
         statusLabel: row.task_rule_id || "OPS",
+        detail: row.continuation_candidate === "Y" ? `연박 후보 · ${row.continuation_basis || "basis-unknown"}` : "",
       };
     }
     return {
@@ -79,6 +107,7 @@ function parseTabularRows(raw: string, action: AppReservationActionInput["action
       primary: `${row.room_no || "-"} / ${row.section || "ARRIVAL"}`,
       secondary: [row.date, row.arrival_text || row.note_head, row.arrival_reservation_nos].filter(Boolean).join(" · ") || "어라이벌",
       statusLabel: row.section || "ARRIVAL",
+      detail: row.continuation_candidate === "Y" ? `연박 후보 · ${row.continuation_basis || "basis-unknown"}` : "",
     };
   });
 }
@@ -105,59 +134,176 @@ function runPythonScript(args: string[], cwd: string) {
   });
 }
 
-async function runOpsPreview(input: AppReservationActionInput): Promise<AppReservationActionSnapshot> {
+function resolveSheetNames(branch: AppBranch, settingsSnapshot: AppSettingsSnapshot) {
+  const tabs = settingsSnapshot.config?.sheetTabs;
+  if (tabs) {
+    return branch === "COEX" ? [tabs.coexMain, tabs.coexAnnex].filter(Boolean) : [tabs.gangnam].filter(Boolean);
+  }
+  return settingsSnapshot.config?.sheetName ? [settingsSnapshot.config.sheetName] : [];
+}
+
+async function runLiveOpsBridge(
+  input: AppReservationActionInput,
+  settingsSnapshot: AppSettingsSnapshot,
+  outDir: string,
+): Promise<OpsBridgePayload> {
+  const spreadsheet = settingsSnapshot.config?.spreadsheet?.trim() ?? "";
+  const sheetNames = resolveSheetNames(input.branch, settingsSnapshot);
+  if (!spreadsheet || sheetNames.length === 0) {
+    throw new Error("예약 시트 설정이 비어 있습니다.");
+  }
   const cwd = process.cwd();
-  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "uhs-app-v2-ops-"));
-  const scriptPath = path.join(cwd, "scripts", "app_v2_ops_preview.py");
-  const { stdout, stderr } = await runPythonScript(
-    [scriptPath, "--branch", input.branch, "--start-date", input.startDate, "--end-date", input.endDate, "--out-dir", outDir],
-    cwd,
-  );
-  const summaryPath = path.join(outDir, "ops_summary.json");
+  const scriptPath = path.join(cwd, "scripts", "app_v2_live_sheet_bridge.py");
+  const excludeRoomMakeup = input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false;
+  const args = [
+    scriptPath,
+    "ops-preview",
+    "--spreadsheet",
+    spreadsheet,
+    "--branch",
+    input.branch,
+    "--start-date",
+    input.startDate,
+    "--end-date",
+    input.endDate,
+    "--out-dir",
+    outDir,
+  ];
+  for (const sheetName of sheetNames) {
+    args.push("--sheet-name", sheetName);
+  }
+  if (excludeRoomMakeup) {
+    args.push("--exclude-room-makeup");
+  }
+  if (input.flagContinuationCandidates !== false) {
+    args.push("--flag-continuation-candidates");
+  }
+  const { stdout } = await runPythonScript(args, cwd);
+  const payload = JSON.parse(stdout) as OpsBridgePayload;
+  if (payload.error) throw new Error(payload.error);
+  return payload;
+}
+
+async function runLiveOpsPreview(
+  input: AppReservationActionInput,
+  settingsSnapshot: AppSettingsSnapshot,
+): Promise<AppReservationActionSnapshot> {
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "uhs-app-v2-ops-live-"));
+  const payload = await runLiveOpsBridge(input, settingsSnapshot, outDir);
   const tsvPath = path.join(outDir, input.action === "order-list" ? "orderlist_report.tsv" : "arrival_report.tsv");
-  const [summaryRaw, tableRaw] = await Promise.all([fs.readFile(summaryPath, "utf8"), fs.readFile(tsvPath, "utf8")]);
-  const summary = JSON.parse(summaryRaw) as {
-    derived_reports?: {
-      orderlist?: { counts?: { total_rows?: number } };
-      arrival?: { counts?: { total_rows?: number } };
-    };
-  };
-  const total =
-    input.action === "order-list"
-      ? Number(summary.derived_reports?.orderlist?.counts?.total_rows ?? 0)
-      : Number(summary.derived_reports?.arrival?.counts?.total_rows ?? 0);
+  const tableRaw = await fs.readFile(tsvPath, "utf8");
+  const total = input.action === "order-list" ? payload.orderlistRows : payload.arrivalRows;
+  const excludeRoomMakeup = input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false;
   return {
     action: input.action,
     branch: input.branch,
     startDate: input.startDate,
     endDate: input.endDate,
-    checkedAt: nowIso(),
+    checkedAt: payload.checkedAt,
     status: "done",
     summary:
       input.action === "order-list"
-        ? `${input.branch} 오더리스트를 생성했습니다.`
-        : `${input.branch} 어라이벌 보드를 생성했습니다.`,
+        ? `${input.branch} 오더리스트 라이브 미리보기를 생성했습니다.`
+        : `${input.branch} 어라이벌 라이브 미리보기를 생성했습니다.`,
     evidence: [
       `python:${PYTHON_COMMAND}`,
       `window:${input.startDate}..${input.endDate}`,
       `rows:${total}`,
-      stdout.trim(),
-      stderr.trim(),
-    ].filter(Boolean),
+      ...payload.evidence,
+      ...makeEvidence(settingsSnapshot, excludeRoomMakeup),
+    ],
     rows: parseTabularRows(tableRaw, input.action),
     outputPath: outDir,
   };
 }
 
+function buildContinuationRows(
+  input: AppReservationActionInput,
+  payload: OpsBridgePayload,
+  scores: Array<{ id: string; score: number }>,
+): AppReservationActionRow[] {
+  const scoreMap = new Map(scores.map((item) => [item.id, item.score]));
+  return payload.continuationCandidates.slice(0, 8).map((candidate, index) => {
+    const similarity = scoreMap.get(candidate.id);
+    const similarityLabel = typeof similarity === "number" ? ` / sim ${similarity.toFixed(2)}` : "";
+    return {
+      id: `${input.action}-${index}`,
+      primary: `${candidate.roomNo} / ${candidate.date}`,
+      secondary: [candidate.basis || "continuation", candidate.departureText, candidate.arrivalText]
+        .filter(Boolean)
+        .join(" · "),
+      statusLabel: input.action === "edit" ? "AI" : "검토",
+      detail: `${candidate.noteHead || "note-missing"}${similarityLabel}`,
+    };
+  });
+}
+
+async function buildEmbeddingScores(
+  settingsSnapshot: AppSettingsSnapshot,
+  payload: OpsBridgePayload,
+) {
+  if (payload.continuationCandidates.length === 0) return [];
+  return scoreTextPairs(
+    settingsSnapshot,
+    payload.continuationCandidates.map((candidate) => ({
+      id: candidate.id,
+      left: candidate.departureText || candidate.noteHead || candidate.roomNo,
+      right: candidate.arrivalText || candidate.noteHead || candidate.roomNo,
+    })),
+  );
+}
+
 export async function runReservationAction(input: AppReservationActionInput): Promise<AppReservationActionSnapshot> {
   const settingsSnapshot = await loadSettingsSnapshot();
   if (input.action === "order-list" || input.action === "arrival") {
-    const result = await runOpsPreview(input);
-    return {
-      ...result,
-      evidence: [...result.evidence, ...makeEvidence(settingsSnapshot)],
-    };
+    return runLiveOpsPreview(input, settingsSnapshot);
   }
+
+  if (input.action === "validate" || input.action === "edit") {
+    try {
+      const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "uhs-app-v2-ops-validate-"));
+      const payload = await runLiveOpsBridge(input, settingsSnapshot, outDir);
+      const scores = await buildEmbeddingScores(settingsSnapshot, payload);
+      const availability = describeEmbeddingAvailability(settingsSnapshot);
+      const rows = buildContinuationRows(input, payload, scores);
+      if (rows.length > 0) {
+        return {
+          action: input.action,
+          branch: input.branch,
+          startDate: input.startDate,
+          endDate: input.endDate,
+          checkedAt: payload.checkedAt,
+          status: "done",
+          summary:
+            input.action === "validate"
+              ? `${input.branch} 연박 후보 ${rows.length}건을 검토했습니다.`
+              : `${input.branch} read-only 수정 추천 ${rows.length}건을 정리했습니다.`,
+          evidence: [
+            ...payload.evidence,
+            `embedding:${availability.reason}`,
+            `continuationCandidates:${payload.continuationCandidates.length}`,
+            ...makeEvidence(settingsSnapshot, input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false),
+          ],
+          rows,
+          outputPath: outDir,
+        };
+      }
+    } catch (error) {
+      return {
+        action: input.action,
+        branch: input.branch,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        checkedAt: nowIso(),
+        status: "error",
+        summary: `${input.branch} ${input.action} 라이브 검토에 실패했습니다.`,
+        evidence: [`error:${error instanceof Error ? error.message : String(error)}`],
+        rows: buildMockRows(input),
+        outputPath: null,
+      };
+    }
+  }
+
   return {
     action: input.action,
     branch: input.branch,
@@ -166,7 +312,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
     checkedAt: nowIso(),
     status: "done",
     summary: `${input.branch} ${input.action} 작업 결과를 준비했습니다.`,
-    evidence: [`window:${input.startDate}..${input.endDate}`, ...makeEvidence(settingsSnapshot)],
+    evidence: [`window:${input.startDate}..${input.endDate}`, ...makeEvidence(settingsSnapshot, input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false)],
     rows: buildMockRows(input),
     outputPath: null,
   };

@@ -93,7 +93,12 @@ export default function App() {
   const [preflight, setPreflight] = useState<AppPreflightSnapshot | null>(null);
   const [spreadsheet, setSpreadsheet] = useState("");
   const [sheetName, setSheetName] = useState("");
+  const [sheetTabCoexMain, setSheetTabCoexMain] = useState("코엑스");
+  const [sheetTabCoexAnnex, setSheetTabCoexAnnex] = useState("코엑스2");
+  const [sheetTabGangnam, setSheetTabGangnam] = useState("강남");
   const [reportWindowDays, setReportWindowDays] = useState("5");
+  const [excludeRoomMakeup, setExcludeRoomMakeup] = useState(false);
+  const [flagContinuationCandidates, setFlagContinuationCandidates] = useState(true);
   const [bgeEnabled, setBgeEnabled] = useState(true);
   const [bgeRuntime, setBgeRuntime] = useState<"local-path" | "download-if-missing">("local-path");
   const [bgeModelPath, setBgeModelPath] = useState("");
@@ -104,6 +109,7 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<AppBranch>("COEX");
+  const [branchSelectionOpen, setBranchSelectionOpen] = useState(false);
   const [activeModule, setActiveModule] = useState<AppShellModule>("pms-read");
   const [activeReservationAction, setActiveReservationAction] = useState<AppReservationAction>("validate");
   const [workspacePhase, setWorkspacePhase] = useState<WorkspacePhase>("idle");
@@ -131,7 +137,12 @@ export default function App() {
       setSettingsSnapshot(snapshot);
       setSpreadsheet(snapshot.config?.spreadsheet ?? "");
       setSheetName(snapshot.config?.sheetName ?? "");
+      setSheetTabCoexMain(snapshot.config?.sheetTabs?.coexMain ?? "코엑스");
+      setSheetTabCoexAnnex(snapshot.config?.sheetTabs?.coexAnnex ?? "코엑스2");
+      setSheetTabGangnam(snapshot.config?.sheetTabs?.gangnam ?? "강남");
       setReportWindowDays(String(nextWindowDays));
+      setExcludeRoomMakeup(snapshot.config?.opsView?.excludeRoomMakeup ?? false);
+      setFlagContinuationCandidates(snapshot.config?.opsView?.flagContinuationCandidates ?? true);
       setBgeEnabled(snapshot.config?.bgeM3?.enabled ?? true);
       setBgeRuntime(snapshot.config?.bgeM3?.runtime ?? "local-path");
       setBgeModelPath(snapshot.config?.bgeM3?.modelPath ?? "");
@@ -182,6 +193,15 @@ export default function App() {
       const nextSnapshot = await api.saveSettings({
         spreadsheet,
         sheetName,
+        sheetTabs: {
+          coexMain: sheetTabCoexMain,
+          coexAnnex: sheetTabCoexAnnex,
+          gangnam: sheetTabGangnam,
+        },
+        opsView: {
+          excludeRoomMakeup,
+          flagContinuationCandidates,
+        },
         reportWindowDays: Number(reportWindowDays),
         bgeM3: {
           enabled: bgeEnabled,
@@ -212,9 +232,19 @@ export default function App() {
     setBusyKey("login");
     await new Promise((resolve) => setTimeout(resolve, 220));
     setIsLoggedIn(true);
+    setBranchSelectionOpen(true);
     setWorkspacePhase("result");
     setWorkspaceMessage("WINGS 로그인에 성공했습니다. PMS 조회에 같은 자격을 사용합니다.");
     setBusyKey(null);
+  }
+
+  function handleLogout() {
+    setIsLoggedIn(false);
+    setBranchSelectionOpen(false);
+    setWorkspacePhase("idle");
+    setWorkspaceMessage("로그인 화면으로 돌아왔습니다.");
+    setReservationResult(null);
+    setSelectedReviewId(null);
   }
 
   async function runRead(module: Extract<AppShellModule, "pms-read" | "ota-read" | "sheet-read">) {
@@ -255,6 +285,8 @@ export default function App() {
           branch: selectedBranch,
           startDate: windowStart,
           endDate: windowEnd,
+          excludeRoomMakeup,
+          flagContinuationCandidates,
         });
         startTransition(() => {
           setReservationResult(result);
@@ -295,6 +327,11 @@ export default function App() {
     setWorkspacePhase("idle");
     setReservationResult(null);
     setWorkspaceMessage(`${RESERVATION_ACTION_LABELS[action]} 화면을 준비했습니다.`);
+  }
+
+  function confirmBranchSelection() {
+    setBranchSelectionOpen(false);
+    setWorkspaceMessage(`${selectedBranch} 작업창으로 이동했습니다.`);
   }
 
   function confirmSettingsPin() {
@@ -378,6 +415,11 @@ export default function App() {
                   ))}
                 </select>
               </label>
+              <div className="button-row compact-button-row">
+                <button type="button" className="ghost-button" onClick={() => setBranchSelectionOpen(true)}>
+                  지점 선택으로 돌아가기
+                </button>
+              </div>
             </div>
 
             <div className="sidebar-block">
@@ -418,6 +460,9 @@ export default function App() {
 
             <button type="button" className="sidebar-button settings-button" onClick={() => handleModuleChange("settings")}>
               설정
+            </button>
+            <button type="button" className="sidebar-button ghost-sidebar-button" onClick={handleLogout}>
+              로그인 화면으로
             </button>
           </aside>
 
@@ -524,6 +569,29 @@ export default function App() {
                         : `${RESERVATION_ACTION_LABELS[activeReservationAction]} 시작`}
                     </button>
                   </div>
+                  {activeReservationAction === "order-list" ||
+                  activeReservationAction === "arrival" ||
+                  activeReservationAction === "validate" ||
+                  activeReservationAction === "edit" ? (
+                    <div className="toggle-stack">
+                      <label className="toggle-row">
+                        <input
+                          type="checkbox"
+                          checked={excludeRoomMakeup}
+                          onChange={(event) => setExcludeRoomMakeup(event.target.checked)}
+                        />
+                        <span>룸메이크업 제외</span>
+                      </label>
+                      <label className="toggle-row">
+                        <input
+                          type="checkbox"
+                          checked={flagContinuationCandidates}
+                          onChange={(event) => setFlagContinuationCandidates(event.target.checked)}
+                        />
+                        <span>연박 후보 표시</span>
+                      </label>
+                    </div>
+                  ) : null}
                 </article>
 
                 <article className="progress-card">
@@ -565,6 +633,7 @@ export default function App() {
                             <div>
                               <strong>{row.primary}</strong>
                               <span>{row.secondary}</span>
+                              {row.detail ? <small>{row.detail}</small> : null}
                             </div>
                             <em>{row.statusLabel}</em>
                           </div>
@@ -630,13 +699,52 @@ export default function App() {
                   <input value={sheetName} onChange={(event) => setSheetName(event.target.value)} />
                 </label>
                 <label className="field">
+                  <span>코엑스(B동)</span>
+                  <input value={sheetTabCoexMain} onChange={(event) => setSheetTabCoexMain(event.target.value)} />
+                </label>
+                <label className="field">
+                  <span>코엑스2(A동)</span>
+                  <input value={sheetTabCoexAnnex} onChange={(event) => setSheetTabCoexAnnex(event.target.value)} />
+                </label>
+                <label className="field">
+                  <span>강남</span>
+                  <input value={sheetTabGangnam} onChange={(event) => setSheetTabGangnam(event.target.value)} />
+                </label>
+                <label className="field">
                   <span>기본 조회 기간(일)</span>
                   <input value={reportWindowDays} onChange={(event) => setReportWindowDays(event.target.value)} />
                 </label>
                 <div className="detail-panel">사용자 기본값은 오늘부터 {reportWindowDays || "5"}일 범위로 열립니다.</div>
+                <div className="detail-panel">COEX는 {sheetTabCoexMain} + {sheetTabCoexAnnex}, 강남은 {sheetTabGangnam} 탭을 읽습니다.</div>
                 <div className="button-row">
                   <button type="button" onClick={() => void saveSettings()} disabled={busyKey !== null}>
                     저장
+                  </button>
+                </div>
+              </article>
+
+              <article className="settings-section">
+                <h4>오더리스트 / 어라이벌 옵션</h4>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={excludeRoomMakeup}
+                    onChange={(event) => setExcludeRoomMakeup(event.target.checked)}
+                  />
+                  <span>룸메이크업 제외</span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={flagContinuationCandidates}
+                    onChange={(event) => setFlagContinuationCandidates(event.target.checked)}
+                  />
+                  <span>연박 후보 표시</span>
+                </label>
+                <div className="detail-panel">예약번호, 예약키, 이름, 노트 겹침을 기준으로 연박 후보를 read-only로 표시합니다.</div>
+                <div className="button-row">
+                  <button type="button" onClick={() => void saveSettings()} disabled={busyKey !== null}>
+                    옵션 저장
                   </button>
                 </div>
               </article>
@@ -710,6 +818,33 @@ export default function App() {
               </article>
             </div>
           </section>
+        </div>
+      ) : null}
+
+      {isLoggedIn && branchSelectionOpen ? (
+        <div className="overlay">
+          <div className="pin-modal branch-picker">
+            <h3>지점 선택</h3>
+            <p className="support-copy">셸에 들어온 뒤에도 언제든 다시 선택할 수 있습니다.</p>
+            <label className="field">
+              <span>현재 작업 지점</span>
+              <select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value as AppBranch)}>
+                {BRANCH_OPTIONS.map((branch) => (
+                  <option key={branch} value={branch}>
+                    {branch}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="button-row">
+              <button type="button" onClick={confirmBranchSelection}>
+                선택 완료
+              </button>
+              <button type="button" className="ghost-button" onClick={handleLogout}>
+                로그인 화면으로
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

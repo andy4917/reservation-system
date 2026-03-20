@@ -151,6 +151,10 @@ select {
   margin-top: 1.25rem;
 }
 
+.compact-button-row {
+  margin-top: 0.15rem;
+}
+
 .ghost-button {
   background: #edf2f6;
   color: var(--text);
@@ -208,6 +212,11 @@ select {
   text-align: left;
   background: rgba(255, 255, 255, 0.08);
   color: #eef5fb;
+}
+
+.ghost-sidebar-button {
+  background: rgba(255, 255, 255, 0.04);
+  color: #dbe6ef;
 }
 
 .sidebar-button.active,
@@ -370,6 +379,12 @@ select {
   color: var(--muted);
 }
 
+.list-row small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--accent-strong);
+}
+
 .list-row em {
   color: var(--accent-strong);
   font-style: normal;
@@ -402,6 +417,24 @@ select {
 
 .step-chip.locked {
   opacity: 0.48;
+}
+
+.toggle-stack {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--muted);
+}
+
+.toggle-row input {
+  width: auto;
+  margin: 0;
 }
 
 .review-grid {
@@ -451,6 +484,10 @@ select {
   background: rgba(255, 255, 255, 0.97);
   padding: 1.6rem;
   box-shadow: var(--shadow);
+}
+
+.branch-picker {
+  width: min(420px, 100%);
 }
 
 .pin-modal.error {

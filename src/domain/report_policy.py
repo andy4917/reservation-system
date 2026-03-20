@@ -30,6 +30,7 @@ class OrderlistDecisionRule:
 class OrderlistPolicy:
     core_labels: Tuple[str, ...] = CORE_ORDERLIST_LABELS
     exclude_departure_only: bool = True
+    exclude_room_makeup: bool = False
     periodic_room_cleaning_min_nights: int = 4
     periodic_room_cleaning_first_offset_days: int = 3
     periodic_room_cleaning_interval_days: int = 4

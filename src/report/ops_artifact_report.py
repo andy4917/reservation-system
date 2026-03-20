@@ -18,6 +18,7 @@ from src.domain.report_policy import (
     select_orderlist_rule,
 )
 from src.domain.sheet_domain import ReservationBlock, normalize_room_no_key, normalize_text
+from src.scan.sheet_scan import parse_note_info
 
 ORDERLIST_FIELDNAMES = [
     "date",
@@ -38,6 +39,8 @@ ORDERLIST_FIELDNAMES = [
     "stayover_reservation_nos",
     "channels",
     "note_heads",
+    "continuation_candidate",
+    "continuation_basis",
 ]
 
 ARRIVAL_FIELDNAMES = [
@@ -62,6 +65,8 @@ ARRIVAL_FIELDNAMES = [
     "departure_channels",
     "note_head",
     "nationality_nights",
+    "continuation_candidate",
+    "continuation_basis",
 ]
 
 WEEKDAY_LABELS = ("월", "화", "수", "목", "금", "토", "일")
@@ -99,6 +104,9 @@ def build_orderlist_artifact(
             continue
         candidates.sort(key=lambda item: item[0], reverse=True)
         _, rule = candidates[0]
+        continuation_candidate, continuation_basis = detect_continuation_candidate(context)
+        if policy.exclude_room_makeup and rule.rule_id == "stayover_room_makeup":
+            continue
         row = {
             "date": context.date.isoformat(),
             "weekday": weekday_label(context.date),
@@ -122,6 +130,8 @@ def build_orderlist_artifact(
             "note_heads": join_unique(
                 note_head(block.note) for block in context.arrivals + context.departures + context.stayovers
             ),
+            "continuation_candidate": "Y" if continuation_candidate else "",
+            "continuation_basis": continuation_basis,
         }
         rows.append(row)
         label_counts[rule.label] += 1
@@ -162,18 +172,37 @@ def build_arrival_artifact(
 
     for context in contexts:
         is_turnover = bool(context.arrivals and context.departures)
+        continuation_candidate, continuation_basis = detect_continuation_candidate(context)
         if is_turnover and policy.separate_turnover_section:
-            row = build_turnover_row(context)
+            row = build_turnover_row(
+                context,
+                continuation_candidate=continuation_candidate,
+                continuation_basis=continuation_basis,
+            )
             rows.append(row)
             section_counts["TURNOVER"] += 1
             continue
 
         for block in sorted(context.arrivals, key=block_sort_key):
-            row = build_arrival_or_departure_row("ARRIVAL", context, block, is_turnover)
+            row = build_arrival_or_departure_row(
+                "ARRIVAL",
+                context,
+                block,
+                is_turnover,
+                continuation_candidate=continuation_candidate,
+                continuation_basis=continuation_basis,
+            )
             rows.append(row)
             section_counts["ARRIVAL"] += 1
         for block in sorted(context.departures, key=block_sort_key):
-            row = build_arrival_or_departure_row("DEPARTURE", context, block, is_turnover)
+            row = build_arrival_or_departure_row(
+                "DEPARTURE",
+                context,
+                block,
+                is_turnover,
+                continuation_candidate=continuation_candidate,
+                continuation_basis=continuation_basis,
+            )
             rows.append(row)
             section_counts["DEPARTURE"] += 1
 
@@ -315,6 +344,9 @@ def build_arrival_or_departure_row(
     context: RoomDayContext,
     block: ReservationBlock,
     is_turnover: bool,
+    *,
+    continuation_candidate: bool = False,
+    continuation_basis: str = "",
 ) -> Dict[str, Any]:
     return {
         "section": section,
@@ -338,10 +370,17 @@ def build_arrival_or_departure_row(
         "departure_channels": join_unique(item.channel or item.platform for item in context.departures),
         "note_head": note_head(block.note),
         "nationality_nights": normalize_text(block.nationality_nights),
+        "continuation_candidate": "Y" if continuation_candidate else "",
+        "continuation_basis": continuation_basis,
     }
 
 
-def build_turnover_row(context: RoomDayContext) -> Dict[str, Any]:
+def build_turnover_row(
+    context: RoomDayContext,
+    *,
+    continuation_candidate: bool = False,
+    continuation_basis: str = "",
+) -> Dict[str, Any]:
     primary = context.arrivals[0] if context.arrivals else (context.departures[0] if context.departures else None)
     return {
         "section": "TURNOVER",
@@ -367,7 +406,46 @@ def build_turnover_row(context: RoomDayContext) -> Dict[str, Any]:
         "nationality_nights": join_unique(
             normalize_text(item.nationality_nights) for item in context.arrivals + context.departures
         ),
+        "continuation_candidate": "Y" if continuation_candidate else "",
+        "continuation_basis": continuation_basis,
     }
+
+
+def detect_continuation_candidate(context: RoomDayContext) -> Tuple[bool, str]:
+    if not context.arrivals or not context.departures:
+        return False, ""
+    for departure in context.departures:
+        for arrival in context.arrivals:
+            basis = continuation_basis_for_pair(departure, arrival)
+            if basis:
+                return True, basis
+    return False, ""
+
+
+def continuation_basis_for_pair(departure: ReservationBlock, arrival: ReservationBlock) -> str:
+    departure_no = normalize_text(departure.reservation_no)
+    arrival_no = normalize_text(arrival.reservation_no)
+    if departure_no and arrival_no and departure_no == arrival_no:
+        return "reservation_no"
+
+    departure_key = normalize_text(departure.reservation_key)
+    arrival_key = normalize_text(arrival.reservation_key)
+    if departure_key and arrival_key and departure_key == arrival_key:
+        return "reservation_key"
+
+    departure_note = parse_note_info(departure.note or "")
+    arrival_note = parse_note_info(arrival.note or "")
+    departure_name = normalize_text(departure_note.guest_name).lower()
+    arrival_name = normalize_text(arrival_note.guest_name).lower()
+    if departure_name and arrival_name and departure_name == arrival_name:
+        return "guest_name"
+
+    departure_head = set(note_head(departure.note).lower().split())
+    arrival_head = set(note_head(arrival.note).lower().split())
+    overlap = {token for token in departure_head & arrival_head if len(token) >= 2}
+    if len(overlap) >= 2:
+        return "note_overlap"
+    return ""
 
 
 def join_block_values(blocks: Iterable[ReservationBlock], field_name: str) -> str:

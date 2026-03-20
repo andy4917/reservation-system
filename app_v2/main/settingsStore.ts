@@ -1,7 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import electron from "electron";
-import type { AppBgeM3Settings, AppSettings, AppSettingsSnapshot } from "../../src/desktop/app-v2-contracts.js";
+import type {
+  AppBgeM3Settings,
+  AppOpsViewSettings,
+  AppSettings,
+  AppSettingsSnapshot,
+  AppSheetTabSettings,
+} from "../../src/desktop/app-v2-contracts.js";
 
 const { app } = electron;
 
@@ -20,6 +26,23 @@ function getSettingsPath() {
   return path.join(app.getPath("userData"), SETTINGS_FILE_NAME);
 }
 
+function normalizeSheetTabs(input: unknown): AppSheetTabSettings {
+  const tabs = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  return {
+    coexMain: normalizeText(tabs.coexMain) || "코엑스",
+    coexAnnex: normalizeText(tabs.coexAnnex) || "코엑스2",
+    gangnam: normalizeText(tabs.gangnam) || "강남",
+  };
+}
+
+function normalizeOpsView(input: unknown): AppOpsViewSettings {
+  const opsView = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  return {
+    excludeRoomMakeup: opsView.excludeRoomMakeup === true,
+    flagContinuationCandidates: opsView.flagContinuationCandidates !== false,
+  };
+}
+
 function normalizeSettings(input: Partial<AppSettings>): AppSettings {
   const bge = input.bgeM3;
   const normalizedBgeM3: AppBgeM3Settings | null =
@@ -36,6 +59,8 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
   return {
     spreadsheet: normalizeText(input.spreadsheet),
     sheetName: normalizeText(input.sheetName),
+    sheetTabs: normalizeSheetTabs(input.sheetTabs),
+    opsView: normalizeOpsView(input.opsView),
     reportWindowDays: Number.isFinite(Number(input.reportWindowDays))
       ? Math.min(Math.max(Math.round(Number(input.reportWindowDays)), 1), 14)
       : 5,
@@ -46,7 +71,7 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
 function buildSnapshot(config: AppSettings | null, updatedAt: string | null): AppSettingsSnapshot {
   const missingRequired: Array<keyof AppSettings> = [];
   if (!config?.spreadsheet) missingRequired.push("spreadsheet");
-  if (!config?.sheetName) missingRequired.push("sheetName");
+  if (!config?.sheetName && !config?.sheetTabs) missingRequired.push("sheetName");
   return {
     config,
     isConfigured: missingRequired.length === 0,
@@ -82,7 +107,12 @@ export async function loadSettingsSnapshot(): Promise<AppSettingsSnapshot> {
 export async function saveSettings(input: Partial<AppSettings>): Promise<AppSettingsSnapshot> {
   const normalized = normalizeSettings(input);
   const hasAnySettings = Boolean(
-    normalized.spreadsheet || normalized.sheetName || normalized.reportWindowDays || normalized.bgeM3
+    normalized.spreadsheet ||
+      normalized.sheetName ||
+      normalized.reportWindowDays ||
+      normalized.bgeM3 ||
+      normalized.sheetTabs ||
+      normalized.opsView
   );
   const nextConfig = hasAnySettings ? normalized : null;
   const updatedAt = new Date().toISOString();
