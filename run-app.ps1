@@ -2,6 +2,8 @@ $ErrorActionPreference = "Stop"
 
 Set-Location -LiteralPath $PSScriptRoot
 
+$env:UHS_BRIDGE_SHARED_SECRET = "uhs-bridge-local-20260319"
+
 if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) {
   Write-Host "npm.cmd not found. Install Node.js for Windows first." -ForegroundColor Red
   Read-Host "Press Enter to exit"
@@ -19,20 +21,8 @@ if (-not (Test-Path -LiteralPath $electronExe)) {
   }
 }
 
-$rendererIndex = Join-Path $PSScriptRoot "dist-app\renderer\index.html"
-$mainEntry = Join-Path $PSScriptRoot "dist-app\main\main.js"
-if ((-not (Test-Path -LiteralPath $rendererIndex)) -or (-not (Test-Path -LiteralPath $mainEntry))) {
-  Write-Host "App build output missing. Running full app build..." -ForegroundColor Yellow
-  & npm.cmd --prefix app run build
-  if ($LASTEXITCODE -ne 0) {
-    Write-Host "Full app build failed." -ForegroundColor Red
-    Read-Host "Press Enter to exit"
-    exit $LASTEXITCODE
-  }
-}
-
-Set-Location -LiteralPath (Join-Path $PSScriptRoot "app")
-& npm.cmd start
+Write-Host "Refreshing latest app build before launch..." -ForegroundColor Yellow
+& npm.cmd run app:electron
 if ($LASTEXITCODE -ne 0) {
   Write-Host "App launch failed." -ForegroundColor Red
   Read-Host "Press Enter to exit"

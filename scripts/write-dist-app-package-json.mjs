@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { atomicWriteJsonFile } from "./lib/atomicWriteJsonFile.mjs";
 
 const rootDir = process.cwd();
 const distDir = path.join(rootDir, "dist-app");
@@ -27,8 +28,4 @@ async function pruneExtensionlessDuplicates(targetDir) {
 
 await fs.mkdir(distDir, { recursive: true });
 await pruneExtensionlessDuplicates(distDir);
-await fs.writeFile(
-  packageJsonPath,
-  `${JSON.stringify({ type: "module" }, null, 2)}\n`,
-  "utf8"
-);
+await atomicWriteJsonFile(packageJsonPath, { type: "module" });
