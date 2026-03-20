@@ -15,7 +15,7 @@
     "app:verify:artifacts": "npm run app:build:main && node scripts/app_v2_artifact_check.mjs",
     "app:verify:live-read": "node scripts/app_v2_runtime_verify.mjs --focus live-read",
     "app:verify:sheet-live": "node scripts/app_v2_runtime_verify.mjs --focus sheet-live",
-    "app:hygiene:check": "python3 scripts/check_contract_hygiene.py --cwd . --scope all",
+    "app:hygiene:check": "python3 scripts/check_contract_hygiene.py --cwd .",
     "app:check": "tsc -p tsconfig.json --noEmit && npm run app:hygiene:check",
     "extension:contracts:check": "tsc -p tsconfig.extension-contracts.json --noEmit",
     "extension:package": "./tasks/build_extension_unpacked.sh"
