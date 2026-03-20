@@ -8,6 +8,7 @@ import type {
   AppSettings
 } from "../../src/desktop/app-v2-contracts.js";
 import { APP_BRANCHES, isAppProvider } from "../../src/desktop/app-v2-contracts.js";
+import { installBgeM3Model } from "./bgeModelInstaller.js";
 import {
   ensureProviderBrowser,
   getProviderBrowserState,
@@ -64,7 +65,7 @@ function normalizeSettingsPayload(input: unknown): Partial<AppSettings> {
       payload.bgeM3 && typeof payload.bgeM3 === "object"
         ? {
             enabled: (payload.bgeM3 as Record<string, unknown>).enabled === true,
-            modelId: typeof (payload.bgeM3 as Record<string, unknown>).modelId === "string" ? String((payload.bgeM3 as Record<string, unknown>).modelId) : "BAAI/bge-m3",
+            modelId: typeof (payload.bgeM3 as Record<string, unknown>).modelId === "string" ? String((payload.bgeM3 as Record<string, unknown>).modelId) : "Xenova/bge-m3",
             runtime:
               (payload.bgeM3 as Record<string, unknown>).runtime === "download-if-missing"
                 ? "download-if-missing"
@@ -136,6 +137,8 @@ function parseReservationActionInput(input: unknown): AppReservationActionInput 
     endDate: parseDateInput(payload.endDate, "endDate"),
     excludeRoomMakeup: payload.excludeRoomMakeup === true,
     flagContinuationCandidates: payload.flagContinuationCandidates !== false,
+    approvePlanToken: typeof payload.approvePlanToken === "string" ? String(payload.approvePlanToken) : "",
+    executeApply: payload.executeApply === true,
   };
 }
 
@@ -147,6 +150,7 @@ export function registerDesktopAppIpc() {
 
   ipcMain.handle("desktop-app:load-settings", async () => loadSettingsSnapshot());
   ipcMain.handle("desktop-app:save-settings", async (_event, input: unknown) => saveSettings(normalizeSettingsPayload(input)));
+  ipcMain.handle("desktop-app:install-bge-m3-model", async () => installBgeM3Model());
   ipcMain.handle("desktop-app:ensure-provider-browser", async (_event, provider: unknown) => ensureProviderBrowser(parseProvider(provider)));
   ipcMain.handle("desktop-app:get-provider-browser-state", async (_event, provider: unknown) => getProviderBrowserState(parseProvider(provider)));
   ipcMain.handle("desktop-app:list-provider-browsers", async () => listProviderBrowsers());

@@ -31,6 +31,7 @@ function main() {
   assert.match(appSource, /조회 기간/);
   assert.match(appSource, /모델 경로/);
   assert.match(appSource, /로컬 모델 준비/);
+  assert.match(appSource, /BGE-M3 설치/);
   assert.match(appSource, /오더리스트/);
   assert.match(appSource, /어라이벌/);
   assert.match(appSource, /로그인 화면으로/);
@@ -41,8 +42,10 @@ function main() {
   assert.match(settingsStore, /hasAnySettings/);
   assert.match(settingsStore, /sheetTabs/);
   assert.match(settingsStore, /opsView/);
+  assert.match(settingsStore, /Xenova\/bge-m3/);
   assert.match(ipc, /parseDateInput/);
   assert.match(ipc, /desktop-app:run-reservation-action/);
+  assert.match(ipc, /desktop-app:install-bge-m3-model/);
   assert.match(ipc, /excludeRoomMakeup/);
   assert.match(runner, /embeddingRuntime/);
   assert.match(runner, /excludeRoomMakeup/);

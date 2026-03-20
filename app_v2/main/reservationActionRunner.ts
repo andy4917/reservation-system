@@ -36,6 +36,21 @@ interface OpsBridgePayload {
   error?: string;
 }
 
+interface ManagementBridgePayload {
+  mode: "compare" | "reconcile" | "apply";
+  branch: AppBranch;
+  checkedAt: string;
+  engineStatus: "pending-source" | "planned";
+  summary: string;
+  issueCount: number;
+  rows: AppReservationActionRow[];
+  evidence: string[];
+  planToken?: string;
+  requiresApproval?: boolean;
+  applyAllowed?: boolean;
+  error?: string;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -184,6 +199,49 @@ async function runLiveOpsBridge(
   return payload;
 }
 
+async function runManagementBridge(
+  input: AppReservationActionInput,
+  settingsSnapshot: AppSettingsSnapshot,
+): Promise<ManagementBridgePayload> {
+  const spreadsheet = settingsSnapshot.config?.spreadsheet?.trim() ?? "";
+  const sheetNames = resolveSheetNames(input.branch, settingsSnapshot);
+  const cwd = process.cwd();
+  const scriptPath = path.join(cwd, "scripts", "app_v2_reservation_management_bridge.py");
+  const args = [
+    scriptPath,
+    input.action,
+    "--branch",
+    input.branch,
+    "--start-date",
+    input.startDate,
+    "--end-date",
+    input.endDate,
+  ];
+  if (spreadsheet) {
+    args.push("--spreadsheet", spreadsheet);
+  }
+  for (const sheetName of sheetNames) {
+    args.push("--sheet-name", sheetName);
+  }
+  const sourceFixturePath = process.env.APP_V2_SOURCE_FIXTURE_JSON?.trim() ?? "";
+  if (sourceFixturePath) {
+    args.push("--source-fixture", sourceFixturePath);
+  }
+  if (process.env.APP_V2_FIXTURE_MODE === "1") {
+    args.push("--fixture-mode");
+  }
+  if (input.approvePlanToken?.trim()) {
+    args.push("--approve-plan-token", input.approvePlanToken.trim());
+  }
+  if (input.executeApply === true) {
+    args.push("--execute-apply");
+  }
+  const { stdout } = await runPythonScript(args, cwd);
+  const payload = JSON.parse(stdout) as ManagementBridgePayload;
+  if (payload.error) throw new Error(payload.error);
+  return payload;
+}
+
 async function runLiveOpsPreview(
   input: AppReservationActionInput,
   settingsSnapshot: AppSettingsSnapshot,
@@ -194,6 +252,9 @@ async function runLiveOpsPreview(
   const tableRaw = await fs.readFile(tsvPath, "utf8");
   const total = input.action === "order-list" ? payload.orderlistRows : payload.arrivalRows;
   const excludeRoomMakeup = input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false;
+  const scores = await buildEmbeddingScores(settingsSnapshot, payload);
+  const availability = describeEmbeddingAvailability(settingsSnapshot);
+  const aiReview = buildOpsAiReviewRows(parseTabularRows(tableRaw, input.action), payload, scores);
   return {
     action: input.action,
     branch: input.branch,
@@ -203,16 +264,18 @@ async function runLiveOpsPreview(
     status: "done",
     summary:
       input.action === "order-list"
-        ? `${input.branch} 오더리스트 라이브 미리보기를 생성했습니다.`
-        : `${input.branch} 어라이벌 라이브 미리보기를 생성했습니다.`,
+        ? `${input.branch} 오더리스트 라이브 미리보기를 생성했습니다. 검토 후보 ${aiReview.scoredRows}건을 정렬했습니다.`
+        : `${input.branch} 어라이벌 라이브 미리보기를 생성했습니다. 검토 후보 ${aiReview.scoredRows}건을 정렬했습니다.`,
     evidence: [
       `python:${PYTHON_COMMAND}`,
       `window:${input.startDate}..${input.endDate}`,
       `rows:${total}`,
+      `embedding:${availability.reason}`,
+      `scoredRows:${aiReview.scoredRows}`,
       ...payload.evidence,
       ...makeEvidence(settingsSnapshot, excludeRoomMakeup),
     ],
-    rows: parseTabularRows(tableRaw, input.action),
+    rows: aiReview.rows,
     outputPath: outDir,
   };
 }
@@ -226,13 +289,21 @@ function buildContinuationRows(
   return payload.continuationCandidates.slice(0, 8).map((candidate, index) => {
     const similarity = scoreMap.get(candidate.id);
     const similarityLabel = typeof similarity === "number" ? ` / sim ${similarity.toFixed(2)}` : "";
+    const statusLabel =
+      input.action === "edit"
+        ? typeof similarity === "number" && similarity >= 0.9
+          ? "AI 추천"
+          : "AI 검토"
+        : typeof similarity === "number" && similarity >= 0.9
+          ? "추천"
+          : "검토";
     return {
       id: `${input.action}-${index}`,
       primary: `${candidate.roomNo} / ${candidate.date}`,
       secondary: [candidate.basis || "continuation", candidate.departureText, candidate.arrivalText]
         .filter(Boolean)
         .join(" · "),
-      statusLabel: input.action === "edit" ? "AI" : "검토",
+      statusLabel,
       detail: `${candidate.noteHead || "note-missing"}${similarityLabel}`,
     };
   });
@@ -253,10 +324,84 @@ async function buildEmbeddingScores(
   );
 }
 
+function buildOpsAiReviewRows(
+  rows: AppReservationActionRow[],
+  payload: OpsBridgePayload,
+  scores: Array<{ id: string; score: number }>,
+) {
+  const scoreMap = new Map(scores.map((item) => [item.id, item.score]));
+  let scoredRows = 0;
+  const nextRows = rows.map((row) => {
+    const [roomNo = ""] = row.primary.split(" / ");
+    const [date = ""] = row.secondary.split(" · ");
+    const candidate = payload.continuationCandidates.find((item) => item.roomNo === roomNo.trim() && item.date === date.trim());
+    if (!candidate) return row;
+    const similarity = scoreMap.get(candidate.id);
+    const detailParts = [row.detail, `연박 후보 · ${candidate.basis || "continuation"}`];
+    if (typeof similarity === "number") {
+      detailParts.push(`sim ${similarity.toFixed(2)}`);
+      scoredRows += 1;
+    }
+    return {
+      ...row,
+      detail: detailParts.filter(Boolean).join(" / "),
+    };
+  });
+  return {
+    rows: nextRows,
+    scoredRows,
+  };
+}
+
 export async function runReservationAction(input: AppReservationActionInput): Promise<AppReservationActionSnapshot> {
   const settingsSnapshot = await loadSettingsSnapshot();
   if (input.action === "order-list" || input.action === "arrival") {
     return runLiveOpsPreview(input, settingsSnapshot);
+  }
+
+  if (input.action === "compare" || input.action === "reconcile" || input.action === "apply") {
+    try {
+      const payload = await runManagementBridge(input, settingsSnapshot);
+      return {
+        action: input.action,
+        branch: input.branch,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        checkedAt: payload.checkedAt,
+        status: "done",
+        summary: payload.summary,
+        evidence: [
+          ...payload.evidence,
+          `engineStatus:${payload.engineStatus}`,
+          ...makeEvidence(settingsSnapshot, input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false),
+        ],
+        rows: payload.rows,
+        outputPath: null,
+        engineStatus: payload.engineStatus,
+        issueCount: payload.issueCount,
+        planToken: payload.planToken ?? "",
+        requiresApproval: payload.requiresApproval ?? false,
+        applyAllowed: payload.applyAllowed ?? false,
+      };
+    } catch (error) {
+      return {
+        action: input.action,
+        branch: input.branch,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        checkedAt: nowIso(),
+        status: "error",
+        summary: `${input.branch} ${input.action} 엔진 실행에 실패했습니다.`,
+        evidence: [`error:${error instanceof Error ? error.message : String(error)}`],
+        rows: buildMockRows(input),
+        outputPath: null,
+        engineStatus: "mock",
+        issueCount: 0,
+        planToken: "",
+        requiresApproval: false,
+        applyAllowed: false,
+      };
+    }
   }
 
   if (input.action === "validate" || input.action === "edit") {

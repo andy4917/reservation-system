@@ -39,9 +39,11 @@ function main() {
   assert.match(preload, /runPmsRead/);
   assert.match(preload, /runOtaRead/);
   assert.match(preload, /runSheetRead/);
+  assert.match(preload, /installBgeM3Model/);
   assert.match(ipc, /desktop-app:run-pms-read/);
   assert.match(ipc, /desktop-app:run-ota-read/);
   assert.match(ipc, /desktop-app:run-sheet-read/);
+  assert.match(ipc, /desktop-app:install-bge-m3-model/);
 
   console.log("regression_app_v2_end_user_shell_contract: OK");
 }

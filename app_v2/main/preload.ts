@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer } = electron;
 contextBridge.exposeInMainWorld("desktopApp", {
   loadSettings: () => ipcRenderer.invoke("desktop-app:load-settings"),
   saveSettings: (input: unknown) => ipcRenderer.invoke("desktop-app:save-settings", input),
+  installBgeM3Model: () => ipcRenderer.invoke("desktop-app:install-bge-m3-model"),
   ensureProviderBrowser: (provider: unknown) => ipcRenderer.invoke("desktop-app:ensure-provider-browser", provider),
   getProviderBrowserState: (provider: unknown) => ipcRenderer.invoke("desktop-app:get-provider-browser-state", provider),
   listProviderBrowsers: () => ipcRenderer.invoke("desktop-app:list-provider-browsers"),

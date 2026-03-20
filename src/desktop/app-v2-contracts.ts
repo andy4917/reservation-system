@@ -20,6 +20,8 @@ export type AppReadinessBlockingSource = AppProvider | "sheet" | "sheet-auth" | 
 export type AppSheetReadinessStatus = "ready" | "needs-settings" | "invalid-settings" | "needs-auth" | "missing-sheet" | "error";
 export type AppLiveReadStatus = "idle" | "loading" | "done" | "error";
 export type AppBgeM3Runtime = "local-path" | "download-if-missing";
+export type AppBgeInstallStatus = "ready" | "installed" | "error";
+export type AppReservationEngineStatus = "mock" | "pending-source" | "planned";
 
 export interface AppSheetTabSettings {
   coexMain: string;
@@ -34,6 +36,17 @@ export interface AppBgeM3Settings {
   modelPath: string;
   topK: number;
   scoreThreshold: number;
+}
+
+export interface AppBgeInstallSnapshot {
+  checkedAt: string;
+  status: AppBgeInstallStatus;
+  modelId: string;
+  installRoot: string;
+  modelPath: string;
+  installed: boolean;
+  summary: string;
+  files: string[];
 }
 
 export interface AppOpsViewSettings {
@@ -161,6 +174,8 @@ export interface AppReservationActionInput {
   endDate: string;
   excludeRoomMakeup?: boolean;
   flagContinuationCandidates?: boolean;
+  approvePlanToken?: string;
+  executeApply?: boolean;
 }
 
 export interface AppReservationActionRow {
@@ -182,11 +197,17 @@ export interface AppReservationActionSnapshot {
   evidence: string[];
   rows: AppReservationActionRow[];
   outputPath: string | null;
+  engineStatus?: AppReservationEngineStatus;
+  issueCount?: number;
+  planToken?: string | null;
+  requiresApproval?: boolean;
+  applyAllowed?: boolean;
 }
 
 export interface DesktopAppApi {
   loadSettings: () => Promise<AppSettingsSnapshot>;
   saveSettings: (input: Partial<AppSettings>) => Promise<AppSettingsSnapshot>;
+  installBgeM3Model: () => Promise<AppBgeInstallSnapshot>;
   ensureProviderBrowser: (provider: AppProvider) => Promise<AppProviderBrowserState>;
   getProviderBrowserState: (provider: AppProvider) => Promise<AppProviderBrowserState>;
   listProviderBrowsers: () => Promise<AppProviderBrowserState[]>;

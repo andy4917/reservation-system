@@ -132,11 +132,116 @@ def dedupe_blocks(blocks: List[Any]) -> List[Any]:
     return list(deduped.values())
 
 
+def iso_or_empty(value: Any) -> str:
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value or "")
+
+
+def build_note_head(block: Any) -> str:
+    raw = str(getattr(block, "note", "") or "").strip()
+    if not raw:
+        return ""
+    return raw.splitlines()[0].strip()
+
+
+def build_review_text(block: Any) -> str:
+    return " | ".join(
+        [
+            normalize_text(getattr(block, "guest_name", "")),
+            normalize_text(getattr(block, "reservation_no", "")),
+            normalize_text(getattr(block, "reservation_key", "")),
+            normalize_text(getattr(block, "room_no", "")),
+            iso_or_empty(getattr(block, "checkin", None)),
+            iso_or_empty(getattr(block, "checkout", None)),
+            normalize_text(build_note_head(block)),
+        ]
+    )
+
+
+def build_review_candidates(blocks: List[Any]) -> List[Dict[str, str]]:
+    by_room: Dict[str, List[Any]] = {}
+    for block in blocks:
+        room_no = normalize_text(getattr(block, "room_no", ""))
+        if not room_no:
+            continue
+        by_room.setdefault(room_no, []).append(block)
+
+    review_candidates: List[Dict[str, str]] = []
+    seen_pairs = set()
+    for room_no, room_blocks in by_room.items():
+        room_blocks.sort(
+            key=lambda item: (
+                iso_or_empty(getattr(item, "checkin", None)),
+                iso_or_empty(getattr(item, "checkout", None)),
+                normalize_text(getattr(item, "reservation_no", "")),
+            )
+        )
+        for left, right in zip(room_blocks, room_blocks[1:]):
+            left_checkout = getattr(left, "checkout", None)
+            right_checkin = getattr(right, "checkin", None)
+            gap_days = None
+            if left_checkout and right_checkin:
+                gap_days = (right_checkin - left_checkout).days
+            left_guest = normalize_text(getattr(left, "guest_name", ""))
+            right_guest = normalize_text(getattr(right, "guest_name", ""))
+            left_note_head = normalize_text(build_note_head(left))
+            right_note_head = normalize_text(build_note_head(right))
+
+            bases: List[str] = []
+            if gap_days is not None and gap_days <= 1:
+                bases.append("adjacent_stay")
+            if left_guest and left_guest == right_guest:
+                bases.append("guest_name")
+            if left_note_head and right_note_head and left_note_head == right_note_head:
+                bases.append("note_head")
+            if not normalize_text(getattr(left, "reservation_no", "")) or not normalize_text(getattr(right, "reservation_no", "")):
+                bases.append("reservation_no_missing")
+
+            if not bases:
+                continue
+
+            pair_id = (
+                room_no,
+                iso_or_empty(getattr(left, "checkin", None)),
+                iso_or_empty(getattr(right, "checkin", None)),
+            )
+            if pair_id in seen_pairs:
+                continue
+            seen_pairs.add(pair_id)
+            review_candidates.append(
+                {
+                    "id": f"{room_no}:{pair_id[1]}:{pair_id[2]}",
+                    "roomNo": room_no,
+                    "date": pair_id[1] or pair_id[2],
+                    "basis": ",".join(bases),
+                    "leftText": build_review_text(left),
+                    "rightText": build_review_text(right),
+                    "leftSummary": " / ".join(
+                        [
+                            normalize_text(getattr(left, "guest_name", "")) or room_no,
+                            iso_or_empty(getattr(left, "checkin", None)),
+                            normalize_text(build_note_head(left)) or "-",
+                        ]
+                    ),
+                    "rightSummary": " / ".join(
+                        [
+                            normalize_text(getattr(right, "guest_name", "")) or room_no,
+                            iso_or_empty(getattr(right, "checkin", None)),
+                            normalize_text(build_note_head(right)) or "-",
+                        ]
+                    ),
+                }
+            )
+    return review_candidates[:8]
+
+
 def command_sheet_read(args: argparse.Namespace) -> int:
     payload = load_sheet_blocks(args)
     start_date = dt.date.fromisoformat(args.start_date)
     end_date = dt.date.fromisoformat(args.end_date)
     window_blocks = [block for block in payload["blocks"] if overlaps_window(block, start_date, end_date)]
+    review_candidates = build_review_candidates(window_blocks)
     print(
         json.dumps(
             {
@@ -148,7 +253,8 @@ def command_sheet_read(args: argparse.Namespace) -> int:
                 "recordsImported": len(window_blocks),
                 "summary": f"{args.branch} 예약 시트 라이브 데이터를 읽었습니다.",
                 "items": payload["items"][:8],
-                "evidence": payload["evidence"],
+                "reviewCandidates": review_candidates,
+                "evidence": payload["evidence"] + [f"reviewCandidates:{len(review_candidates)}"],
             },
             ensure_ascii=False,
         )

@@ -49,7 +49,7 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
     bge && typeof bge === "object"
       ? {
           enabled: bge.enabled === true,
-          modelId: normalizeText(bge.modelId) || "BAAI/bge-m3",
+          modelId: normalizeText(bge.modelId) || "Xenova/bge-m3",
           runtime: bge.runtime === "download-if-missing" ? "download-if-missing" : "local-path",
           modelPath: normalizeText(bge.modelPath),
           topK: Number.isFinite(Number(bge.topK)) ? Number(bge.topK) : 5,

@@ -7,6 +7,7 @@ import type {
   AppLiveReadSnapshot,
   AppProvider,
 } from "../../src/desktop/app-v2-contracts.js";
+import { describeEmbeddingAvailability, scoreTextPairs } from "./embeddingRuntime.js";
 import { getProviderBrowserState } from "./providerWorkspaceManager.js";
 import { loadSettingsSnapshot } from "./settingsStore.js";
 
@@ -18,8 +19,20 @@ interface LiveSheetBridgePayload {
   recordsImported: number;
   summary: string;
   items: AppLiveReadPreviewItem[];
+  reviewCandidates?: SheetReviewCandidate[];
   evidence: string[];
   error?: string;
+}
+
+interface SheetReviewCandidate {
+  id: string;
+  roomNo: string;
+  date: string;
+  basis: string;
+  leftText: string;
+  rightText: string;
+  leftSummary: string;
+  rightSummary: string;
 }
 
 function nowIso() {
@@ -144,6 +157,75 @@ async function runLiveSheetBridge(input: AppLiveReadInput): Promise<LiveSheetBri
   return payload;
 }
 
+function formatAiStatus(score: number | undefined) {
+  if (typeof score !== "number") return "검토";
+  if (score >= 0.9) return "AI추천";
+  if (score >= 0.82) return "AI검토";
+  return "검토";
+}
+
+async function scoreSheetReviewCandidates(payload: LiveSheetBridgePayload) {
+  const settings = await loadSettingsSnapshot();
+  const availability = describeEmbeddingAvailability(settings);
+  const candidates = payload.reviewCandidates ?? [];
+  if (candidates.length === 0) {
+    return {
+      items: payload.items,
+      evidence: [...payload.evidence, `embedding:${availability.reason}`, "reviewCandidates:0"],
+      summary: payload.summary,
+    };
+  }
+
+  let scores: Array<{ id: string; score: number }> = [];
+  try {
+    scores = await scoreTextPairs(
+      settings,
+      candidates.map((candidate) => ({
+        id: candidate.id,
+        left: candidate.leftText || candidate.leftSummary || candidate.roomNo,
+        right: candidate.rightText || candidate.rightSummary || candidate.roomNo,
+      })),
+    );
+  } catch (error) {
+    return {
+      items: payload.items,
+      evidence: [
+        ...payload.evidence,
+        `embedding:error:${error instanceof Error ? error.message : String(error)}`,
+        `reviewCandidates:${candidates.length}`,
+      ],
+      summary: `${payload.summary} 검토 후보 점수화는 건너뛰었습니다.`,
+    };
+  }
+
+  const scoreMap = new Map(scores.map((item) => [item.id, item.score]));
+  const reviewItems = candidates
+    .map((candidate) => {
+      const score = scoreMap.get(candidate.id);
+      return {
+        id: `sheet-review:${candidate.id}`,
+        title: `${candidate.roomNo || "-"} 검토 후보`,
+        subtitle: [candidate.basis || "sheet-review", candidate.leftSummary, candidate.rightSummary].filter(Boolean).join(" · "),
+        statusLabel: formatAiStatus(score),
+        score: typeof score === "number" ? score : -1,
+      };
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 4)
+    .map(({ score: _score, ...item }) => item);
+
+  return {
+    items: [...payload.items, ...reviewItems].slice(0, 8),
+    evidence: [
+      ...payload.evidence,
+      `embedding:${availability.reason}`,
+      `reviewCandidates:${candidates.length}`,
+      `reviewScores:${scores.length}`,
+    ],
+    summary: reviewItems.length > 0 ? `${payload.summary} 검토 후보 ${reviewItems.length}건을 정리했습니다.` : payload.summary,
+  };
+}
+
 export async function runPmsRead(input: AppLiveReadInput): Promise<AppLiveReadSnapshot> {
   const readiness = await ensureProviderReadable("wings-pms", "PMS");
   if (!readiness.ok) {
@@ -209,16 +291,17 @@ export async function runSheetRead(input: AppLiveReadInput): Promise<AppLiveRead
   try {
     const payload = await runLiveSheetBridge(input);
     const settingsEvidence = await buildSettingsEvidence();
+    const scored = await scoreSheetReviewCandidates(payload);
     return {
       source: "sheet",
       branch: input.branch,
       checkedAt: payload.checkedAt,
       status: "done",
-      summary: `${payload.summary} (${input.startDate} ~ ${input.endDate})`,
+      summary: `${scored.summary} (${input.startDate} ~ ${input.endDate})`,
       recordsImported: payload.recordsImported,
       blockedReason: null,
-      items: payload.items,
-      evidence: [...payload.evidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
+      items: scored.items,
+      evidence: [...scored.evidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
     };
   } catch (error) {
     return buildError("sheet", input.branch, "예약 시트 라이브 조회에 실패했습니다.", [

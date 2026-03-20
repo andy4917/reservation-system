@@ -59,7 +59,7 @@ async function loadExtractor(settingsSnapshot: AppSettingsSnapshot) {
   const bge = settingsSnapshot.config?.bgeM3;
   const modelPath = bge?.modelPath?.trim() ?? "";
   const runtime = bge?.runtime ?? "local-path";
-  const cacheKey = `${runtime}:${modelPath || bge?.modelId || "BAAI/bge-m3"}`;
+  const cacheKey = `${runtime}:${modelPath || bge?.modelId || "Xenova/bge-m3"}`;
   if (extractorPromise && extractorKey === cacheKey) {
     return extractorPromise;
   }
@@ -68,8 +68,10 @@ async function loadExtractor(settingsSnapshot: AppSettingsSnapshot) {
     const transformers = (await import("@huggingface/transformers")) as any;
     transformers.env.allowLocalModels = true;
     transformers.env.allowRemoteModels = runtime === "download-if-missing";
-    const modelRef = modelPath || bge?.modelId || "BAAI/bge-m3";
+    const modelRef = modelPath || bge?.modelId || "Xenova/bge-m3";
     return transformers.pipeline("feature-extraction", modelRef, {
+      model_file_name: "sentence_transformers",
+      dtype: "q8",
       local_files_only: runtime !== "download-if-missing",
     });
   })();

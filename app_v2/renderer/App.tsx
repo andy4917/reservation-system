@@ -104,6 +104,7 @@ export default function App() {
   const [bgeModelPath, setBgeModelPath] = useState("");
   const [bgeTopK, setBgeTopK] = useState("5");
   const [bgeScoreThreshold, setBgeScoreThreshold] = useState("0.72");
+  const [bgeInstallSummary, setBgeInstallSummary] = useState("BGE-M3 로컬 모델 설치가 필요합니다.");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [loginId, setLoginId] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -148,6 +149,7 @@ export default function App() {
       setBgeModelPath(snapshot.config?.bgeM3?.modelPath ?? "");
       setBgeTopK(String(snapshot.config?.bgeM3?.topK ?? 5));
       setBgeScoreThreshold(String(snapshot.config?.bgeM3?.scoreThreshold ?? 0.72));
+      setBgeInstallSummary(snapshot.config?.bgeM3?.modelPath ? "BGE-M3 로컬 모델 경로가 저장되어 있습니다." : "BGE-M3 로컬 모델 설치가 필요합니다.");
       setWindowStart(defaultWindow.start);
       setWindowEnd(defaultWindow.end);
     });
@@ -205,7 +207,7 @@ export default function App() {
         reportWindowDays: Number(reportWindowDays),
         bgeM3: {
           enabled: bgeEnabled,
-          modelId: "BAAI/bge-m3",
+          modelId: "Xenova/bge-m3",
           runtime: bgeRuntime,
           modelPath: bgeModelPath,
           topK: Number(bgeTopK),
@@ -218,6 +220,29 @@ export default function App() {
       setWindowStart(defaultWindow.start);
       setWindowEnd(defaultWindow.end);
       await refreshPreflight();
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function installBgeM3Model() {
+    if (!api?.installBgeM3Model) return;
+    setBusyKey("install-bge-m3");
+    setWorkspacePhase("working");
+    setWorkspaceMessage("BGE-M3 로컬 모델을 설치 중입니다.");
+    try {
+      const snapshot = await api.installBgeM3Model();
+      setBgeEnabled(true);
+      setBgeRuntime("local-path");
+      setBgeModelPath(snapshot.modelPath);
+      setBgeInstallSummary(snapshot.summary);
+      setWorkspacePhase("result");
+      setWorkspaceMessage(snapshot.summary);
+      await refreshSettings();
+    } catch (error) {
+      setBgeInstallSummary("BGE-M3 설치에 실패했습니다.");
+      setWorkspacePhase("result");
+      setWorkspaceMessage(error instanceof Error ? error.message : String(error));
     } finally {
       setBusyKey(null);
     }
@@ -642,6 +667,12 @@ export default function App() {
                       {reservationResult?.outputPath ? (
                         <div className="detail-panel">output: {reservationResult.outputPath}</div>
                       ) : null}
+                      {reservationResult?.engineStatus === "pending-source" ? (
+                        <div className="detail-panel">source bundle 필요: compare/reconcile/apply 엔진은 준비되었고 PMS/OTA raw source records 연결만 남았습니다.</div>
+                      ) : null}
+                      {reservationResult?.planToken ? (
+                        <div className="detail-panel">plan token: {reservationResult.planToken}</div>
+                      ) : null}
                     </div>
                   </div>
                 </article>
@@ -752,6 +783,7 @@ export default function App() {
               <article className="settings-section">
                 <h4>BGE-M3 보조 설정</h4>
                 <p className="support-copy">매핑/추천 보조 모델은 BGE-M3를 기본값으로 사용합니다.</p>
+                <div className="detail-panel">시트 조회, 검증, 오더리스트, 어라이벌에서 추천 후보와 검토 후보를 read-only로 정렬합니다.</div>
                 <label className="field">
                   <span>사용 여부</span>
                   <select value={bgeEnabled ? "on" : "off"} onChange={(event) => setBgeEnabled(event.target.value === "on")}>
@@ -773,6 +805,7 @@ export default function App() {
                     onChange={(event) => setBgeModelPath(event.target.value)}
                   />
                 </label>
+                <div className="detail-panel">{bgeInstallSummary}</div>
                 <label className="field">
                   <span>Top K</span>
                   <input value={bgeTopK} onChange={(event) => setBgeTopK(event.target.value)} />
@@ -782,8 +815,11 @@ export default function App() {
                   <input value={bgeScoreThreshold} onChange={(event) => setBgeScoreThreshold(event.target.value)} />
                 </label>
                 <div className="detail-panel">로컬 모델 준비: 1. 경로 입력 2. 활성화 3. 저장 4. 수정/검토 단계에서 보조 상태 확인</div>
-                <div className="detail-panel">BAAI/bge-m3 / {bgeRuntime} / {bgeModelPath ? "path-set" : "path-missing"}</div>
+                <div className="detail-panel">Xenova/bge-m3 / {bgeRuntime} / {bgeModelPath ? "path-set" : "path-missing"}</div>
                 <div className="button-row">
+                  <button type="button" onClick={() => void installBgeM3Model()} disabled={busyKey !== null}>
+                    BGE-M3 설치
+                  </button>
                   <button type="button" onClick={() => void saveSettings()} disabled={busyKey !== null}>
                     BGE-M3 저장
                   </button>
