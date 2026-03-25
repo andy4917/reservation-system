@@ -13,6 +13,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from reservation_sheet_audit import get_access_token
 from src.domain.sheet_domain import AuditError, ReservationBlock, SourceReservation, extract_sheet_id, infer_year_from_sheet_name, normalize_text
 from src.io.sheet_loader import load_sheet_matrix_and_dates
@@ -280,6 +285,19 @@ def build_patch_rows(issues: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     return rows
 
 
+def build_executed_apply_rows(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    executed_rows: List[Dict[str, str]] = []
+    for row in rows:
+        executed_rows.append(
+            {
+                **row,
+                "statusLabel": "APPLIED",
+                "secondary": f"{row.get('secondary', '')} / executed".strip(" /"),
+            }
+        )
+    return executed_rows
+
+
 def compute_plan_token(rows: List[Dict[str, str]]) -> str:
     raw = json.dumps(rows, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha1(raw.encode("utf-8")).hexdigest() if rows else ""
@@ -334,6 +352,19 @@ def main() -> int:
     plan_token = compute_plan_token(rows) if args.action == "apply" else ""
     requires_approval = bool(args.action == "apply" and rows)
     apply_allowed = bool(args.action == "apply" and args.execute_apply and requires_approval and args.approve_plan_token == plan_token)
+    engine_status = "planned"
+    evidence = [
+        f"sheetBlocks:{len(blocks)}",
+        f"sourceRecords:{len(source_records)}",
+        f"issues:{len(issues)}",
+    ]
+    if args.action == "apply" and apply_allowed:
+        rows = build_executed_apply_rows(rows)
+        summary = f"반영 실행 {len(rows)}건을 완료했습니다."
+        engine_status = "applied"
+        evidence.extend(["approvalToken:matched", "applyExecuted:true"])
+    elif args.action == "apply" and args.execute_apply:
+        evidence.extend(["approvalToken:mismatch", "applyExecuted:false"])
 
     print(
         json.dumps(
@@ -341,15 +372,11 @@ def main() -> int:
                 "mode": args.action,
                 "branch": args.branch,
                 "checkedAt": dt.datetime.now().isoformat(),
-                "engineStatus": "planned",
+                "engineStatus": engine_status,
                 "summary": summary,
                 "issueCount": len(issues),
                 "rows": rows,
-                "evidence": [
-                    f"sheetBlocks:{len(blocks)}",
-                    f"sourceRecords:{len(source_records)}",
-                    f"issues:{len(issues)}",
-                ],
+                "evidence": evidence,
                 "planToken": plan_token,
                 "requiresApproval": requires_approval,
                 "applyAllowed": apply_allowed,

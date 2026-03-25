@@ -14,6 +14,8 @@ from src.domain.sheet_domain import (
 
 
 class GoogleSheetsReadonlyClient:
+    GRID_FETCH_ROW_WINDOW = 240
+
     def __init__(self, access_token: str, session: Optional[requests.Session] = None):
         self.access_token = access_token
         self._session = session or self._build_session()
@@ -36,10 +38,53 @@ class GoogleSheetsReadonlyClient:
         headers["Accept"] = "application/json"
         resp = self._session.request(method, url, headers=headers, timeout=30, **kwargs)
         if resp.status_code >= 400:
+            retried_kwargs = self._build_range_parse_retry_kwargs(kwargs, resp)
+            if retried_kwargs is not None:
+                resp = self._session.request(method, url, headers=headers, timeout=30, **retried_kwargs)
+        if resp.status_code >= 400:
             raise AuditError(
                 f"Google Sheets API error {resp.status_code}: {resp.text[:500]}"
             )
         return resp.json()
+
+    @staticmethod
+    def _unquote_a1_sheet_title(value: str) -> str:
+        text = normalize_text(value)
+        match = re.match(r"^'((?:[^']|'')+)'!(.+)$", text)
+        if not match:
+            return text
+        title = match.group(1).replace("''", "'")
+        remainder = match.group(2)
+        return f"{title}!{remainder}"
+
+    @classmethod
+    def _build_range_parse_retry_kwargs(cls, kwargs: Dict[str, Any], response: Any) -> Optional[Dict[str, Any]]:
+        if response.status_code != 400:
+            return None
+        body = normalize_text(getattr(response, "text", ""))
+        if "Unable to parse range" not in body:
+            return None
+        params = kwargs.get("params")
+        if not isinstance(params, dict) or "ranges" not in params:
+            return None
+
+        retried = dict(kwargs)
+        next_params = dict(params)
+        ranges_value = next_params.get("ranges")
+        if isinstance(ranges_value, list):
+            updated = [cls._unquote_a1_sheet_title(str(item)) for item in ranges_value]
+            if updated == ranges_value:
+                return None
+            next_params["ranges"] = updated
+        elif isinstance(ranges_value, str):
+            updated = cls._unquote_a1_sheet_title(ranges_value)
+            if updated == ranges_value:
+                return None
+            next_params["ranges"] = updated
+        else:
+            return None
+        retried["params"] = next_params
+        return retried
 
     def resolve_sheet_name_by_gid(self, spreadsheet_id: str, gid: int) -> str:
         url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
@@ -51,7 +96,7 @@ class GoogleSheetsReadonlyClient:
                 title = props.get("title")
                 if title:
                     return title
-        raise AuditError(f"gid={gid} ???대떦?섎뒗 ?쒗듃 ??쓣 李얠? 紐삵뻽?듬땲??")
+        raise AuditError(f"gid={gid} 에 해당하는 시트 이름을 찾지 못했습니다.")
 
     def batch_get_values(
         self,
@@ -83,7 +128,8 @@ class GoogleSheetsReadonlyClient:
         escaped_title = str(sheet_name).replace("'", "''")
         safe_title = f"'{escaped_title}'" if re.search(r"[^A-Za-z0-9_]", str(sheet_name)) else str(sheet_name)
         end_col = normalize_text(end_col_a1).upper() or GRID_FETCH_END_COL_FULL
-        range_a1 = f"{safe_title}!A{start_row_1based}:{end_col}"
+        end_row = max(int(start_row_1based), 1) + self.GRID_FETCH_ROW_WINDOW - 1
+        range_a1 = f"{safe_title}!A{start_row_1based}:{end_col}{end_row}"
         fields = ",".join(
             [
                 "sheets(properties(sheetId,title),",
@@ -103,5 +149,5 @@ class GoogleSheetsReadonlyClient:
         data = self._request("GET", url, params=params)
         sheets = data.get("sheets", [])
         if not sheets:
-            raise AuditError("?쒗듃 ?묐떟?먯꽌 ???곗씠?곕? 李얠쓣 ???놁뒿?덈떎.")
+            raise AuditError("시트 응답에서 grid 데이터를 찾을 수 없습니다.")
         return sheets[0]

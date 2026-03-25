@@ -691,6 +691,91 @@
     return error;
   }
 
+  function formatTaggedError(error) {
+    const message = String(error?.message || error || "").trim();
+    const detail = String(error?.detail || "").trim();
+    return detail ? `${message} :: ${detail}` : message;
+  }
+
+  function decodeHtmlEntities(value) {
+    return String(value || "")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/&#x2f;/gi, "/")
+      .replace(/&#(\d+);/g, (_, code) => {
+        const parsed = Number(code);
+        return Number.isFinite(parsed) ? String.fromCharCode(parsed) : _;
+      });
+  }
+
+  function parseHtmlFormInputs(text) {
+    const inputs = [];
+    const inputRe = /<input\b[^>]*>/gi;
+    let match;
+    while ((match = inputRe.exec(String(text || "")))) {
+      const tag = match[0] || "";
+      const name = decodeHtmlEntities(tag.match(/\bname\s*=\s*['"]([^'"]*)['"]/i)?.[1] || "");
+      if (!name) continue;
+      const value = decodeHtmlEntities(tag.match(/\bvalue\s*=\s*['"]([^'"]*)['"]/i)?.[1] || "");
+      inputs.push([name, value]);
+    }
+    return inputs;
+  }
+
+  function parseHtmlRelayForm(text, baseUrl) {
+    const raw = String(text || "");
+    if (!/<form\b/i.test(raw)) return null;
+    const formMatch = raw.match(/<form\b([^>]*)>/i);
+    if (!formMatch?.[1]) return null;
+    const attrs = formMatch[1];
+    const method = normalizeText(attrs.match(/\bmethod\s*=\s*['"]([^'"]*)['"]/i)?.[1] || "POST").toUpperCase() || "POST";
+    const actionRaw = decodeHtmlEntities(attrs.match(/\baction\s*=\s*['"]([^'"]*)['"]/i)?.[1] || "");
+    if (!actionRaw) return null;
+    let actionUrl = actionRaw;
+    try {
+      actionUrl = new URL(actionRaw, baseUrl || PMS_ORIGINS.WINGS_WEB).toString();
+    } catch (_) {
+      return null;
+    }
+    return {
+      method: method === "GET" ? "GET" : "POST",
+      actionUrl,
+      body: new URLSearchParams(parseHtmlFormInputs(raw)).toString()
+    };
+  }
+
+  async function submitHtmlRelayForm(relay, bundle, referer = "") {
+    if (!relay?.actionUrl) {
+      throw createTaggedError("HTML_RELAY_MISSING_ACTION", "PMS relay form is missing an action URL.");
+    }
+    await ensurePmsBundleCookies(bundle);
+    const { headers, cookieHeader } = buildPmsRequestHeaders(bundle, { headers: {} });
+    const relayHeaders = {};
+    mergeHeaders(relayHeaders, headers);
+    mergeHeaders(relayHeaders, {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    });
+    if (referer) {
+      mergeHeaders(relayHeaders, { Referer: referer });
+    }
+    if (relay.method !== "GET") {
+      mergeHeaders(relayHeaders, { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" });
+    }
+    const response = await fetch(relay.actionUrl, {
+      method: relay.method,
+      credentials: cookieHeader || (Array.isArray(bundle?.cookies) && bundle.cookies.length > 0) ? "include" : "omit",
+      headers: relayHeaders,
+      body: relay.method === "GET" ? undefined : relay.body
+    });
+    if (!response?.ok) {
+      throw createTaggedError("HTML_RELAY_FAILED", `PMS relay form failed (${response?.status || "unknown"})`);
+    }
+    return response;
+  }
+
   function summarizeProviderRowSources(rows) {
     return (Array.isArray(rows) ? rows : []).reduce(
       (acc, row) => {
@@ -1887,12 +1972,22 @@
     throw lastError || new Error("PMS reservation API failed");
   }
 
-  async function parsePmsReservationResponse(response) {
+  async function parsePmsReservationResponse(response, requestContext = null) {
     const text = await response.text();
     const payload = safeJsonParse(text);
     if (!payload || typeof payload !== "object") {
       const contentType = normalizeText(response?.headers?.get?.("content-type") || "").toLowerCase();
       const snippet = String(text || "").slice(0, 240);
+      const relay = parseHtmlRelayForm(text, response?.url || requestContext?.url?.toString?.() || "");
+      const relayDepth = Number(requestContext?.relayDepth || 0);
+      if (relay && requestContext?.url && requestContext?.options && requestContext?.bundle && relayDepth < 2) {
+        await submitHtmlRelayForm(relay, requestContext.bundle, response?.url || "");
+        const retriedResponse = await fetchPmsReservationResponse(requestContext.url, requestContext.options, requestContext.bundle);
+        return parsePmsReservationResponse(retriedResponse, {
+          ...requestContext,
+          relayDepth: relayDepth + 1
+        });
+      }
       if (
         contentType.includes("text/html") &&
         /identity\/samlsso|you are now redirected back to/i.test(snippet)
@@ -1989,7 +2084,12 @@
 
     return readOrRunInflightPmsReservation(cacheKey, async () => {
       const response = await fetchPmsReservationResponse(url, options, bundle);
-      const payload = await parsePmsReservationResponse(response);
+      const payload = await parsePmsReservationResponse(response, {
+        url,
+        options,
+        bundle,
+        relayDepth: 0
+      });
       const adapterParsed =
         typeof W.getReservations === "function"
           ? W.getReservations({
@@ -2086,16 +2186,16 @@
             url: normalizeText(profile?.pmsReservationUrl || ""),
             branch: normalizeRecordBranch(profile?.branch || ""),
             ok: false,
-            error: String(error?.message || error)
+            error: formatTaggedError(error)
           }],
           profilesFetched: [{
             branch: normalizeRecordBranch(profile?.branch || ""),
             url: normalizeText(profile?.pmsReservationUrl || ""),
             recordCount: 0,
-            error: String(error?.message || error)
+            error: formatTaggedError(error)
           }],
           query: { ...normalizedQuery },
-          error: String(error?.message || error)
+          error: formatTaggedError(error)
         });
       }
     }
@@ -2294,15 +2394,15 @@
             url: failedUrl,
             branch: normalizeRecordBranch(profile?.branch || ""),
             ok: false,
-            error: String(error?.message || error)
+            error: formatTaggedError(error)
           }],
           profilesFetched: [{
             branch: normalizeRecordBranch(profile?.branch || ""),
             url: failedUrl,
             itemCount: 0,
-            error: String(error?.message || error)
+            error: formatTaggedError(error)
           }],
-          error: String(error?.message || error)
+          error: formatTaggedError(error)
         });
       }
     }

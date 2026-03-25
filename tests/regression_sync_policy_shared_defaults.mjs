@@ -27,6 +27,8 @@ function main() {
   assert.equal(policy.sheetDefaults.startRow, constants.POLICY_START_ROW);
   assert.deepEqual(policy.roomPresets["admin-station"], constants.ROOM_PRESETS["admin-station"]);
   assert.equal(policy.roomTypeByRoomNo["A1201"], constants.ROOM_TYPE_BY_ROOM_NO["A1201"]);
+  assert.equal(policy.roomTypeByRoomNo["1302"], constants.ROOM_TYPE_BY_ROOM_NO["1302"]);
+  assert.equal(policy.roomTypeByRoomNo["2201"], constants.ROOM_TYPE_BY_ROOM_NO["2201"]);
 
   console.log("regression_sync_policy_shared_defaults: OK");
 }

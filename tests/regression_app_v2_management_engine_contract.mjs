@@ -12,18 +12,19 @@ function main() {
   const root = process.cwd();
   const contracts = read(root, "src/desktop/app-v2-contracts.ts");
   const runner = read(root, "app_v2/main/reservationActionRunner.ts");
-  const appSource = read(root, "app_v2/renderer/App.tsx");
 
   assert.doesNotMatch(contracts, /\bmock\b/);
   assert.doesNotMatch(runner, /\bmock\b/);
+  assert.doesNotMatch(runner, /buildMockRows/);
   assert.match(contracts, /planToken/);
   assert.match(contracts, /requiresApproval/);
   assert.match(contracts, /applyAllowed/);
   assert.match(runner, /app_v2_reservation_management_bridge\.py/);
   assert.match(runner, /engineStatus/);
   assert.match(runner, /planToken/);
-  assert.match(appSource, /plan token/);
-  assert.match(appSource, /source bundle 필요/);
+  assert.match(runner, /rows:\s*\[\]/);
+  assert.doesNotMatch(runner, /APP_V2_SOURCE_FIXTURE_JSON/);
+  assert.doesNotMatch(runner, /APP_V2_FIXTURE_MODE/);
 
   console.log("regression_app_v2_management_engine_contract: OK");
 }

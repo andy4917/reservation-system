@@ -442,17 +442,31 @@ def normalize_room_no(value: str) -> str:
     return ""
 
 
+COEX_SPECIAL_ROOM_ALIASES = {
+    "401": {"401", "B401"},
+    "B401": {"401", "B401"},
+    "1102": {"1102", "B112"},
+    "B112": {"1102", "B112"},
+    "1302": {"1302", "A302"},
+    "A302": {"1302", "A302"},
+    "2201": {"2201", "A121"},
+    "A121": {"2201", "A121"},
+}
+
+
 def room_no_alias_keys(room_no: str) -> List[str]:
     key = normalize_room_no(room_no)
     if not key:
         return []
+    has_special_alias = key in COEX_SPECIAL_ROOM_ALIASES
     keys = [key]
-    if key.startswith("B") and key[1:].isdigit():
+    keys.extend(sorted(COEX_SPECIAL_ROOM_ALIASES.get(key, set())))
+    if key.startswith("B") and key[1:].isdigit() and not has_special_alias:
         keys.append(str(int(key[1:])))
-    if key.startswith("A") and key[1:].isdigit():
+    if key.startswith("A") and key[1:].isdigit() and not has_special_alias:
         n = int(key[1:])
         keys.append(str(n + 1000))
-    if key.isdigit():
+    if key.isdigit() and not has_special_alias:
         n = int(key)
         if n >= 1301:
             keys.append(f"A{n - 1000}")
@@ -532,11 +546,19 @@ def build_room_identity(branch: str, room_no: str) -> RoomIdentity:
     canonical_parts = [part for part in (branch_key, building, room_number) if part]
     canonical_id = "-".join(canonical_parts)
     pms_room_no = ""
+    if normalized_room_no in {"B401", "B112", "A302", "A121"}:
+        legacy_candidates = [
+            candidate
+            for candidate in sorted(COEX_SPECIAL_ROOM_ALIASES.get(normalized_room_no, set()))
+            if candidate.isdigit()
+        ]
+        if legacy_candidates:
+            pms_room_no = legacy_candidates[0]
     if room_number.isdigit():
         number = int(room_number)
-        if building == "A":
+        if not pms_room_no and building == "A":
             pms_room_no = str(number + 1000)
-        else:
+        elif not pms_room_no:
             pms_room_no = str(number)
 
     return RoomIdentity(
@@ -973,7 +995,8 @@ def date_columns_from_batch_header_row(
     header_row_zero_based: int,
     year: int,
 ) -> List[DateColumn]:
-    safe_title = f"'{sheet_name}'" if " " in sheet_name else sheet_name
+    escaped_title = str(sheet_name).replace("'", "''")
+    safe_title = f"'{escaped_title}'" if re.search(r"[^A-Za-z0-9_]", str(sheet_name)) else str(sheet_name)
     row_1based = header_row_zero_based + 1
     range_a1 = f"{safe_title}!C{row_1based}:ZZ{row_1based}"
     value_ranges = client.batch_get_values(

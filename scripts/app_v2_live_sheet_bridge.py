@@ -12,6 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from reservation_sheet_audit import get_access_token
 from src.domain.report_policy import OrderlistPolicy
 from src.domain.sheet_domain import AuditError, extract_sheet_id, infer_year_from_sheet_name, normalize_text

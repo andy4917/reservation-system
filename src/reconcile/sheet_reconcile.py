@@ -270,23 +270,47 @@ def room_alias_keys(room_no: str) -> set[str]:
     token = normalize_text(room_no).upper().replace(" ", "").replace("-", "")
     if not token:
         return set()
+    has_special_alias = token in {
+        "401",
+        "B401",
+        "1102",
+        "B112",
+        "1302",
+        "A302",
+        "2201",
+        "A121",
+    }
+    special_aliases = {
+        "401": {"401", "B401"},
+        "B401": {"401", "B401"},
+        "1102": {"1102", "B112"},
+        "B112": {"1102", "B112"},
+        "1302": {"1302", "A302"},
+        "A302": {"1302", "A302"},
+        "2201": {"2201", "A121"},
+        "A121": {"2201", "A121"},
+    }
     out: set[str] = set()
+    out.update(special_aliases.get(token, set()))
     if re.fullmatch(r"\d{1,5}", token):
-        n = int(token)
-        out.add(str(n))
-        out.add(f"B{n}")
-        if n >= 1301:
-            out.add(f"A{n - 1000}")
+        if not has_special_alias:
+            n = int(token)
+            out.add(str(n))
+            out.add(f"B{n}")
+            if n >= 1301:
+                out.add(f"A{n - 1000}")
         return out
     if re.fullmatch(r"A\d{3,4}", token):
         n = int(token[1:])
         out.add(token)
-        out.add(str(n + 1000))
+        if not has_special_alias:
+            out.add(str(n + 1000))
         return out
     if re.fullmatch(r"B\d{3,4}", token):
         n = int(token[1:])
         out.add(token)
-        out.add(str(n))
+        if not has_special_alias:
+            out.add(str(n))
         return out
     out.add(token)
     return out

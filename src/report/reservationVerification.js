@@ -213,6 +213,17 @@
     const normalized = normalizeText(roomNo || "").toUpperCase().replace(/\s+/g, "").replace(/-/g, "");
     if (!normalized) return [];
     const out = new Set([normalized]);
+    const specialAliases = {
+      "401": ["401", "B401"],
+      "B401": ["401", "B401"],
+      "1102": ["1102", "B112"],
+      "B112": ["1102", "B112"],
+      "1302": ["1302", "A302"],
+      "A302": ["1302", "A302"],
+      "2201": ["2201", "A121"],
+      "A121": ["2201", "A121"],
+    };
+    (specialAliases[normalized] || []).forEach((alias) => out.add(alias));
     const compact = normalized.replace(/^0+/, "");
     if (compact) out.add(compact);
     if (/^\d+$/.test(compact)) out.add(String(Number(compact)));

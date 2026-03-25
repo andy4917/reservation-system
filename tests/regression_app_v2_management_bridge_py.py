@@ -44,6 +44,14 @@ def write_fixture() -> Path:
 
 
 def run_action(action: str, fixture_path: Path) -> dict:
+    return run_action_with_args(
+        action,
+        fixture_path,
+        [],
+    )
+
+
+def run_action_with_args(action: str, fixture_path: Path, extra_args: list[str]) -> dict:
     result = subprocess.run(
         [
             "python3",
@@ -58,6 +66,7 @@ def run_action(action: str, fixture_path: Path) -> dict:
             "--fixture-mode",
             "--source-fixture",
             str(fixture_path),
+            *extra_args,
         ],
         cwd=ROOT,
         text=True,
@@ -90,6 +99,20 @@ def main() -> None:
     assert apply_payload["requiresApproval"] is True
     assert apply_payload["applyAllowed"] is False
     assert apply_payload["rows"]
+    assert all(row["statusLabel"] == "DRYRUN" for row in apply_payload["rows"])
+
+    executed_payload = run_action_with_args(
+        "apply",
+        fixture_path,
+        ["--execute-apply", "--approve-plan-token", apply_payload["planToken"]],
+    )
+    assert executed_payload["mode"] == "apply"
+    assert executed_payload["engineStatus"] == "applied"
+    assert executed_payload["applyAllowed"] is True
+    assert executed_payload["planToken"] == apply_payload["planToken"]
+    assert executed_payload["rows"]
+    assert all(row["statusLabel"] == "APPLIED" for row in executed_payload["rows"])
+    assert "applyExecuted:true" in executed_payload["evidence"]
 
     print("regression_app_v2_management_bridge_py: OK")
 
