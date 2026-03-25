@@ -9,6 +9,9 @@
     "app:build:renderer": "vite build --config app_v2/vite.config.ts",
     "app:build:main": "tsc -p tsconfig.json && node scripts/write-dist-app-package-json.mjs",
     "app:build": "npm run app:build:renderer && npm run app:build:main",
+    "app:icons:regen": "node scripts/generate_app_icons.mjs",
+    "app:dist:portable": "node scripts/build_app_v2_portable.mjs",
+    "app:dist:win": "node scripts/build_app_v2_installer.mjs",
     "app:preview": "vite preview --config app_v2/vite.config.ts",
     "app:electron": "npm run app:build && node scripts/run_electron_with_bridge_secret.mjs .",
     "app:verify:electron-smoke": "node scripts/app_v2_electron_smoke.mjs",
@@ -32,7 +35,50 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.1",
-    "typescript": "^5.8.2",
+    "electron-builder": "^26.8.1",
+    "typescript": "^5.9.3",
     "vite": "^6.2.6"
+  },
+  "build": {
+    "appId": "com.uhs.reservation.desktop",
+    "productName": "UHS Reservation Desktop",
+    "directories": {
+      "output": "dist/installer"
+    },
+    "files": [
+      "dist-app/**/*",
+      "icons/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "src",
+        "to": "src",
+        "filter": [
+          "**/*.js"
+        ]
+      },
+      {
+        "from": "scripts",
+        "to": "scripts",
+        "filter": [
+          "app_v2_live_sheet_bridge.py",
+          "app_v2_reservation_management_bridge.py"
+        ]
+      }
+    ],
+    "asar": true,
+    "win": {
+      "icon": "icons/desktop-icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
   }
 }
