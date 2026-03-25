@@ -4,8 +4,8 @@ Last updated: 2026-03-14
 
 기준 문서:
 
-- [`SHEET_MAPPING_SEARCH_BASELINE.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/SHEET_MAPPING_SEARCH_BASELINE.md)
-- [`APP_PRODUCT_OPERATING_MODEL.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/APP_PRODUCT_OPERATING_MODEL.md)
+- [`SHEET_MAPPING_SEARCH_BASELINE.md`](SHEET_MAPPING_SEARCH_BASELINE.md)
+- [`APP_PRODUCT_OPERATING_MODEL.md`](APP_PRODUCT_OPERATING_MODEL.md)
 
 이 문서는 최신 Patch 1~7 결정을 실제 구현 순서와 검증 게이트로 고정하기 위한 실행 문서입니다.
 
@@ -80,20 +80,8 @@ Last updated: 2026-03-14
 
 ### 먼저 손댈 파일
 
-1. [`app/contracts/provider.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/contracts/provider.ts)
-- 시트 summary와 visible slice 계약 확장
-
-2. [`app/main/sheetRuntime.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/main/sheetRuntime.ts)
-- token refresh / failure category / summary 조립
-
-3. [`src/io/sheets.fetch.js`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/src/io/sheets.fetch.js)
-- metadata, named range, validation, retry reason 요약 구조화
-
-4. [`app/main/runArtifactStore.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/main/runArtifactStore.ts)
-- run artifact 저장, visible slice 계산
-
-5. [`app/main/ipc.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/main/ipc.ts)
-- sheet snapshot을 main-run artifact store에 적재한 뒤 renderer에 응답
+- 이 섹션의 과거 `app/` 파일 목록은 retired surface 기준이라 제거했습니다.
+- 현재는 `app_v2/main/*`과 `src/io/sheets.fetch.js`를 기준으로 다시 매핑해야 합니다.
 
 ### Stage A 완료 조건
 
@@ -127,14 +115,8 @@ Last updated: 2026-03-14
 
 ### 먼저 손댈 파일
 
-1. [`app/renderer/types.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/types.ts)
-- `selectedRunId`, `visibleSlice` 반영
-
-2. [`app/renderer/state/uiStore.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/state/uiStore.ts)
-- sheetRead 상태를 summary + selectedRunId + visibleSlice 중심으로 저장
-
-3. [`app/renderer/components/surfaces/SettingsSurface.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/surfaces/SettingsSurface.tsx)
-- visible slice와 선택된 run 표시
+- 이 섹션의 과거 `app/renderer/*` 파일 목록은 retired surface 기준이라 제거했습니다.
+- 현재는 `app_v2/renderer/*`와 관련 상태 저장소를 기준으로 다시 잡아야 합니다.
 
 ### Patch 2 완료 조건
 
@@ -162,11 +144,8 @@ Last updated: 2026-03-14
 
 ### 먼저 손댈 파일
 
-1. [`app/renderer/types.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/types.ts)
-2. [`src/io/sheets.fetch.js`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/src/io/sheets.fetch.js)
-3. [`src/domain/sheet_domain.py`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/src/domain/sheet_domain.py)
-4. [`app/main/runArtifactStore.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/main/runArtifactStore.ts)
-5. 관련 surface 파일
+- 이 섹션의 과거 `app/` 파일 목록은 retired surface 기준이라 제거했습니다.
+- 현재는 `src/io/sheets.fetch.js`, `src/domain/sheet_domain.py`, `app_v2/main/*` 기준으로 다시 매핑해야 합니다.
 
 ### Patch 3 완료 조건
 
@@ -189,10 +168,9 @@ Last updated: 2026-03-14
 
 ### 먼저 손댈 파일
 
-1. [`src/domain/sheet_domain.py`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/src/domain/sheet_domain.py)
-2. [`app/services/inventoryCompare.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/services/inventoryCompare.ts)
-3. [`app/services/reservationAudit.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/services/reservationAudit.ts)
-4. main IPC / worker bridge 관련 파일
+- `src/domain/sheet_domain.py`
+- 나머지 과거 `app/services/*` 파일 목록은 retired surface 기준이라 제거했습니다.
+- 현재는 `app_v2/main/*` IPC/runtime 경계에서 다시 잡아야 합니다.
 
 ### Patch 4 완료 조건
 
@@ -214,11 +192,9 @@ Last updated: 2026-03-14
 
 ### 먼저 손댈 파일
 
-1. [`app/services/searchEngine.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/services/searchEngine.ts)
-2. main search runtime/worker 파일
-3. [`app/renderer/state/uiStore.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/state/uiStore.ts)
-4. [`app/renderer/components/AppHeader.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/AppHeader.tsx)
-5. [`app/renderer/components/RightPanel.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/RightPanel.tsx)
+- main search runtime/worker 파일
+- 과거 `app/services/*`, `app/renderer/*` 파일 목록은 retired surface 기준이라 제거했습니다.
+- 현재는 `app_v2/renderer/*`와 대응 main runtime 기준으로 다시 잡아야 합니다.
 
 ### Patch 5 완료 조건
 
@@ -240,9 +216,8 @@ Last updated: 2026-03-14
 
 ### 먼저 손댈 파일
 
-1. [`app/renderer/components/AppHeader.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/AppHeader.tsx)
-2. [`app/renderer/components/RightPanel.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/RightPanel.tsx)
-3. [`app/renderer/components/TaskWorkspace.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/TaskWorkspace.tsx)
+- 이 섹션의 과거 `app/renderer/*` 파일 목록은 retired surface 기준이라 제거했습니다.
+- 현재는 `app_v2/renderer/*` 기준으로 lazy-load와 virtualization 대상을 다시 잡아야 합니다.
 
 ### Patch 6 완료 조건
 

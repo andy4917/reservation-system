@@ -37,13 +37,15 @@
 완료 기준:
 
 - 앱에서 실제 live inventory/audit rows가 보인다.
-- HAR fallback 없이 브라우저 세션 기준 조회가 성공한다.
+- 기본 운영 경로에서 브라우저 세션 기준 조회가 성공한다.
+- HAR/env/DOM fallback은 운영 주경로가 아니라 차단 또는 보조 진단 경로로 분리된다.
 
 현재 상태:
 
 - main-owned `LiveReadRunContext`와 `coverage` bundle까지는 구현 완료
 - 현재 환경에서는 `sheet-unconfigured / provider unavailable / wings unavailable`로 `offline-preview`
-- 즉 코드 경로는 닫혔고, 남은 것은 운영 환경 smoke다
+- backend 정리로 live bundle 순차화와 runtime verify JSON 복구는 반영됐지만, Wings 쪽 `har-env`, PMS/OTA 쪽 DOM/provider fallback, fixture 기반 관리 경로가 남아 있어 운영 주경로가 완전히 fail-closed 된 상태는 아닙니다.
+- 즉 운영 smoke만 남은 상태가 아니라, fallback 경계를 더 줄이는 작업이 함께 남아 있습니다.
 
 ## Stage 2. Truth-Aligned Mapping Core
 

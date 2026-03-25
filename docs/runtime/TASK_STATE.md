@@ -1,38 +1,60 @@
 # TASK STATE
 
-- updated_at: 2026-03-18T22:50:13+09:00
-- status: verified
-- goal: Stage 1 `Live Read 최소 경로`와 Stage 2 `Truth-Aligned Mapping Core` completion을 위해 실제 시트/PMS 기반 alias/identity auto binding과 precision/soft-triage surface를 반영
-- current_milestone: stage/v1 checklist, repo handoff, active memory, archive 정리까지 현재 상태 기준으로 동기화
-- next_step: 환경 세션이 준비되면 `offline-preview`를 넘어 실제 `read-live` smoke를 다시 확인
+- updated_at: 2026-03-25T23:04:22+09:00
+- status: active
+- goal: Stage 1/2 완료 기준선 위에서 `app_v2` read-only 운영 셸의 live source/runtime safety/packaging 확장 상태를 최신 검증 기준으로 재정리하고 핸드오프 가능한 상태로 고정
+- current_milestone: committed `app_v2` readonly bridge/ops baseline 위에 provider session ingest, Wings source runtime, source fixture export, runtime safety, packaging 정합을 얹는 전환 구간
+- next_step: 실제 운영 세션 smoke와 Windows 산출물 build로 contract-verified 상태를 운영 검증으로 승격
 
 ## Completed
-- `memory-bootstrap` 절차를 다시 실행하고 continuation 작업 상태를 최신화했습니다.
-- `app/main/liveReadRuntime.ts`, `app/main/ipc.ts`, `app/renderer/state/uiStore.ts`를 기준으로 shared run contract와 main-owned branch/date scope를 제품 코드에 반영했습니다.
-- `app/main/truthCatalogRuntime.ts`를 truth dataset loader 단일 원본으로 확장하고, `app/main/mappingTruthRuntime.ts`의 중복 파일 로딩/캐시를 제거했습니다.
-- `app/services/bindingArtifacts.ts`에서 `branch_the_samseong` 하드코드 필터를 제거하고, preopen section도 artifact로 유지되게 조정했습니다.
-- `app/contracts/provider.ts`, `app/renderer/types.ts`에 canonical binding 보존용 optional field(`resolvedCanonicalId`)를 추가했습니다.
-- `app/services/operatingProgress.ts`를 최신 구현 상태 기준으로 갱신했습니다.
-- 관련 회귀 테스트와 smoke script를 최신 구현 기준으로 재실행했습니다.
-- `app/main/mappingAutoBindingRuntime.ts`를 추가하고, `app/main/ipc.ts`의 `buildSheetSnapshotBridgeResponse`에서 시트 snapshot + PMS reservation rows를 함께 사용해 auto binding을 생성하도록 연결했습니다.
-- room alias는 `snapshot.readHints.roomTypeByRoomNo/localRoomTypeByRoomNo`와 truth alias graph를 기준으로 auto binding하고, reservation identity는 `snapshot.reservationBlocks`와 PMS reservation rows를 기준으로 exact pair만 auto binding, soft pair는 unresolved로 남기도록 구현했습니다.
-- 새 회귀 테스트 `tests/regression_app_mapping_auto_binding_runtime.mjs`를 추가했습니다.
-- `app/main/operatorExportRuntime.ts`와 `app/contracts/provider.ts`에서 exact auto binding / soft triage / precision gate를 bundle-level manifest, metrics, copy text, csv, preview, operator loop에 노출했습니다.
-- `app/main/searchRuntime.ts`에 `binding-summary` 문서를 추가하고, unresolved binding search document에 confidence/domain/severity/rule/evidence signal을 보강했습니다.
-- `app/renderer/components/RightPanel.tsx`, `app/renderer/components/surfaces/SettingsSurface.tsx`에서 exact auto binding, soft triage, precision gate/score를 최소 UI 변경으로 surface에 반영했습니다.
-- `tests/regression_app_binding_artifacts.mjs`, `tests/regression_app_operator_export_runtime.mjs`, `tests/regression_app_search_runtime.mjs`를 completion 기준으로 갱신했습니다.
-- `npm run app:check`, `npm run app:build:main`, `node tests/regression_app_binding_artifacts.mjs`, `node tests/regression_app_mapping_auto_binding_runtime.mjs`, `node tests/regression_app_operator_export_runtime.mjs`, `node tests/regression_app_search_runtime.mjs`, `node --experimental-vm-modules tests/regression_app_ui_store_live_wings_flow.mjs`, `node scripts/live_read_verify.mjs --json`를 통과했습니다.
-- `docs/runtime/STAGE_V1_CHECKLIST.md`, `docs/runtime/HANDOFF.md`, `docs/runtime/ACTIVE_MEMORY.md`를 추가했습니다.
-- 완료된 stage 설계 문서와 옛 handoff는 `docs/archive/stage-history/`로 이동했습니다.
+- Stage 1 `Live Read 최소 경로`와 Stage 2 `Truth-Aligned Mapping Core` 기준선은 유지됩니다.
+- committed baseline `7cf7249`, `9b032d8`, `f29ebdd`까지의 `app_v2` readonly live bridge, ops preview, management workflow, engine status wording 정리가 유지됩니다.
+- dirty worktree 기준으로 provider/browser session material ingest, Wings reservation runtime, source reservation fixture export, runtime safety snapshot, packaging scripts/docs/icons 확장분이 존재합니다.
+- backend 정리 기준 반영 완료
+  - `app_v2/main/liveReadRuntime.ts`: live bundle synthetic row fallback 제거 및 PMS → OTA → Sheet 순차 실행 고정.
+  - `app_v2/main/runtimeExclusive.ts`: provider/Wings live runtime이 같은 글로벌 fetch/module 상태를 공유하지 않도록 공용 배타 실행기로 직렬화.
+  - `app_v2/main/runtimeProbeProcess.ts`: runtime probe도 bundle/pms/ota/sheet/action을 순차 실행하도록 정리.
+  - `app_v2/main/reservationActionRunner.ts`: 운영 경로에서 `APP_V2_SOURCE_FIXTURE_JSON` / `APP_V2_FIXTURE_MODE` env fallback 제거, live PMS source export만 사용.
+  - `scripts/app_v2_runtime_verify.mjs`: `--json`에서 빌드 실패/프로브 누락 시 구조화된 실패 payload을 반환하도록 복구.
+  - `src/io/sheets_api.py`: API 상태 기반 메시지 정규화 및 `fetch_grid` 누락 메시지 정합화.
+- 최신 검증에서 다음 명령이 통과했습니다.
+  - `node tests/regression_app_v2_live_runtime_contract.mjs`
+  - `node tests/regression_app_v2_live_bundle_contract.mjs`
+  - `node tests/regression_app_v2_management_engine_contract.mjs`
+  - `node tests/regression_app_v2_runtime_verify.mjs`
+  - `node tests/regression_app_v2_runtime_safety_contract.mjs`
+  - `node tests/regression_app_v2_runtime_safety_behavior.mjs`
+  - `node tests/regression_app_v2_runtime_probe_contract.mjs`
+  - `node tests/regression_app_v2_runtime_readiness_contract.mjs`
+  - `node tests/regression_app_v2_source_reservation_runtime.mjs`
+  - `node tests/regression_app_v2_provider_storage_snapshot.mjs`
+  - `node tests/regression_app_v2_management_bridge_py.py`
+  - `python3 tests/regression_sheets_api_fetch_grid_range_py.py`
+  - `python3 tests/regression_ops_workflow_py.py`
+  - `python3 tests/regression_pms_reconcile_py.py`
+  - `npm run app:check`
+  - `npm run app:build:main`
 
 ## Current Findings
-- Stage 1의 `sheet/provider/wings`는 이제 하나의 main-owned live bundle과 coverage 요약으로 묶이지만, 실제 live 성공 여부는 환경 설정/브라우저 세션 가용성에 계속 의존합니다.
-- Stage 2의 `truthSignals`, `metrics`, `resolvedCanonicalId`는 이제 artifact 경로에 연결됐고, exact room/reservation auto binding이 생성됩니다.
-- reservation identity soft match는 자동 채택하지 않고 unresolved로만 남기되, operator export/search/UI에서 잔량과 precision gate를 직접 드러냅니다.
-- `preopen` section은 더 이상 숨기지 않고 artifact로 유지되어 운영 상태를 드러냅니다.
-- UI store 회귀는 기본 Node 환경에서는 `vm` 모듈 미지원으로 skip 처리되며, `--experimental-vm-modules` 경로에서 실제 동작을 확인했습니다.
-- 현재 active 문서는 `docs/runtime/*`이고, 이전 stage memo는 archive로 분리됐습니다.
+- 현재 브랜치는 `codex/reference-ledger-shell`이며 `origin/codex/reference-ledger-shell` 대비 `ahead 3`입니다.
+- worktree는 dirty 상태이고 `app_v2/main/*`, `package.json`, `scripts/*`, `docs/runtime/*`, `extension/*`, `src/reconcile|report|scan/*`, icon assets가 함께 움직이고 있습니다.
+- `app_v2`는 이제 provider browser에서 쿠키/localStorage/sessionStorage를 읽어 live provider rows와 Wings PMS reservation fetch에 넘길 수 있는 구조를 가집니다.
+- provider/Wings live runtime은 공용 직렬화 경로로 묶여 bundle/read probe에서 전역 `fetch` 충돌 가능성을 줄였습니다.
+- management flow는 PMS reservation rows를 source fixture로 저장할 수 있고, source bundle이 없으면 `pending-source` snapshot으로 명시적으로 멈추게 설계되어 있습니다.
+- fixture mode, HAR/env fallback, DOM/provider fallback은 아직 일부 런타임에 남아 있어 운영 주경로를 완전히 fail-closed 했다고 보기는 어렵습니다.
+- portable/Windows packaging 경로와 packaged runtime asset lookup은 계약 테스트로 검증됐지만, 실제 배포 산출물 생성까지 이번 세션에서 실행한 것은 아닙니다.
+- COEX room alias와 hygiene absolute path allowlist는 현재 dirty 코드 기준으로 JS/Python/extension 경로가 맞춰져 있습니다.
+- 로컬 워크스페이스 생성물은 현재 `dist-app/`만 유지하고, `build/`, `dist/`, `output/`, `output_review/`, `debug/`, `logs/`는 정리했습니다.
+
+## Remaining Work
+- 운영 세션에서 `app_v2` live read가 실제로 성공하는지 확인
+- `compare`/`reconcile`/`apply` UI 흐름에서 source fixture와 runtime safety fallback이 실제 사용자 흐름과 맞는지 확인
+- Windows 환경에서 portable/installer 산출물 실제 생성 및 문서 경로 재확인
+- dirty worktree 변경을 커밋 경계별로 정리하고 release 서사와 문서를 최종 동기화
 
 ## Risks
-- 현재 환경의 `live_read_verify` 결과는 `offline-preview`이며, 운영 세션이 없는 상태를 명시적으로 보여 줍니다.
-- UI store 회귀는 실험적 `vm` 모듈 플래그에 의존하므로, 기본 Node 실행만으로는 full-path 검증이 닫히지 않습니다.
+- dirty worktree의 설명과 release 가능 상태를 혼동하면 안 됩니다.
+- contract/build/regression 통과만으로 운영 환경 `read-live` 성공을 주장할 수 없습니다.
+- Windows packaging은 실제 타깃 환경 빌드 전까지는 문서/계약 수준 보장에 머뭅니다.
+- alias/policy 정합은 회귀 테스트로는 닫혔지만, 실제 데이터셋과 운영 smoke까지는 남아 있습니다.
+- `npm install --ignore-scripts`와 일반 `npm install`이 다시 정상 완료됩니다. `global-agent/node_modules/semver` 파손은 해소됐고, 현재 node_modules는 재설치 가능한 상태로 복구됐습니다.

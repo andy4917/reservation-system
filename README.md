@@ -4,8 +4,8 @@
 
 가장 먼저 읽을 문서:
 
-- 제품 정의 / 왜 만드는지 / v1 범위: [`docs/architecture/APP_PRODUCT_OPERATING_MODEL.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/APP_PRODUCT_OPERATING_MODEL.md)
-- 재구현 순서 / 운영 경로 중심 로드맵: [`docs/architecture/APP_IMPLEMENTATION_ROADMAP.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/APP_IMPLEMENTATION_ROADMAP.md)
+- 제품 정의 / 왜 만드는지 / v1 범위: [`docs/architecture/APP_PRODUCT_OPERATING_MODEL.md`](docs/architecture/APP_PRODUCT_OPERATING_MODEL.md)
+- 재구현 순서 / 운영 경로 중심 로드맵: [`docs/architecture/APP_IMPLEMENTATION_ROADMAP.md`](docs/architecture/APP_IMPLEMENTATION_ROADMAP.md)
 
 ## 문서 구조
 
@@ -24,10 +24,18 @@
 ## Python/C++ 런타임 권장 상태
 
 - Python runtime 고정: `python3.10`
+- 개발 가상환경 기준: `.venv310`
 - Native module 유지: `inventory_cpp_core.cpython-310-x86_64-linux-gnu.so`
 - 제거 대상: `inventory_cpp_core.cpython-311-*.so`
 - Wrapper 기본 모드(운영): `INVENTORY_CPP_MODE=auto`
 - 강제 검증 모드: `INVENTORY_CPP_MODE=required`
+
+개발 환경 확인:
+
+```bash
+./.venv310/bin/python --version
+./.venv310/bin/python -m pip --version
+```
 
 빌드 산출물 관리:
 - `build/`와 `*.so`는 산출물로 취급하며 저장소 추적 대상이 아닙니다.
@@ -70,7 +78,7 @@ python3.10 setup.py build_ext --inplace
 
 ## 현재 주요 축
 
-- 데스크톱 앱 실행 폴더: `app/`
+- 데스크톱 앱 실행 폴더: `app_v2/`
 - 브리지 전용 확장:
   - 세션 캡처
   - 현재 탭 context
@@ -79,11 +87,10 @@ python3.10 setup.py build_ext --inplace
 
 ## 앱 실행
 
-`app/` 폴더에서 바로 실행합니다.
+저장소 루트에서 앱 스크립트를 직접 실행합니다.
 
 ```bash
-cd app
-npm start
+npm run app:electron
 ```
 
 ## 확장 브리지 설치
@@ -105,7 +112,7 @@ npm start
 
 주의:
 - 현재 확장은 메인 작업 UI가 아니라 브리지 역할만 담당합니다.
-- 메인 사용자 플로우는 `app/` 아래 데스크톱 앱 런타임으로 이동 중입니다.
+- 메인 사용자 플로우는 `app_v2/` 기반 데스크톱 앱 런타임으로 이동 중입니다.
 
 ## SSO 세션 재사용 / 인증 번들
 

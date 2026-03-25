@@ -71,13 +71,13 @@ These are evidence that operator actions happened in the recorded sessions. They
 
 - Stale documentation previously listed `searchFITInHouse.do`, `searchListInterMemo.do`, `searchListRateByWalkIn.do`, `searchListServiceByWalkIn.do`, `selectAllMenuList.do`, `selectUserInfo.do` as active assumptions.
 - Those endpoints were not observed in the latest official HAR pair, so they are no longer documented as current integration targets.
-- No dead runtime execution path was found for the old reservation-list URL. It remains only as backward-compatible HAR parsing alias in [`normalize.js`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/src/scan/normalize.js).
+- No dead runtime execution path was found for the old reservation-list URL. It remains only as backward-compatible HAR parsing alias in `src/scan/normalize.js`.
 
 ## Next Phase Inputs
 
-- Sanitized endpoint inventory: [`wings_har_endpoint_catalog.json`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/reports/wings_har_endpoint_catalog.json)
-- Human-readable catalog: [`wings_har_endpoint_catalog.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/reports/wings_har_endpoint_catalog.md)
-- Capability matrix: [`wings_capability_matrix_v1.json`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/wings_capability_matrix_v1.json)
+- Sanitized endpoint inventory: `truth_dataset/reports/wings_har_endpoint_catalog.json`
+- Human-readable catalog: `truth_dataset/reports/wings_har_endpoint_catalog.md`
+- Capability matrix: `truth_dataset/wings_capability_matrix_v1.json`
 
 Recommended next step:
 
@@ -113,4 +113,4 @@ Implemented capabilities:
 - `assignable_room_lookup`
 - `assignable_room_type_lookup`
 
-Structured request/response summary is captured in [`wings_live_contract_v2.json`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/wings_live_contract_v2.json).
+Structured request/response summary is captured in `truth_dataset/wings_live_contract_v2.json`.

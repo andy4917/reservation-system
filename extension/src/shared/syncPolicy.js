@@ -58,6 +58,7 @@
       "201": "Urban Spa Suite 6인",
       "301": "Urban Spa Suite 6인",
       "401": "Urban Spa Suite 6인",
+      "B401": "Urban Spa Suite 6인",
       "501": "Urban Spa Suite 6인",
       "601": "Urban Spa Suite 6인",
       "701": "Urban Spa Suite 6인",
@@ -85,6 +86,8 @@
       "902": "Double Twin Spa Room 4인",
       "1002": "Double Twin Spa Room 4인",
       "1102": "Double Twin Spa Room 4인",
+      "B112": "Double Twin Spa Room 4인",
+      "1302": "Double Twin Spa Room 4인",
       "1202": "Double Twin Spa Room 4인",
       "A302": "Double Twin Spa Room 4인",
       "A402": "Double Twin Spa Room 4인",
@@ -95,6 +98,8 @@
       "A902": "Double Twin Spa Room 4인",
       "A1002": "Double Twin Spa Room 4인",
       "A1102": "Double Twin Spa Room 4인",
+      "A121": "Grand Spa Suite 8인",
+      "2201": "Grand Spa Suite 8인",
       "A1201": "Grand Spa Suite 8인"
     },
     "providerTargetMax": {
