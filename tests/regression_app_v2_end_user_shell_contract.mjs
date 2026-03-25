@@ -16,25 +16,34 @@ function main() {
   const preload = read(root, "app_v2/main/preload.ts");
   const ipc = read(root, "app_v2/main/ipc.ts");
 
+  assert.equal(fs.existsSync(path.join(root, "app_v2/renderer/mockShellData.ts")), false, "mock shell data should be removed");
+
   assert.match(contracts, /export type AppShellModule/);
   assert.match(contracts, /export type AppReservationAction/);
   assert.match(contracts, /export type AppBranch/);
 
-  assert.match(appSource, /WINGS 계정으로 시작|WINGS 로그인/);
-  assert.match(appSource, /PMS 조회/);
-  assert.match(appSource, /OTA 조회/);
-  assert.match(appSource, /예약 시트 조회/);
-  assert.match(appSource, /예약 관리/);
-  assert.match(appSource, /비교/);
-  assert.match(appSource, /검증/);
-  assert.match(appSource, /대조/);
-  assert.match(appSource, /수정/);
-  assert.match(appSource, /반영/);
-  assert.match(appSource, /오더리스트/);
-  assert.match(appSource, /어라이벌/);
-  assert.match(appSource, /0000/);
-  assert.match(appSource, /BGE-M3/);
-  assert.match(appSource, /COEX|GANGNAM/);
+  assert.match(appSource, /Frontend Skeleton/);
+  assert.match(appSource, /Runtime readiness/);
+  assert.match(appSource, /Provider sessions/);
+  assert.match(appSource, /Config JSON/);
+  assert.match(appSource, /Settings snapshot/);
+  assert.match(appSource, /Live read input/);
+  assert.match(appSource, /Reservation input/);
+  assert.match(appSource, /window\.desktopApp/);
+  assert.match(appSource, /JSON\.parse/);
+
+  assert.doesNotMatch(appSource, /결과 내보내기/);
+  assert.doesNotMatch(appSource, /앱 보기/);
+  assert.doesNotMatch(appSource, /원본형 보기/);
+  assert.doesNotMatch(appSource, /상세 보기/);
+  assert.doesNotMatch(appSource, /0000/);
+  assert.doesNotMatch(appSource, /const PROVIDER_LABELS/);
+  assert.doesNotMatch(appSource, /coexMain:\s*"코엑스"/);
+  assert.doesNotMatch(appSource, /coexAnnex:\s*"코엑스2"/);
+  assert.doesNotMatch(appSource, /gangnam:\s*"강남"/);
+  assert.doesNotMatch(appSource, /reportWindowDays:\s*"5"/);
+  assert.doesNotMatch(appSource, /긴급클리닝|판매가|채널상태|프로모션|검토필요/);
+  assert.doesNotMatch(appSource, /mockShellData/);
 
   assert.match(preload, /runPmsRead/);
   assert.match(preload, /runOtaRead/);

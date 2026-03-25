@@ -21,8 +21,8 @@
   - `node tests/regression_app_operator_export_runtime.mjs`
   - `node tests/regression_app_search_runtime.mjs`
   - `node --experimental-vm-modules tests/regression_app_ui_store_live_wings_flow.mjs`
-  - `node scripts/live_read_verify.mjs --json`
-- `live_read_verify` 결과는 현재 환경 기준 `sheet-unconfigured / provider unavailable / wings unavailable`로 read-only `offline-preview`를 명시했습니다.
+  - `node scripts/app_v2_runtime_verify.mjs --focus live-read`
+- `app_v2_runtime_verify --focus live-read` 결과는 현재 환경 기준 `sheet-unconfigured / provider unavailable / wings unavailable`로 read-only `offline-preview`를 명시했습니다.
 
 ## Out Of Scope
 - write-mode 운영 자동화

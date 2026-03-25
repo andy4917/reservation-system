@@ -101,8 +101,8 @@ export async function installBgeM3Model(): Promise<AppBgeInstallSnapshot> {
       modelId,
       runtime: "local-path",
       modelPath,
-      topK: settingsSnapshot.config?.bgeM3?.topK ?? 5,
-      scoreThreshold: settingsSnapshot.config?.bgeM3?.scoreThreshold ?? 0.72,
+      topK: settingsSnapshot.config?.bgeM3?.topK,
+      scoreThreshold: settingsSnapshot.config?.bgeM3?.scoreThreshold,
     },
   });
   return buildSnapshotFromSettings(updatedSettings);

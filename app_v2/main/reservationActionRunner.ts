@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   AppBranch,
   AppReservationActionInput,
@@ -10,9 +12,13 @@ import type {
   AppSettingsSnapshot,
 } from "../../src/desktop/app-v2-contracts.js";
 import { describeEmbeddingAvailability, scoreTextPairs } from "./embeddingRuntime.js";
+import { buildPendingSourceActionSnapshot } from "./runtimeSafety.js";
 import { loadSettingsSnapshot } from "./settingsStore.js";
+import { buildSourceReservationsFromPmsRecords, writeSourceReservationsFixture } from "./sourceReservationRuntime.js";
+import { fetchWingsReservations } from "./wingsReservationRuntime.js";
 
 const PYTHON_COMMAND = process.env.PYTHON_BIN || "python3";
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 interface ContinuationCandidate {
   id: string;
@@ -36,11 +42,34 @@ interface OpsBridgePayload {
   error?: string;
 }
 
+function detectRuntimeAssetRoot() {
+  // Resolve scripts from module-relative root first, then packaged resources root for Windows artifact layouts.
+  const candidateRoots = [path.resolve(currentDir, "..", "..", "..")];
+  if (process.resourcesPath) candidateRoots.push(path.resolve(process.resourcesPath));
+  for (const root of candidateRoots) {
+    if (
+      fsSync.existsSync(path.join(root, "scripts", "app_v2_reservation_management_bridge.py")) &&
+      fsSync.existsSync(path.join(root, "src", "io", "pms.fetch.js"))
+    ) {
+      return root;
+    }
+  }
+  return candidateRoots[0];
+}
+
+function resolvePythonScript(scriptName: "app_v2_live_sheet_bridge.py" | "app_v2_reservation_management_bridge.py") {
+  const root = detectRuntimeAssetRoot();
+  return {
+    scriptPath: path.join(root, "scripts", scriptName),
+    runtimeCwd: root,
+  };
+}
+
 interface ManagementBridgePayload {
   mode: "compare" | "reconcile" | "apply";
   branch: AppBranch;
   checkedAt: string;
-  engineStatus: "pending-source" | "planned";
+  engineStatus: "pending-source" | "planned" | "applied";
   summary: string;
   issueCount: number;
   rows: AppReservationActionRow[];
@@ -58,46 +87,14 @@ function nowIso() {
 function makeEvidence(settingsSummary: AppSettingsSnapshot, excludeRoomMakeup: boolean) {
   const bge = settingsSummary.config?.bgeM3;
   return [
-    `windowDays:${settingsSummary.config?.reportWindowDays ?? 5}`,
+    `windowDays:${settingsSummary.config?.reportWindowDays ?? "-"}`,
     `sheetTabs:${settingsSummary.config?.sheetTabs ? "set" : "missing"}`,
     `excludeRoomMakeup:${excludeRoomMakeup ? "on" : "off"}`,
     `bgeM3:${bge?.enabled ? "on" : "off"}`,
     `bgeRuntime:${bge?.runtime ?? "local-path"}`,
     `bgeModelPath:${bge?.modelPath ? "set" : "missing"}`,
-    `bgeTopK:${bge?.topK ?? 5}`,
-    `bgeThreshold:${bge?.scoreThreshold ?? 0.72}`,
-  ];
-}
-
-function buildMockRows(input: AppReservationActionInput): AppReservationActionRow[] {
-  const branchLabel = input.branch === "COEX" ? "코엑스" : "강남";
-  if (input.action === "compare") {
-    return [
-      { id: "cmp-1", primary: `${branchLabel} PMS ↔ OTA`, secondary: "판매수량 차이 2건", statusLabel: "검토" },
-      { id: "cmp-2", primary: `${branchLabel} OTA ↔ 시트`, secondary: "중복 예약 후보 1건", statusLabel: "주의" },
-    ];
-  }
-  if (input.action === "validate") {
-    return [
-      { id: "val-1", primary: `${branchLabel} 기준 검증`, secondary: `${input.startDate} ~ ${input.endDate}`, statusLabel: "정상" },
-      { id: "val-2", primary: "소프트 매치 후보", secondary: "예약번호 보정 필요 2건", statusLabel: "보조" },
-    ];
-  }
-  if (input.action === "reconcile") {
-    return [
-      { id: "rec-1", primary: `${branchLabel} PMS ↔ 시트`, secondary: "체크인 차이 1건", statusLabel: "대조" },
-      { id: "rec-2", primary: `${branchLabel} PMS ↔ OTA`, secondary: "상태 재동기화 후보", statusLabel: "주의" },
-    ];
-  }
-  if (input.action === "edit") {
-    return [
-      { id: "edit-1", primary: "수정 대기", secondary: "권장 수정 3건", statusLabel: "편집" },
-      { id: "edit-2", primary: "BGE-M3 보조", secondary: "후보 정렬 준비", statusLabel: "AI" },
-    ];
-  }
-  return [
-    { id: "apply-1", primary: "반영 전 점검", secondary: `${input.startDate} ~ ${input.endDate}`, statusLabel: "확인" },
-    { id: "apply-2", primary: "반영 대기", secondary: "승인 대상 2건", statusLabel: "실행" },
+    `bgeTopK:${bge?.topK ?? "-"}`,
+    `bgeThreshold:${bge?.scoreThreshold ?? "-"}`,
   ];
 }
 
@@ -129,7 +126,15 @@ function parseTabularRows(raw: string, action: AppReservationActionInput["action
 
 function runPythonScript(args: string[], cwd: string) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    const child = spawn(PYTHON_COMMAND, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(PYTHON_COMMAND, args, {
+      cwd,
+      env: {
+        ...process.env,
+        PYTHONUTF8: "1",
+        PYTHONIOENCODING: "utf-8",
+      },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => {
@@ -167,8 +172,7 @@ async function runLiveOpsBridge(
   if (!spreadsheet || sheetNames.length === 0) {
     throw new Error("예약 시트 설정이 비어 있습니다.");
   }
-  const cwd = process.cwd();
-  const scriptPath = path.join(cwd, "scripts", "app_v2_live_sheet_bridge.py");
+  const { scriptPath, runtimeCwd } = resolvePythonScript("app_v2_live_sheet_bridge.py");
   const excludeRoomMakeup = input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false;
   const args = [
     scriptPath,
@@ -193,7 +197,7 @@ async function runLiveOpsBridge(
   if (input.flagContinuationCandidates !== false) {
     args.push("--flag-continuation-candidates");
   }
-  const { stdout } = await runPythonScript(args, cwd);
+  const { stdout } = await runPythonScript(args, runtimeCwd);
   const payload = JSON.parse(stdout) as OpsBridgePayload;
   if (payload.error) throw new Error(payload.error);
   return payload;
@@ -202,11 +206,12 @@ async function runLiveOpsBridge(
 async function runManagementBridge(
   input: AppReservationActionInput,
   settingsSnapshot: AppSettingsSnapshot,
-): Promise<ManagementBridgePayload> {
+  sourceFixturePath: string,
+  runtimeEvidence: string[],
+): Promise<{ payload: ManagementBridgePayload; runtimeEvidence: string[] }> {
   const spreadsheet = settingsSnapshot.config?.spreadsheet?.trim() ?? "";
   const sheetNames = resolveSheetNames(input.branch, settingsSnapshot);
-  const cwd = process.cwd();
-  const scriptPath = path.join(cwd, "scripts", "app_v2_reservation_management_bridge.py");
+  const { scriptPath, runtimeCwd } = resolvePythonScript("app_v2_reservation_management_bridge.py");
   const args = [
     scriptPath,
     input.action,
@@ -223,12 +228,8 @@ async function runManagementBridge(
   for (const sheetName of sheetNames) {
     args.push("--sheet-name", sheetName);
   }
-  const sourceFixturePath = process.env.APP_V2_SOURCE_FIXTURE_JSON?.trim() ?? "";
   if (sourceFixturePath) {
     args.push("--source-fixture", sourceFixturePath);
-  }
-  if (process.env.APP_V2_FIXTURE_MODE === "1") {
-    args.push("--fixture-mode");
   }
   if (input.approvePlanToken?.trim()) {
     args.push("--approve-plan-token", input.approvePlanToken.trim());
@@ -236,10 +237,56 @@ async function runManagementBridge(
   if (input.executeApply === true) {
     args.push("--execute-apply");
   }
-  const { stdout } = await runPythonScript(args, cwd);
+  const { stdout } = await runPythonScript(args, runtimeCwd);
   const payload = JSON.parse(stdout) as ManagementBridgePayload;
   if (payload.error) throw new Error(payload.error);
-  return payload;
+  return {
+    payload,
+    runtimeEvidence,
+  };
+}
+
+async function prepareManagementSourceFixture(input: AppReservationActionInput) {
+  try {
+    const live = await fetchWingsReservations({
+      branch: input.branch,
+      startDate: input.startDate,
+      endDate: input.endDate,
+    });
+    const liveRecords = Array.isArray(live?.records) ? live.records : [];
+    const sourceRows = buildSourceReservationsFromPmsRecords(liveRecords, "PMS");
+    if (sourceRows.length === 0) {
+      return {
+        ok: false as const,
+        reason: `${input.action} 엔진은 준비되었지만 source bundle이 아직 없습니다.`,
+        evidence: [
+          `pmsSource:${String(live?.source || "-")}`,
+          `pmsEndpoint:${String(live?.endpointCapability || "-")}`,
+          `pmsUrl:${String(live?.url || "-")}`,
+          `pmsError:${String(live?.error || "-")}`,
+          `pmsAttempts:${Array.isArray(live?.attempts) ? live.attempts.length : 0}`,
+          "sourceFixture:live:0",
+        ],
+      };
+    }
+    const sourceDir = await fs.mkdtemp(path.join(os.tmpdir(), "uhs-app-v2-source-live-"));
+    const written = await writeSourceReservationsFixture(sourceRows, sourceDir);
+    return {
+      ok: true as const,
+      sourceFixturePath: written.path,
+      runtimeEvidence: [
+        `sourceFixture:live:${written.count}`,
+        `pmsSource:${String(live?.source || "-")}`,
+        `pmsEndpoint:${String(live?.endpointCapability || "-")}`,
+      ],
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      reason: `${input.action} 엔진은 준비되었지만 source bundle을 아직 만들 수 없습니다.`,
+      evidence: [`sourceFixture:error:${error instanceof Error ? error.message : String(error)}`],
+    };
+  }
 }
 
 async function runLiveOpsPreview(
@@ -330,11 +377,14 @@ function buildOpsAiReviewRows(
   scores: Array<{ id: string; score: number }>,
 ) {
   const scoreMap = new Map(scores.map((item) => [item.id, item.score]));
+  const continuationByRoomDate = new Map(
+    payload.continuationCandidates.map((candidate) => [`${candidate.roomNo.trim()}::${candidate.date.trim()}`, candidate]),
+  );
   let scoredRows = 0;
   const nextRows = rows.map((row) => {
     const [roomNo = ""] = row.primary.split(" / ");
     const [date = ""] = row.secondary.split(" · ");
-    const candidate = payload.continuationCandidates.find((item) => item.roomNo === roomNo.trim() && item.date === date.trim());
+    const candidate = continuationByRoomDate.get(`${roomNo.trim()}::${date.trim()}`);
     if (!candidate) return row;
     const similarity = scoreMap.get(candidate.id);
     const detailParts = [row.detail, `연박 후보 · ${candidate.basis || "continuation"}`];
@@ -360,8 +410,27 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
   }
 
   if (input.action === "compare" || input.action === "reconcile" || input.action === "apply") {
+    const sourcePreparation = await prepareManagementSourceFixture(input);
+    if (!sourcePreparation.ok) {
+      return buildPendingSourceActionSnapshot({
+        action: input.action,
+        branch: input.branch,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        reason: sourcePreparation.reason,
+        evidence: [
+          ...sourcePreparation.evidence,
+          ...makeEvidence(settingsSnapshot, input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false),
+        ],
+      });
+    }
     try {
-      const payload = await runManagementBridge(input, settingsSnapshot);
+      const { payload, runtimeEvidence } = await runManagementBridge(
+        input,
+        settingsSnapshot,
+        sourcePreparation.sourceFixturePath,
+        sourcePreparation.runtimeEvidence,
+      );
       return {
         action: input.action,
         branch: input.branch,
@@ -371,6 +440,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
         status: "done",
         summary: payload.summary,
         evidence: [
+          ...runtimeEvidence,
           ...payload.evidence,
           `engineStatus:${payload.engineStatus}`,
           ...makeEvidence(settingsSnapshot, input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false),
@@ -393,7 +463,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
         status: "error",
         summary: `${input.branch} ${input.action} 엔진 실행에 실패했습니다.`,
         evidence: [`error:${error instanceof Error ? error.message : String(error)}`],
-        rows: buildMockRows(input),
+        rows: [],
         outputPath: null,
         engineStatus: "fallback",
         issueCount: 0,
@@ -443,7 +513,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
         status: "error",
         summary: `${input.branch} ${input.action} 라이브 검토에 실패했습니다.`,
         evidence: [`error:${error instanceof Error ? error.message : String(error)}`],
-        rows: buildMockRows(input),
+        rows: [],
         outputPath: null,
       };
     }
@@ -455,10 +525,14 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
     startDate: input.startDate,
     endDate: input.endDate,
     checkedAt: nowIso(),
-    status: "done",
-    summary: `${input.branch} ${input.action} 작업 결과를 준비했습니다.`,
-    evidence: [`window:${input.startDate}..${input.endDate}`, ...makeEvidence(settingsSnapshot, input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false)],
-    rows: buildMockRows(input),
+    status: "error",
+    summary: `${input.branch} ${input.action} 작업은 현재 지원되지 않습니다.`,
+    evidence: [
+      `window:${input.startDate}..${input.endDate}`,
+      "error:unsupported-action",
+      ...makeEvidence(settingsSnapshot, input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false),
+    ],
+    rows: [],
     outputPath: null,
   };
 }

@@ -13,15 +13,17 @@ export type AppProviderWindowState = "hidden" | "visible" | "closed";
 export type AppProviderPageState = "idle" | "loading" | "loaded" | "error";
 export type AppProviderOperatingStatus = "ready" | "needs-login" | "attention" | "error";
 export type AppPreflightStatus = "ready" | "needs-settings" | "attention";
+export type AppProviderStorageSnapshotReadState = "not-read" | "ok" | "error";
 export type AppRuntimeVerifyFocus = "live-read" | "sheet-live";
 export type AppRuntimeSupportLevel = "offline-preview" | "sheet-live" | "read-live";
 export type AppRuntimeGate = "locked" | "open";
 export type AppReadinessBlockingSource = AppProvider | "sheet" | "sheet-auth" | "runtime-error";
 export type AppSheetReadinessStatus = "ready" | "needs-settings" | "invalid-settings" | "needs-auth" | "missing-sheet" | "error";
 export type AppLiveReadStatus = "idle" | "loading" | "done" | "error";
+export type AppLiveReadBundleSupportLevel = "offline-preview" | "partial-live" | "read-live" | "blocked";
 export type AppBgeM3Runtime = "local-path" | "download-if-missing";
 export type AppBgeInstallStatus = "ready" | "installed" | "error";
-export type AppReservationEngineStatus = "fallback" | "pending-source" | "planned";
+export type AppReservationEngineStatus = "fallback" | "pending-source" | "planned" | "applied";
 
 export interface AppSheetTabSettings {
   coexMain: string;
@@ -34,8 +36,8 @@ export interface AppBgeM3Settings {
   modelId: string;
   runtime: AppBgeM3Runtime;
   modelPath: string;
-  topK: number;
-  scoreThreshold: number;
+  topK?: number;
+  scoreThreshold?: number;
 }
 
 export interface AppBgeInstallSnapshot {
@@ -84,6 +86,8 @@ export interface AppProviderRawRuntimeSignals {
   lastLoadStartedAt: string | null;
   lastLoadFinishedAt: string | null;
   lastLoadFailedAt: string | null;
+  storageSnapshotReadState?: AppProviderStorageSnapshotReadState;
+  storageSnapshotError?: string | null;
 }
 
 export interface AppProviderBrowserState extends AppProviderRawRuntimeSignals {
@@ -167,6 +171,20 @@ export interface AppLiveReadSnapshot {
   evidence: string[];
 }
 
+export interface AppLiveReadBundleSnapshot {
+  query: AppLiveReadInput;
+  checkedAt: string;
+  supportLevel: AppLiveReadBundleSupportLevel;
+  summary: string;
+  sources: AppLiveReadSnapshot[];
+  evidence: string[];
+}
+
+export interface AppWingsLoginInput {
+  username: string;
+  password: string;
+}
+
 export interface AppReservationActionInput {
   action: AppReservationAction;
   branch: AppBranch;
@@ -208,6 +226,7 @@ export interface DesktopAppApi {
   loadSettings: () => Promise<AppSettingsSnapshot>;
   saveSettings: (input: Partial<AppSettings>) => Promise<AppSettingsSnapshot>;
   installBgeM3Model: () => Promise<AppBgeInstallSnapshot>;
+  loginWingsSession: (input: AppWingsLoginInput) => Promise<AppProviderOperatingSnapshot>;
   ensureProviderBrowser: (provider: AppProvider) => Promise<AppProviderBrowserState>;
   getProviderBrowserState: (provider: AppProvider) => Promise<AppProviderBrowserState>;
   listProviderBrowsers: () => Promise<AppProviderBrowserState[]>;
@@ -215,6 +234,7 @@ export interface DesktopAppApi {
   hideProviderBrowser: (provider: AppProvider) => Promise<AppProviderBrowserState>;
   reloadProviderBrowser: (provider: AppProvider) => Promise<AppProviderBrowserState>;
   runPreflight: () => Promise<AppPreflightSnapshot>;
+  fetchLiveReadBundle: (input: AppLiveReadInput) => Promise<AppLiveReadBundleSnapshot>;
   runPmsRead: (input: AppLiveReadInput) => Promise<AppLiveReadSnapshot>;
   runOtaRead: (input: AppLiveReadInput) => Promise<AppLiveReadSnapshot>;
   runSheetRead: (input: AppLiveReadInput) => Promise<AppLiveReadSnapshot>;

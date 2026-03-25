@@ -63,7 +63,7 @@
 - [x] `node tests/regression_app_operator_export_runtime.mjs`
 - [x] `node tests/regression_app_search_runtime.mjs`
 - [x] `node --experimental-vm-modules tests/regression_app_ui_store_live_wings_flow.mjs`
-- [x] `node scripts/live_read_verify.mjs --json`
+- [x] `node scripts/app_v2_runtime_verify.mjs --focus live-read`
 
 ## Next Cut
 1. 운영 세션이 준비된 환경에서 `offline-preview -> read-live`를 실증합니다.

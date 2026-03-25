@@ -5,7 +5,8 @@ import type {
   AppProvider,
   AppReservationAction,
   AppReservationActionInput,
-  AppSettings
+  AppSettings,
+  AppWingsLoginInput
 } from "../../src/desktop/app-v2-contracts.js";
 import { APP_BRANCHES, isAppProvider } from "../../src/desktop/app-v2-contracts.js";
 import { installBgeM3Model } from "./bgeModelInstaller.js";
@@ -13,11 +14,13 @@ import {
   ensureProviderBrowser,
   getProviderBrowserState,
   hideProviderBrowser,
+  loginWingsSession,
   listProviderBrowsers,
   openProviderBrowser,
   reloadProviderBrowser
 } from "./providerWorkspaceManager.js";
 import { runOtaRead, runPmsRead, runSheetRead } from "./liveReadActions.js";
+import { runLiveReadBundle } from "./liveReadRuntime.js";
 import { runPreflight } from "./preflight.js";
 import { runReservationAction } from "./reservationActionRunner.js";
 import { loadSettingsSnapshot, saveSettings } from "./settingsStore.js";
@@ -29,6 +32,16 @@ function parseProvider(value: unknown): AppProvider {
     throw new Error(`Unsupported provider: ${String(value)}`);
   }
   return value;
+}
+
+function parseWingsLoginInput(input: unknown): AppWingsLoginInput {
+  if (!input || typeof input !== "object") {
+    return { username: "", password: "" };
+  }
+  const payload = input as Partial<Record<keyof AppWingsLoginInput, unknown>>;
+  const username = typeof payload.username === "string" ? payload.username.trim() : "";
+  const password = typeof payload.password === "string" ? String(payload.password) : "";
+  return { username, password };
 }
 
 function normalizeSettingsPayload(input: unknown): Partial<AppSettings> {
@@ -74,11 +87,15 @@ function normalizeSettingsPayload(input: unknown): Partial<AppSettings> {
               typeof (payload.bgeM3 as Record<string, unknown>).modelPath === "string"
                 ? String((payload.bgeM3 as Record<string, unknown>).modelPath)
                 : "",
-            topK: Number((payload.bgeM3 as Record<string, unknown>).topK ?? 5),
-            scoreThreshold: Number((payload.bgeM3 as Record<string, unknown>).scoreThreshold ?? 0.72)
+            topK: Number.isFinite(Number((payload.bgeM3 as Record<string, unknown>).topK))
+              ? Number((payload.bgeM3 as Record<string, unknown>).topK)
+              : undefined,
+            scoreThreshold: Number.isFinite(Number((payload.bgeM3 as Record<string, unknown>).scoreThreshold))
+              ? Number((payload.bgeM3 as Record<string, unknown>).scoreThreshold)
+              : undefined
           }
         : null,
-    reportWindowDays: Number(payload.reportWindowDays ?? 5)
+    reportWindowDays: payload.reportWindowDays == null ? undefined : Number(payload.reportWindowDays)
   };
 }
 
@@ -151,6 +168,7 @@ export function registerDesktopAppIpc() {
   ipcMain.handle("desktop-app:load-settings", async () => loadSettingsSnapshot());
   ipcMain.handle("desktop-app:save-settings", async (_event, input: unknown) => saveSettings(normalizeSettingsPayload(input)));
   ipcMain.handle("desktop-app:install-bge-m3-model", async () => installBgeM3Model());
+  ipcMain.handle("desktop-app:login-wings-session", async (_event, input: unknown) => loginWingsSession(parseWingsLoginInput(input)));
   ipcMain.handle("desktop-app:ensure-provider-browser", async (_event, provider: unknown) => ensureProviderBrowser(parseProvider(provider)));
   ipcMain.handle("desktop-app:get-provider-browser-state", async (_event, provider: unknown) => getProviderBrowserState(parseProvider(provider)));
   ipcMain.handle("desktop-app:list-provider-browsers", async () => listProviderBrowsers());
@@ -158,6 +176,7 @@ export function registerDesktopAppIpc() {
   ipcMain.handle("desktop-app:hide-provider-browser", async (_event, provider: unknown) => hideProviderBrowser(parseProvider(provider)));
   ipcMain.handle("desktop-app:reload-provider-browser", async (_event, provider: unknown) => reloadProviderBrowser(parseProvider(provider)));
   ipcMain.handle("desktop-app:run-preflight", async () => runPreflight());
+  ipcMain.handle("desktop-app:fetch-live-read-bundle", async (_event, input: unknown) => runLiveReadBundle(parseLiveReadInput(input)));
   ipcMain.handle("desktop-app:run-pms-read", async (_event, input: unknown) => runPmsRead(parseLiveReadInput(input)));
   ipcMain.handle("desktop-app:run-ota-read", async (_event, input: unknown) => runOtaRead(parseLiveReadInput(input)));
   ipcMain.handle("desktop-app:run-sheet-read", async (_event, input: unknown) => runSheetRead(parseLiveReadInput(input)));

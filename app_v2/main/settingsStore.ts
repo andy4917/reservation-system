@@ -26,13 +26,20 @@ function getSettingsPath() {
   return path.join(app.getPath("userData"), SETTINGS_FILE_NAME);
 }
 
-function normalizeSheetTabs(input: unknown): AppSheetTabSettings {
-  const tabs = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
-  return {
-    coexMain: normalizeText(tabs.coexMain) || "코엑스",
-    coexAnnex: normalizeText(tabs.coexAnnex) || "코엑스2",
-    gangnam: normalizeText(tabs.gangnam) || "강남",
+function normalizeSheetTabs(input: unknown): AppSheetTabSettings | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const tabs = input as Record<string, unknown>;
+  const normalized = {
+    coexMain: normalizeText(tabs.coexMain),
+    coexAnnex: normalizeText(tabs.coexAnnex),
+    gangnam: normalizeText(tabs.gangnam),
   };
+  if (!normalized.coexMain && !normalized.coexAnnex && !normalized.gangnam) {
+    return null;
+  }
+  return normalized;
 }
 
 function normalizeOpsView(input: unknown): AppOpsViewSettings {
@@ -52,8 +59,8 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
           modelId: normalizeText(bge.modelId) || "Xenova/bge-m3",
           runtime: bge.runtime === "download-if-missing" ? "download-if-missing" : "local-path",
           modelPath: normalizeText(bge.modelPath),
-          topK: Number.isFinite(Number(bge.topK)) ? Number(bge.topK) : 5,
-          scoreThreshold: Number.isFinite(Number(bge.scoreThreshold)) ? Number(bge.scoreThreshold) : 0.72
+          topK: Number.isFinite(Number(bge.topK)) ? Number(bge.topK) : undefined,
+          scoreThreshold: Number.isFinite(Number(bge.scoreThreshold)) ? Number(bge.scoreThreshold) : undefined
         }
       : null;
   return {
@@ -63,7 +70,7 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
     opsView: normalizeOpsView(input.opsView),
     reportWindowDays: Number.isFinite(Number(input.reportWindowDays))
       ? Math.min(Math.max(Math.round(Number(input.reportWindowDays)), 1), 14)
-      : 5,
+      : undefined,
     bgeM3: normalizedBgeM3
   };
 }
