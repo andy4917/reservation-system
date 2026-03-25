@@ -9,26 +9,76 @@ import { buildRuntimeVerifyEnv, toPowerShellLiteral } from "./app_v2_runtime_ver
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const electronCli = path.join(repoRoot, "node_modules", "electron", "cli.js");
 const electronExe = path.join(repoRoot, "node_modules", "electron", "dist", "electron.exe");
-const DEFAULT_VERIFY_TIMEOUT_MS = 30000;
+const DEFAULT_TIMEOUT_MS = 30000;
 
 function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function parseTasks(raw) {
+  const allowed = ["bundle", "pms", "ota", "sheet", "action"];
+  const requested = normalizeText(raw)
+    .split(",")
+    .map((task) => task.trim().toLowerCase())
+    .filter((task) => allowed.includes(task));
+  if (requested.length === 0) {
+    return allowed.join(",");
+  }
+  return [...new Set(requested)].join(",");
+}
+
 function parseArgs(argv) {
   const options = {
-    focus: "live-read",
+    tasks: "bundle,action",
+    branch: "GANGNAM",
+    startDate: "",
+    endDate: "",
+    action: "compare",
+    approvePlanToken: "",
+    executeApply: false,
+    outputFile: "",
     json: false,
     userDataDir: "",
-    timeoutMs: DEFAULT_VERIFY_TIMEOUT_MS,
+    timeoutMs: DEFAULT_TIMEOUT_MS,
     googleTokenFile: ""
   };
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     const next = argv[index + 1];
-    if (token === "--focus" && next) {
-      options.focus = next === "sheet-live" ? "sheet-live" : "live-read";
+
+    if (token === "--tasks" && next) {
+      options.tasks = parseTasks(next);
+      index += 1;
+      continue;
+    }
+    if (token === "--branch" && next) {
+      options.branch = next;
+      index += 1;
+      continue;
+    }
+    if (token === "--start-date" && next) {
+      options.startDate = next;
+      index += 1;
+      continue;
+    }
+    if (token === "--end-date" && next) {
+      options.endDate = next;
+      index += 1;
+      continue;
+    }
+    if (token === "--action" && next) {
+      options.action = next;
+      index += 1;
+      continue;
+    }
+    if (token === "--approve-plan-token" && next) {
+      options.approvePlanToken = next;
+      index += 1;
+      continue;
+    }
+    if (token === "--output-file" && next) {
+      options.outputFile = next;
       index += 1;
       continue;
     }
@@ -52,6 +102,11 @@ function parseArgs(argv) {
     if (token === "--google-token-file" && next) {
       options.googleTokenFile = next;
       index += 1;
+      continue;
+    }
+    if (token === "--execute-apply") {
+      options.executeApply = true;
+      continue;
     }
   }
 
@@ -96,82 +151,65 @@ function printResult(result, asJson) {
   }
 
   const lines = [
-    `focus=${result.focus}`,
-    `preflightStatus=${result.preflightStatus}`,
-    `overallReady=${String(result.overallReady)}`,
-    `blockingSources=${JSON.stringify(result.blockingSources)}`,
-    `supportLevel=${result.supportLevel}`,
-    `v2Gate=${result.v2Gate}`,
-    `sheet.status=${result.sheet?.status || "unknown"}`,
-    `sheet.summary=${result.sheet?.summary || ""}`
+    `mode=${result.mode}`,
+    `overallStatus=${String(result.overallStatus)}`,
+    `branch=${result.branch}`,
+    `tasks=${JSON.stringify(result.executedTasks)}`
   ];
   process.stdout.write(`${lines.join("\n")}\n`);
 }
 
-async function hasExistingBuildArtifacts() {
-  try {
-    await fs.access(path.join(repoRoot, "dist-app", "app_v2", "main", "main.js"));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function buildRuntimeVerifyFailureResult(options, message) {
-  const checkedAt = new Date().toISOString();
+function buildProbeEnv(options, probeFile) {
   return {
-    checkedAt,
-    focus: options.focus,
-    preflightStatus: "attention",
-    overallReady: false,
-    blockingSources: ["runtime-error"],
-    supportLevel: "offline-preview",
-    v2Gate: "locked",
-    sheet: {
-      checkedAt,
-      status: "error",
-      summary: message,
-      spreadsheetId: null,
-      sheetName: null,
-      accessMode: "none",
-      lastError: message,
-    },
-    settings: {
-      config: null,
-      isConfigured: false,
-      missingRequired: ["spreadsheet", "sheetName"],
-      updatedAt: null,
-      storagePath: options.userDataDir || "",
-    },
-    preflight: null,
+    ...buildRuntimeVerifyEnv({ env: process.env, googleTokenFile: options.googleTokenFile }),
+    UHS_APP_V2_RUNTIME_PROBE: "1",
+    UHS_APP_V2_PROBE_TASKS: options.tasks,
+    UHS_APP_V2_PROBE_BRANCH: options.branch,
+    UHS_APP_V2_PROBE_START_DATE: options.startDate,
+    UHS_APP_V2_PROBE_END_DATE: options.endDate,
+    UHS_APP_V2_PROBE_RESERVATION_ACTION: options.action,
+    UHS_APP_V2_PROBE_APPROVE_PLAN_TOKEN: options.approvePlanToken,
+    UHS_APP_V2_PROBE_EXECUTE_APPLY: options.executeApply ? "1" : "",
+    UHS_APP_V2_PROBE_OUTPUT_FILE: probeFile,
+    UHS_APP_V2_USER_DATA_DIR: options.userDataDir
   };
 }
 
 async function spawnProbe(options, probeFile) {
-  const runtimeEnv = buildRuntimeVerifyEnv({ env: process.env, googleTokenFile: options.googleTokenFile });
+  const runtimeEnv = buildProbeEnv(options, probeFile);
+
   if (process.platform === "linux" && electronExe.endsWith(".exe")) {
     const repoRootWin = await readWindowsPath(repoRoot);
     const electronExeWin = await readWindowsPath(electronExe);
     const probeFileWin = await readWindowsPath(probeFile);
     const userDataDirWin = options.userDataDir ? await readWindowsPath(options.userDataDir) : "";
+    const branchCmd = options.branch ? `$env:UHS_APP_V2_PROBE_BRANCH=${toPowerShellLiteral(options.branch)}` : "";
+    const startDateCmd = options.startDate ? `$env:UHS_APP_V2_PROBE_START_DATE=${toPowerShellLiteral(options.startDate)}` : "";
+    const endDateCmd = options.endDate ? `$env:UHS_APP_V2_PROBE_END_DATE=${toPowerShellLiteral(options.endDate)}` : "";
     return spawn(
       "powershell.exe",
       [
         "-NoProfile",
         "-Command",
         [
-          `$env:UHS_APP_V2_RUNTIME_VERIFY='1'`,
-          `$env:UHS_APP_V2_VERIFY_OUTPUT_FILE='${probeFileWin}'`,
-          `$env:UHS_APP_V2_VERIFY_FOCUS='${options.focus}'`,
+          `$env:UHS_APP_V2_RUNTIME_PROBE=${toPowerShellLiteral("1")}`,
+          `$env:UHS_APP_V2_PROBE_TASKS=${toPowerShellLiteral(options.tasks)}`,
+          `$env:UHS_APP_V2_PROBE_RESERVATION_ACTION=${toPowerShellLiteral(options.action)}`,
+          `$env:UHS_APP_V2_PROBE_APPROVE_PLAN_TOKEN=${toPowerShellLiteral(options.approvePlanToken)}`,
+          options.executeApply ? "$env:UHS_APP_V2_PROBE_EXECUTE_APPLY='1'" : "",
           normalizeText(runtimeEnv.UHS_GOOGLE_ACCESS_TOKEN) ? `$env:UHS_GOOGLE_ACCESS_TOKEN=${toPowerShellLiteral(runtimeEnv.UHS_GOOGLE_ACCESS_TOKEN)}` : "",
           normalizeText(runtimeEnv.UHS_GOOGLE_REFRESH_TOKEN) ? `$env:UHS_GOOGLE_REFRESH_TOKEN=${toPowerShellLiteral(runtimeEnv.UHS_GOOGLE_REFRESH_TOKEN)}` : "",
           normalizeText(runtimeEnv.UHS_GOOGLE_CLIENT_ID) ? `$env:UHS_GOOGLE_CLIENT_ID=${toPowerShellLiteral(runtimeEnv.UHS_GOOGLE_CLIENT_ID)}` : "",
           normalizeText(runtimeEnv.UHS_GOOGLE_CLIENT_SECRET) ? `$env:UHS_GOOGLE_CLIENT_SECRET=${toPowerShellLiteral(runtimeEnv.UHS_GOOGLE_CLIENT_SECRET)}` : "",
-          userDataDirWin ? `$env:UHS_APP_V2_USER_DATA_DIR='${userDataDirWin}'` : "$env:UHS_APP_V2_USER_DATA_DIR=''",
+          userDataDirWin ? `$env:UHS_APP_V2_USER_DATA_DIR=${toPowerShellLiteral(userDataDirWin)}` : "$env:UHS_APP_V2_USER_DATA_DIR=''",
+          branchCmd,
+          startDateCmd,
+          endDateCmd,
+          `$env:UHS_APP_V2_PROBE_OUTPUT_FILE=${toPowerShellLiteral(probeFileWin)}`,
           `Set-Location '${repoRootWin}'`,
           `$p = Start-Process -FilePath '${electronExeWin}' -ArgumentList @('.') -Wait -PassThru`,
           "exit $p.ExitCode"
-        ].filter(Boolean).join("; ")
+        ].filter(Boolean).join("; "),
       ],
       {
         cwd: repoRoot,
@@ -183,35 +221,15 @@ async function spawnProbe(options, probeFile) {
 
   return spawn(process.execPath, [electronCli, "."], {
     cwd: repoRoot,
-    env: {
-      ...runtimeEnv,
-      UHS_APP_V2_RUNTIME_VERIFY: "1",
-      UHS_APP_V2_VERIFY_OUTPUT_FILE: probeFile,
-      UHS_APP_V2_VERIFY_FOCUS: options.focus,
-      UHS_APP_V2_USER_DATA_DIR: options.userDataDir
-    },
+    env: runtimeEnv,
     stdio: ["ignore", "pipe", "pipe"]
   });
 }
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const build = await runCommand("npm", ["run", "app:build:main"]);
-  if (build.code !== 0) {
-    if (!(await hasExistingBuildArtifacts())) {
-      const message = `app build:main failed before runtime verify\n${build.stderr || build.stdout}`;
-      if (options.json) {
-        printResult(buildRuntimeVerifyFailureResult(options, message.trim()), true);
-        process.exitCode = 1;
-        return;
-      }
-      throw new Error(message);
-    }
-    process.stderr.write("app build:main failed, reusing existing dist-app artifacts for runtime verify\n");
-  }
+  const probeFile = normalizeText(options.outputFile) || path.join(await fs.mkdtemp(path.join(os.tmpdir(), "app-v2-runtime-probe-")), "probe.json");
 
-  const probeDir = await fs.mkdtemp(path.join(os.tmpdir(), "app-v2-runtime-verify-"));
-  const probeFile = path.join(probeDir, "probe.json");
   const probeChild = await spawnProbe(options, probeFile);
 
   let stdout = "";
@@ -221,10 +239,12 @@ async function main() {
   }, options.timeoutMs);
 
   probeChild.stdout.on("data", (chunk) => {
-    stdout += chunk.toString();
+    const text = chunk.toString();
+    stdout += text;
   });
   probeChild.stderr.on("data", (chunk) => {
-    stderr += chunk.toString();
+    const text = chunk.toString();
+    stderr += text;
   });
 
   const childResult = await new Promise((resolve, reject) => {
@@ -237,31 +257,19 @@ async function main() {
 
   const raw = await fs.readFile(probeFile, "utf8").catch(() => "");
   if (!raw) {
-    const message = `runtime verify did not produce probe output\nstdout:\n${stdout}\nstderr:\n${stderr}`;
-    if (options.json) {
-      printResult(buildRuntimeVerifyFailureResult(options, message.trim()), true);
-      process.exitCode = 1;
-      return;
-    }
-    throw new Error(message);
+    throw new Error(`runtime probe did not produce output\nstdout:\n${stdout}\nstderr:\n${stderr}`);
   }
 
   const result = JSON.parse(raw);
   printResult(result, options.json);
 
-  process.exitCode = result.overallReady ? 0 : 1;
+  process.exitCode = result.overallStatus ? 0 : 1;
   if (childResult.code !== process.exitCode && !options.json) {
     process.stderr.write(`probe child exit=${childResult.code}\n`);
   }
-  }
+}
 
-const cliOptions = parseArgs(process.argv.slice(2));
-main(cliOptions).catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  if (cliOptions.json) {
-    printResult(buildRuntimeVerifyFailureResult(cliOptions, message), true);
-  } else {
-    console.error(message);
-  }
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });

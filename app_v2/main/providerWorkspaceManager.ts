@@ -1,9 +1,20 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import electron from "electron";
 import type { BrowserWindow as ElectronBrowserWindow } from "electron";
-import type { AppProvider, AppProviderBrowserState } from "../../src/desktop/app-v2-contracts.js";
+import type {
+  AppBranch,
+  AppProvider,
+  AppProviderBrowserState,
+  AppProviderOperatingSnapshot,
+  AppWingsLoginInput
+} from "../../src/desktop/app-v2-contracts.js";
 import { APP_PROVIDERS } from "../../src/desktop/app-v2-contracts.js";
+import { evaluateProviderOperatingState } from "./providerOperatingAdapter.js";
 
-const { BrowserWindow } = electron;
+const { BrowserWindow, session } = electron;
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const appIconPath = path.resolve(currentDir, "..", "..", "..", "icons", "icon128.png");
 
 interface ProviderWorkspaceConfig {
   provider: AppProvider;
@@ -16,6 +27,29 @@ interface ProviderWorkspaceConfig {
 interface ProviderWorkspaceRecord {
   window: ElectronBrowserWindow | null;
   state: AppProviderBrowserState;
+}
+
+interface ProviderStorageEntry {
+  key: string;
+  value: string;
+}
+
+interface ProviderStorageSnapshot {
+  localStorage: ProviderStorageEntry[];
+  sessionStorage: ProviderStorageEntry[];
+}
+
+interface ProviderSessionCookie {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+  secure: boolean;
+  httpOnly: boolean;
+  sameSite: string;
+  session: boolean;
+  url: string;
+  expirationDate?: number;
 }
 
 const PROVIDER_CONFIG: Record<AppProvider, ProviderWorkspaceConfig> = {
@@ -49,6 +83,7 @@ function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+
 function getProviderConfig(provider: AppProvider) {
   return PROVIDER_CONFIG[provider];
 }
@@ -75,6 +110,8 @@ function buildEmptyState(provider: AppProvider): AppProviderBrowserState {
     cookieCount: 0,
     providerCookieCount: 0,
     lastError: null,
+    storageSnapshotReadState: "not-read",
+    storageSnapshotError: null,
     lastLoadedAt: null,
     lastLoadStartedAt: null,
     lastLoadFinishedAt: null,
@@ -129,6 +166,33 @@ async function readProviderCookieCount(provider: AppProvider) {
   return cookieKeys.size;
 }
 
+async function readProviderScopedCookies(provider: AppProvider): Promise<ProviderSessionCookie[]> {
+  const record = getRecord(provider);
+  if (!record.window || record.window.isDestroyed()) return [];
+  const config = getProviderConfig(provider);
+  const cookieMap = new Map<string, ProviderSessionCookie>();
+  for (const scopeUrl of config.cookieScopeUrls) {
+    const cookies = await record.window.webContents.session.cookies.get({ url: scopeUrl });
+    for (const cookie of cookies) {
+      const key = `${cookie.name};${cookie.domain};${cookie.path}`;
+      if (cookieMap.has(key)) continue;
+      cookieMap.set(key, {
+        name: String(cookie.name || ""),
+        value: String(cookie.value || ""),
+        domain: String(cookie.domain || ""),
+        path: String(cookie.path || "/"),
+        secure: cookie.secure === true,
+        httpOnly: cookie.httpOnly === true,
+        sameSite: String(cookie.sameSite ?? "unspecified"),
+        session: cookie.session === true,
+        url: `${cookie.secure ? "https" : "http"}://${String(cookie.domain || "").replace(/^\./, "")}${cookie.path || "/"}`,
+        expirationDate: Number.isFinite(cookie.expirationDate) ? Number(cookie.expirationDate) : undefined,
+      });
+    }
+  }
+  return [...cookieMap.values()];
+}
+
 async function refreshProviderState(provider: AppProvider): Promise<AppProviderBrowserState> {
   const record = getRecord(provider);
   const currentWindow = record.window;
@@ -173,13 +237,18 @@ function attachWindowListeners(provider: AppProvider, windowRef: ElectronBrowser
   });
   windowRef.on("closed", () => {
     record.window = null;
-    record.state = { ...buildEmptyState(provider), lastError: record.state.lastError };
+    record.state = {
+      ...buildEmptyState(provider),
+      lastError: record.state.lastError
+    };
   });
   windowRef.webContents.on("did-start-loading", () => {
     record.state = {
       ...record.state,
       pageState: "loading",
       lastError: null,
+      storageSnapshotReadState: "not-read",
+      storageSnapshotError: null,
       lastLoadStartedAt: new Date().toISOString()
     };
   });
@@ -189,6 +258,8 @@ function attachWindowListeners(provider: AppProvider, windowRef: ElectronBrowser
       ...record.state,
       pageState: "loaded",
       lastError: null,
+      storageSnapshotReadState: "not-read",
+      storageSnapshotError: null,
       lastLoadedAt: now,
       lastLoadFinishedAt: now
     };
@@ -221,7 +292,26 @@ async function loadProviderStartUrl(windowRef: ElectronBrowserWindow, startUrl: 
   }
 }
 
-export async function ensureProviderBrowser(provider: AppProvider): Promise<AppProviderBrowserState> {
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForProviderOperatingState(
+  provider: AppProvider,
+  accept: (snapshot: AppProviderOperatingSnapshot) => boolean,
+  timeoutMs = 20000
+) {
+  const startedAt = Date.now();
+  let lastSnapshot = evaluateProviderOperatingState(await refreshProviderState(provider));
+  while (Date.now() - startedAt < timeoutMs) {
+    lastSnapshot = evaluateProviderOperatingState(await refreshProviderState(provider));
+    if (accept(lastSnapshot)) return lastSnapshot;
+    await delay(300);
+  }
+  return lastSnapshot;
+}
+
+export async function ensureProviderBrowser(provider: AppProvider, branchHint?: AppBranch): Promise<AppProviderBrowserState> {
   const record = getRecord(provider);
   if (record.window && !record.window.isDestroyed()) {
     return refreshProviderState(provider);
@@ -234,6 +324,7 @@ export async function ensureProviderBrowser(provider: AppProvider): Promise<AppP
     height: 900,
     autoHideMenuBar: true,
     title: `${config.label} Workspace`,
+    icon: appIconPath,
     webPreferences: {
       partition: config.partition,
       contextIsolation: true,
@@ -262,8 +353,184 @@ export async function ensureProviderBrowser(provider: AppProvider): Promise<AppP
   return refreshProviderState(provider);
 }
 
+export async function loginWingsSession(input: AppWingsLoginInput): Promise<AppProviderOperatingSnapshot> {
+  const provider = "wings-pms";
+  await ensureProviderBrowser(provider);
+  const record = getRecord(provider);
+  const windowRef = record.window;
+  if (!windowRef || windowRef.isDestroyed()) {
+    throw new Error("Wings provider window is not available.");
+  }
+  if (typeof windowRef.show === "function") windowRef.show();
+  if (typeof windowRef.focus === "function") windowRef.focus();
+
+  const loadedSnapshot = await waitForProviderOperatingState(
+    provider,
+    (snapshot) => snapshot.pageState === "loaded" || snapshot.operatingStatus === "error",
+    15000
+  );
+  if (loadedSnapshot.operatingStatus === "ready") {
+    return loadedSnapshot;
+  }
+  if (loadedSnapshot.operatingStatus === "error") {
+    return loadedSnapshot;
+  }
+  return waitForProviderOperatingState(
+    provider,
+    (snapshot) =>
+      snapshot.operatingStatus === "ready" ||
+      snapshot.operatingStatus === "needs-login" ||
+      snapshot.operatingStatus === "error",
+    20000
+  );
+}
+
+
 export async function getProviderBrowserState(provider: AppProvider): Promise<AppProviderBrowserState> {
   return refreshProviderState(provider);
+}
+
+export async function getProviderBrowserStorageSnapshot(provider: AppProvider): Promise<ProviderStorageSnapshot> {
+  const record = getRecord(provider);
+  const windowRef = record.window;
+  if (!windowRef || windowRef.isDestroyed()) {
+    record.state = {
+      ...record.state,
+      storageSnapshotReadState: "not-read",
+      storageSnapshotError: null
+    };
+    return {
+      localStorage: [],
+      sessionStorage: [],
+    };
+  }
+
+  try {
+    const snapshot = await windowRef.webContents.executeJavaScript(
+      `(() => {
+        const readStorage = (storage) => {
+          const entries = [];
+          if (!storage) return entries;
+          for (let index = 0; index < storage.length; index += 1) {
+            try {
+              const key = String(storage.key(index) || "").trim();
+              if (!key) continue;
+              const value = String(storage.getItem(key) || "");
+              entries.push({ key, value });
+            } catch (_error) {
+              continue;
+            }
+          }
+          return entries;
+        };
+        return {
+          localStorage: readStorage(window.localStorage),
+          sessionStorage: readStorage(window.sessionStorage),
+        };
+      })()`,
+      true,
+    );
+    const toEntries = (value: unknown): ProviderStorageEntry[] =>
+      Array.isArray(value)
+        ? value
+            .filter((entry) => Boolean(entry) && typeof entry === "object")
+            .map((entry) => ({
+              key: normalizeText((entry as { key?: unknown }).key || ""),
+              value: typeof (entry as { value?: unknown }).value === "string" ? (entry as { value: string }).value : "",
+            }))
+            .filter((entry) => Boolean(entry.key))
+        : [];
+    const entries = {
+      localStorage: toEntries((snapshot as { localStorage?: unknown })?.localStorage),
+      sessionStorage: toEntries((snapshot as { sessionStorage?: unknown })?.sessionStorage),
+    };
+    record.state = {
+      ...record.state,
+      storageSnapshotReadState: "ok",
+      storageSnapshotError: null
+    };
+    return entries;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    record.state = {
+      ...record.state,
+      storageSnapshotReadState: "error",
+      storageSnapshotError: message || "provider-storage-snapshot-failed"
+    };
+    return {
+      localStorage: [],
+      sessionStorage: [],
+    };
+  }
+}
+
+export async function getProviderSessionCookies(provider: AppProvider): Promise<ProviderSessionCookie[]> {
+  return readProviderScopedCookies(provider);
+}
+
+export async function fetchWithProviderSession(
+  provider: AppProvider,
+  input: string | URL,
+  init?: Record<string, unknown>,
+  branchHint?: AppBranch,
+) {
+  const config = getProviderConfig(provider);
+  await ensureProviderBrowser(provider, branchHint);
+  const record = getRecord(provider);
+  const sessionRef = record.window?.webContents.session ?? session.fromPartition(config.partition);
+  return sessionRef.fetch(String(input), init as Parameters<typeof sessionRef.fetch>[1]);
+}
+
+export async function fetchWithProviderPageContext(
+  provider: AppProvider,
+  input: string | URL,
+  init?: Record<string, unknown>,
+  branchHint?: AppBranch,
+) {
+  await ensureProviderBrowser(provider, branchHint);
+  const record = getRecord(provider);
+  const windowRef = record.window;
+  if (!windowRef || windowRef.isDestroyed()) {
+    throw new Error(`provider-window-unavailable:${provider}`);
+  }
+  const request = {
+    url: String(input),
+    method: String(init?.method || "GET").toUpperCase(),
+    headers:
+      init?.headers && typeof init.headers === "object"
+        ? Object.fromEntries(
+            Object.entries(init.headers as Record<string, unknown>).map(([key, value]) => [key, String(value ?? "")]),
+          )
+        : {},
+    body: typeof init?.body === "string" ? init.body : null,
+  };
+  const payload = JSON.stringify(request);
+  return windowRef.webContents.executeJavaScript(
+    `(() => {
+      const request = ${payload};
+      return fetch(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: request.method === "GET" ? undefined : request.body,
+        credentials: "include"
+      }).then(async (response) => ({
+        ok: response.ok,
+        status: response.status,
+        url: response.url,
+        headers: {
+          contentType: response.headers.get("content-type") || ""
+        },
+        text: await response.text()
+      }));
+    })()`,
+    true,
+  ) as Promise<{
+    ok: boolean;
+    status: number;
+    url: string;
+    headers: { contentType: string };
+    text: string;
+  }>;
 }
 
 export async function listProviderBrowsers(): Promise<AppProviderBrowserState[]> {

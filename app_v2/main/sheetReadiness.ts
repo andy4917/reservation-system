@@ -4,6 +4,8 @@ import type {
 } from "../../src/desktop/app-v2-contracts.js";
 
 const DEFAULT_SHEET_READINESS_TIMEOUT_MS = 15000;
+const DEFAULT_SHEET_READINESS_RETRY_COUNT = 2;
+const DEFAULT_SHEET_READINESS_RETRY_DELAY_MS = 250;
 const SPREADSHEET_ID_RE = /^[A-Za-z0-9_-]{40,120}$/;
 const SPREADSHEET_URL_RE = /\/spreadsheets(?:\/u\/\d+)?\/d\/([A-Za-z0-9_-]{40,120})/i;
 
@@ -44,6 +46,27 @@ function readSheetReadinessTimeoutMs() {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_SHEET_READINESS_TIMEOUT_MS;
 }
 
+function readSheetReadinessRetryCount() {
+  const value = Number(process.env.UHS_APP_V2_SHEET_READINESS_RETRY_COUNT || DEFAULT_SHEET_READINESS_RETRY_COUNT);
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : DEFAULT_SHEET_READINESS_RETRY_COUNT;
+}
+
+function readSheetReadinessRetryDelayMs() {
+  const value = Number(process.env.UHS_APP_V2_SHEET_READINESS_RETRY_DELAY_MS || DEFAULT_SHEET_READINESS_RETRY_DELAY_MS);
+  return Number.isFinite(value) && value >= 0 ? value : DEFAULT_SHEET_READINESS_RETRY_DELAY_MS;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientFetchError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.name === "AbortError" || String(error.message).includes("aborted");
+}
+
 async function fetchWithTimeout(url: string, init: RequestInit) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), readSheetReadinessTimeoutMs());
@@ -52,6 +75,29 @@ async function fetchWithTimeout(url: string, init: RequestInit) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchWithRetry(url: string, init: RequestInit) {
+  const maxAttempts = Math.max(1, readSheetReadinessRetryCount());
+  const baseDelay = readSheetReadinessRetryDelayMs();
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await fetchWithTimeout(url, init);
+    } catch (error) {
+      lastError = error;
+      const isLastAttempt = attempt >= maxAttempts;
+      if (isLastAttempt || !isTransientFetchError(error)) {
+        throw error;
+      }
+      if (baseDelay > 0) {
+        await sleep(baseDelay * attempt);
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 function resolveTokenInputs() {
@@ -83,7 +129,7 @@ async function refreshAccessToken(refreshToken: string, clientId: string, client
   body.set("client_id", clientId);
   body.set("client_secret", clientSecret);
 
-  const response = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
+  const response = await fetchWithRetry("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body
@@ -147,7 +193,7 @@ export async function evaluateSheetReadiness(settings: AppSettingsSnapshot): Pro
   }
 
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetchWithRetry(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`,
       {
         headers: {

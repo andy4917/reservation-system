@@ -9,6 +9,7 @@ const { BrowserWindow } = electron;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow: ElectronBrowserWindow | null = null;
 const launchContext = readAppLaunchMode();
+const appIconPath = path.resolve(currentDir, "..", "..", "..", "icons", "icon128.png");
 
 export function createMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -24,6 +25,7 @@ export function createMainWindow() {
     backgroundColor: "#f6f0e8",
     autoHideMenuBar: true,
     show: launchContext.mode === "interactive",
+    icon: appIconPath,
     webPreferences: {
       preload: path.resolve(currentDir, "preload.js"),
       contextIsolation: true,

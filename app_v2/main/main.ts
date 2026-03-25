@@ -3,6 +3,7 @@ import { applyLaunchPaths, applyLaunchSwitches, readAppLaunchMode } from "./main
 import { registerDesktopAppIpc } from "./ipc.js";
 import { destroyProviderBrowsers } from "./providerWorkspaceManager.js";
 import { runRuntimeVerificationProcess } from "./runtimeVerificationProcess.js";
+import { runRuntimeProbeProcess } from "./runtimeProbeProcess.js";
 import { bindSmokeWindowLifecycle } from "./smokeHarness.js";
 import { createMainWindow } from "./window.js";
 
@@ -16,6 +17,10 @@ async function bootstrap() {
   await app.whenReady();
   if (launchContext.mode === "runtime-verify") {
     await runRuntimeVerificationProcess(launchContext);
+    return;
+  }
+  if (launchContext.mode === "runtime-probe") {
+    await runRuntimeProbeProcess(launchContext);
     return;
   }
   registerDesktopAppIpc();
