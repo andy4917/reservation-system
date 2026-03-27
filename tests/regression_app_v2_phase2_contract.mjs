@@ -11,12 +11,12 @@ function read(root, relativePath) {
 function main() {
   const root = process.cwd();
 
-  const appSource = read(root, "app_v2/renderer/App.tsx");
   const contracts = read(root, "src/desktop/app-v2-contracts.ts");
   const settingsStore = read(root, "app_v2/main/settingsStore.ts");
   const ipc = read(root, "app_v2/main/ipc.ts");
   const runner = read(root, "app_v2/main/reservationActionRunner.ts");
   const liveRead = read(root, "app_v2/main/liveReadActions.ts");
+  const wingsRuntime = read(root, "app_v2/main/wingsReservationRuntime.ts");
 
   assert.match(contracts, /reportWindowDays/);
   assert.match(contracts, /modelPath/);
@@ -25,31 +25,40 @@ function main() {
   assert.match(contracts, /endDate/);
   assert.match(contracts, /sheetTabs/);
   assert.match(contracts, /excludeRoomMakeup/);
-  assert.match(appSource, /branchSelectionOpen/);
-
-  assert.match(appSource, /오늘부터 5일/);
-  assert.match(appSource, /조회 기간/);
-  assert.match(appSource, /모델 경로/);
-  assert.match(appSource, /로컬 모델 준비/);
-  assert.match(appSource, /BGE-M3 설치/);
-  assert.match(appSource, /오더리스트/);
-  assert.match(appSource, /어라이벌/);
-  assert.match(appSource, /로그인 화면으로/);
-  assert.match(appSource, /지점 선택으로 돌아가기/);
-  assert.match(appSource, /룸메이크업 제외/);
-  assert.match(appSource, /코엑스2/);
+  assert.match(contracts, /"GANGNAM", "COEX", "SEOLLEUNG", "SAMSEONG"/);
+  assert.match(contracts, /seolleung: string;/);
+  assert.match(contracts, /samseong: string;/);
 
   assert.match(settingsStore, /hasAnySettings/);
   assert.match(settingsStore, /sheetTabs/);
+  assert.match(settingsStore, /gangnam: normalizeText\(tabs\.gangnam\)/);
+  assert.match(settingsStore, /coex: normalizeText\(tabs\.coex\)/);
+  assert.match(settingsStore, /seolleung: normalizeText\(tabs\.seolleung\)/);
+  assert.match(settingsStore, /samseong: normalizeText\(tabs\.samseong\)/);
   assert.match(settingsStore, /opsView/);
   assert.match(settingsStore, /Xenova\/bge-m3/);
+  assert.doesNotMatch(settingsStore, /coexMain/);
+  assert.doesNotMatch(settingsStore, /coexAnnex/);
   assert.match(ipc, /parseDateInput/);
   assert.match(ipc, /desktop-app:run-reservation-action/);
   assert.match(ipc, /desktop-app:install-bge-m3-model/);
   assert.match(ipc, /excludeRoomMakeup/);
+  assert.match(ipc, /run-reservation-action/);
+  assert.doesNotMatch(ipc, /coexMain|coexAnnex/);
   assert.match(runner, /embeddingRuntime/);
   assert.match(runner, /excludeRoomMakeup/);
+  assert.match(runner, /branch === "COEX"\s*\?\s*\[tabs\.coex\]/);
+  assert.match(runner, /branch === "SEOLLEUNG"\s*\?\s*\[tabs\.seolleung\]/);
+  assert.match(runner, /\[tabs\.samseong\]/);
   assert.match(liveRead, /app_v2_live_sheet_bridge.py/);
+  assert.match(liveRead, /branch === "GANGNAM"\s*\?\s*\[tabs\.gangnam\]/);
+  assert.match(liveRead, /branch === "SEOLLEUNG"\s*\?\s*\[tabs\.seolleung\]/);
+  assert.match(liveRead, /\[tabs\.samseong\]/);
+  assert.match(wingsRuntime, /SEOLLEUNG/);
+  assert.match(wingsRuntime, /SAMSEONG/);
+  assert.match(wingsRuntime, /UHS_WINGS_HAR_SEOLLEUNG/);
+  assert.match(wingsRuntime, /UHS_WINGS_HAR_SAMSEONG/);
+  assert.match(wingsRuntime, /normalizeBranch/);
 
   console.log("regression_app_v2_phase2_contract: OK");
 }

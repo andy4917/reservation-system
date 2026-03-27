@@ -17,7 +17,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-from reservation_sheet_audit import get_access_token
+from reservation_sheet_audit import get_access_token, normalize_branch_label
 from src.domain.report_policy import OrderlistPolicy
 from src.domain.sheet_domain import AuditError, extract_sheet_id, infer_year_from_sheet_name, normalize_text
 from src.io.sheet_loader import load_sheet_matrix_and_dates
@@ -70,6 +70,7 @@ def load_sheet_blocks(args: argparse.Namespace) -> Dict[str, Any]:
     client, spreadsheet_id = build_client(args)
     start_date = dt.date.fromisoformat(args.start_date)
     end_date = dt.date.fromisoformat(args.end_date)
+    request_branch = normalize_branch_label(args.branch)
     all_blocks: List[Any] = []
     items: List[Dict[str, str]] = []
     evidence: List[str] = []
@@ -91,7 +92,7 @@ def load_sheet_blocks(args: argparse.Namespace) -> Dict[str, Any]:
         branch_blocks = [
             block
             for block in blocks
-            if normalize_text(getattr(block, "branch", "")) == normalize_text(args.branch)
+            if normalize_branch_label(getattr(block, "branch", "")) == request_branch
         ]
         window_blocks = [block for block in branch_blocks if overlaps_window(block, start_date, end_date)]
         all_blocks.extend(branch_blocks)

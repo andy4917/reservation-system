@@ -14,6 +14,9 @@ def main() -> None:
     parsed = parse_branch_scope("강남, coex\n강남, BRANCH_THE_SEOLLEUNG")
     assert parsed == ["GANGNAM", "COEX", "BRANCH_THE_SEOLLEUNG"]
 
+    samsung_aliases = parse_branch_scope("samseong, SAMSUNG, BRANCH_THE_SAMSUNG")
+    assert samsung_aliases == ["BRANCH_THE_SAMSEONG"]
+
     empty = parse_branch_scope("")
     assert empty == []
 

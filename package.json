@@ -55,8 +55,13 @@
         "from": "src",
         "to": "src",
         "filter": [
-          "**/*.js"
+          "**/*.js",
+          "**/*.py"
         ]
+      },
+      {
+        "from": "reservation_sheet_audit.py",
+        "to": "reservation_sheet_audit.py"
       },
       {
         "from": "scripts",

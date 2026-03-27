@@ -15,34 +15,48 @@ function main() {
   const contracts = read(root, "src/desktop/app-v2-contracts.ts");
   const preload = read(root, "app_v2/main/preload.ts");
   const ipc = read(root, "app_v2/main/ipc.ts");
+  const api = read(root, "app_v2/renderer/api.ts");
+  const model = read(root, "app_v2/renderer/model.ts");
+  const state = read(root, "app_v2/renderer/state.ts");
 
   assert.equal(fs.existsSync(path.join(root, "app_v2/renderer/mockShellData.ts")), false, "mock shell data should be removed");
 
   assert.match(contracts, /export type AppShellModule/);
   assert.match(contracts, /export type AppReservationAction/);
   assert.match(contracts, /export type AppBranch/);
+  assert.match(contracts, /"GANGNAM", "COEX", "SEOLLEUNG", "SAMSEONG"/);
 
-  assert.match(appSource, /Frontend Skeleton/);
-  assert.match(appSource, /Runtime readiness/);
-  assert.match(appSource, /Provider sessions/);
-  assert.match(appSource, /Config JSON/);
-  assert.match(appSource, /Settings snapshot/);
-  assert.match(appSource, /Live read input/);
-  assert.match(appSource, /Reservation input/);
-  assert.match(appSource, /window\.desktopApp/);
-  assert.match(appSource, /JSON\.parse/);
+  assert.match(api, /window\.desktopApp/);
+  assert.match(model, /SIDEBAR_MENUS/);
+  assert.match(model, /BRANCH_OPTIONS/);
+  assert.match(model, /세션/);
+  assert.match(model, /읽기/);
+  assert.match(model, /작업/);
+  assert.match(model, /결과/);
+  assert.match(model, /WINGS/);
+  assert.match(model, /NAVER/);
+  assert.match(model, /STATION/);
+  assert.match(model, /compare/);
+  assert.match(model, /validate/);
+  assert.match(model, /reconcile/);
+  assert.match(model, /apply/);
+  assert.match(model, /order-list/);
+  assert.match(model, /arrival/);
+  assert.match(model, /강남/);
+  assert.match(model, /코엑스/);
+  assert.match(model, /선릉/);
+  assert.match(model, /삼성/);
+  assert.match(state, /useAppWorkbench/);
 
-  assert.doesNotMatch(appSource, /결과 내보내기/);
-  assert.doesNotMatch(appSource, /앱 보기/);
-  assert.doesNotMatch(appSource, /원본형 보기/);
-  assert.doesNotMatch(appSource, /상세 보기/);
-  assert.doesNotMatch(appSource, /0000/);
-  assert.doesNotMatch(appSource, /const PROVIDER_LABELS/);
-  assert.doesNotMatch(appSource, /coexMain:\s*"코엑스"/);
-  assert.doesNotMatch(appSource, /coexAnnex:\s*"코엑스2"/);
-  assert.doesNotMatch(appSource, /gangnam:\s*"강남"/);
-  assert.doesNotMatch(appSource, /reportWindowDays:\s*"5"/);
-  assert.doesNotMatch(appSource, /긴급클리닝|판매가|채널상태|프로모션|검토필요/);
+  assert.doesNotMatch(appSource, /Frontend Skeleton/);
+  assert.doesNotMatch(appSource, /Runtime readiness/);
+  assert.doesNotMatch(appSource, /Provider sessions/);
+  assert.doesNotMatch(appSource, /Config JSON/);
+  assert.doesNotMatch(appSource, /Settings snapshot/);
+  assert.doesNotMatch(appSource, /Live read input/);
+  assert.doesNotMatch(appSource, /Reservation input/);
+  assert.doesNotMatch(appSource, /breadcrumb|footer|KPI/i);
+  assert.doesNotMatch(appSource, /JSON\.parse/);
   assert.doesNotMatch(appSource, /mockShellData/);
 
   assert.match(preload, /runPmsRead/);

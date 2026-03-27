@@ -4,11 +4,15 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { buildRuntimeVerifyEnv, toPowerShellLiteral } from "./app_v2_runtime_verify_support.mjs";
+import {
+  buildRuntimeVerifyEnv,
+  resolveElectronLaunchPaths,
+  shouldLaunchWindowsElectron,
+  toPowerShellLiteral
+} from "./app_v2_runtime_verify_support.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const electronCli = path.join(repoRoot, "node_modules", "electron", "cli.js");
-const electronExe = path.join(repoRoot, "node_modules", "electron", "dist", "electron.exe");
+const { electronCli, electronExe } = resolveElectronLaunchPaths(repoRoot);
 const DEFAULT_TIMEOUT_MS = 30000;
 
 function normalizeText(value) {
@@ -178,7 +182,7 @@ function buildProbeEnv(options, probeFile) {
 async function spawnProbe(options, probeFile) {
   const runtimeEnv = buildProbeEnv(options, probeFile);
 
-  if (process.platform === "linux" && electronExe.endsWith(".exe")) {
+  if (shouldLaunchWindowsElectron(electronExe)) {
     const repoRootWin = await readWindowsPath(repoRoot);
     const electronExeWin = await readWindowsPath(electronExe);
     const probeFileWin = await readWindowsPath(probeFile);

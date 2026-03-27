@@ -29,7 +29,7 @@ function normalizeDate(value: string, fallback: string) {
 }
 
 function isAppBranch(value: string): value is AppBranch {
-  return value === "GANGNAM" || value === "COEX";
+  return value === "GANGNAM" || value === "COEX" || value === "SEOLLEUNG" || value === "SAMSEONG";
 }
 
 function parseProbeBranch(value: unknown): AppBranch {

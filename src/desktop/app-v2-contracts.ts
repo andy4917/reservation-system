@@ -1,14 +1,16 @@
 export const APP_PROVIDERS = ["wings-pms", "naver-partner", "admin-station"] as const;
-export const APP_BRANCHES = ["COEX", "GANGNAM"] as const;
+export const APP_BRANCHES = ["GANGNAM", "COEX", "SEOLLEUNG", "SAMSEONG"] as const;
 export const APP_SHELL_MODULES = ["pms-read", "ota-read", "sheet-read", "reservation-management", "settings"] as const;
 export const APP_RESERVATION_ACTIONS = ["compare", "validate", "reconcile", "edit", "apply", "order-list", "arrival"] as const;
 export const APP_READ_SOURCES = ["pms", "ota", "sheet"] as const;
+export const APP_SOURCE_ACCESS_MODE = "read-only" as const;
 
 export type AppProvider = (typeof APP_PROVIDERS)[number];
 export type AppBranch = (typeof APP_BRANCHES)[number];
 export type AppShellModule = (typeof APP_SHELL_MODULES)[number];
 export type AppReservationAction = (typeof APP_RESERVATION_ACTIONS)[number];
 export type AppReadSource = (typeof APP_READ_SOURCES)[number];
+export type AppSourceAccessMode = typeof APP_SOURCE_ACCESS_MODE;
 export type AppProviderWindowState = "hidden" | "visible" | "closed";
 export type AppProviderPageState = "idle" | "loading" | "loaded" | "error";
 export type AppProviderOperatingStatus = "ready" | "needs-login" | "attention" | "error";
@@ -26,9 +28,10 @@ export type AppBgeInstallStatus = "ready" | "installed" | "error";
 export type AppReservationEngineStatus = "fallback" | "pending-source" | "planned" | "applied";
 
 export interface AppSheetTabSettings {
-  coexMain: string;
-  coexAnnex: string;
   gangnam: string;
+  coex: string;
+  seolleung: string;
+  samseong: string;
 }
 
 export interface AppBgeM3Settings {

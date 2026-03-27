@@ -689,14 +689,19 @@ def normalize_branch_label(value: str) -> str:
     if not text:
         return ""
     low = text.lower()
+    if low.startswith("branch_the_"):
+        legacy = text.upper()
+        if legacy == "BRANCH_THE_SAMSUNG":
+            return "BRANCH_THE_SAMSEONG"
+        return legacy
     if "coex" in low or "코엑스" in low:
         return "COEX"
     if "gangnam" in low or "강남" in low:
         return "GANGNAM"
     if "seolleung" in low or "선릉" in low:
         return "BRANCH_THE_SEOLLEUNG"
-    if "samsung" in low or "삼성" in low:
-        return "BRANCH_THE_SAMSUNG"
+    if "samseong" in low or "samsung" in low or "삼성" in low:
+        return "BRANCH_THE_SAMSEONG"
     if text.upper().startswith("BRANCH_"):
         return text.upper()
     return text.upper()
@@ -804,7 +809,7 @@ def infer_branch_from_source_row(
         part for part in [branch_raw, property_name, channel_raw, account] if normalize_text(part)
     ).lower()
     keyword_branch = normalize_branch_label(candidates)
-    if keyword_branch in {"COEX", "GANGNAM", "BRANCH_THE_SEOLLEUNG", "BRANCH_THE_SAMSUNG"}:
+    if keyword_branch in {"COEX", "GANGNAM", "BRANCH_THE_SEOLLEUNG", "BRANCH_THE_SAMSEONG"}:
         return keyword_branch
     if branch_raw.isdigit():
         return f"PROPERTY_{int(branch_raw)}"
@@ -3092,7 +3097,7 @@ def add_analyze_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--pms-branch-map",
         default="",
-        help="PMS 지점 맵핑 (예: 91=COEX,92=GANGNAM,93=BRANCH_THE_SEOLLEUNG)",
+        help="PMS 지점 맵핑 (예: 91=COEX,92=GANGNAM,93=BRANCH_THE_SEOLLEUNG,94=BRANCH_THE_SAMSEONG)",
     )
     parser.add_argument(
         "--sheet-branch-scope",

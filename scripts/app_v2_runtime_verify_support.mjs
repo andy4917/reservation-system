@@ -47,3 +47,28 @@ export function buildRuntimeVerifyEnv({ env = process.env, googleTokenFile = "" 
 export function toPowerShellLiteral(value = "") {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
+
+export function resolveElectronLaunchPaths(repoRoot) {
+  const electronCli = path.join(repoRoot, "node_modules", "electron", "cli.js");
+  const electronDist = path.join(repoRoot, "node_modules", "electron", "dist");
+  const windowsExe = path.join(electronDist, "electron.exe");
+  const linuxExe = path.join(electronDist, "electron");
+
+  if (process.platform === "linux") {
+    if (fs.existsSync(windowsExe)) {
+      return { electronCli, electronExe: windowsExe };
+    }
+    if (fs.existsSync(linuxExe)) {
+      return { electronCli, electronExe: linuxExe };
+    }
+  }
+
+  return {
+    electronCli,
+    electronExe: process.platform === "win32" ? windowsExe : linuxExe,
+  };
+}
+
+export function shouldLaunchWindowsElectron(electronExe) {
+  return process.platform === "linux" && electronExe.endsWith(".exe") && fs.existsSync(electronExe);
+}

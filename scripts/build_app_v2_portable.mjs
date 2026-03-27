@@ -20,6 +20,11 @@ const runtimeJsAssets = [
 ];
 const runtimePythonAssets = ["app_v2_live_sheet_bridge.py", "app_v2_reservation_management_bridge.py"];
 
+async function copyRuntimeSupportTree() {
+  await fs.cp(path.join(root, "src"), path.join(appDir, "src"), { recursive: true, force: true });
+  await copyRuntimeAsset(path.join(root, "reservation_sheet_audit.py"), "reservation_sheet_audit.py");
+}
+
 async function copyRuntimeAsset(sourcePath, fileName) {
   const source = sourcePath;
   const destination = path.join(appDir, fileName);
@@ -79,6 +84,7 @@ async function main() {
 
   await fs.cp(path.join(root, "dist-app"), path.join(appDir, "dist-app"), { recursive: true, force: true });
   await fs.cp(path.join(root, "icons"), path.join(appDir, "icons"), { recursive: true, force: true });
+  await copyRuntimeSupportTree();
   for (const asset of runtimeJsAssets) {
     await copyRuntimeAsset(path.join(root, asset), asset);
   }

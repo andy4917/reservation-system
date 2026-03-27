@@ -18,7 +18,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-from reservation_sheet_audit import get_access_token
+from reservation_sheet_audit import get_access_token, normalize_branch_label
 from src.domain.sheet_domain import AuditError, ReservationBlock, SourceReservation, extract_sheet_id, infer_year_from_sheet_name, normalize_text
 from src.io.sheet_loader import load_sheet_matrix_and_dates
 from src.io.sheets_api import GoogleSheetsReadonlyClient
@@ -67,6 +67,7 @@ def load_live_blocks(args: argparse.Namespace) -> List[ReservationBlock]:
     client, spreadsheet_id = build_client(args)
     start_date = parse_date(args.start_date)
     end_date = parse_date(args.end_date)
+    request_branch = normalize_branch_label(args.branch)
     all_blocks: List[ReservationBlock] = []
     for sheet_name in args.sheet_names:
         clean_sheet_name = normalize_text(sheet_name)
@@ -85,7 +86,7 @@ def load_live_blocks(args: argparse.Namespace) -> List[ReservationBlock]:
         branch_blocks = [
             block
             for block in blocks
-            if normalize_text(getattr(block, "branch", "")) == normalize_text(args.branch)
+            if normalize_branch_label(getattr(block, "branch", "")) == request_branch
         ]
         window_blocks = [block for block in branch_blocks if overlaps_window(block, start_date, end_date)]
         all_blocks.extend(window_blocks)
@@ -306,7 +307,8 @@ def compute_plan_token(rows: List[Dict[str, str]]) -> str:
 def main() -> int:
     args = parse_args()
     start_date = parse_date(args.start_date)
-    blocks = build_fixture_blocks(args.branch, start_date) if args.fixture_mode else load_live_blocks(args)
+    branch = normalize_branch_label(args.branch)
+    blocks = build_fixture_blocks(branch, start_date) if args.fixture_mode else load_live_blocks(args)
     source_records = load_source_records(args.source_fixture) if str(args.source_fixture or "").strip() else []
 
     if not source_records:

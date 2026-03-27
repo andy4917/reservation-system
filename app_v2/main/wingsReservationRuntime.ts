@@ -9,6 +9,7 @@ import {
 } from "./providerWorkspaceManager.js";
 import { runWithRuntimeGlobalsExclusive } from "./runtimeExclusive.js";
 import { buildStableWingsRuntimeCacheKey } from "./runtimeSafety.js";
+import { APP_BRANCHES, type AppBranch } from "../../src/desktop/app-v2-contracts.js";
 
 interface StorageEntry {
   key: string;
@@ -60,6 +61,27 @@ let cachedConfigState: {
   configuredBranches: string[];
   errors: string[];
 } | null = null;
+
+const HAR_BRANCH_HINT_ENVS: Record<AppBranch, string> = {
+  GANGNAM: "UHS_WINGS_HAR_GANGNAM",
+  COEX: "UHS_WINGS_HAR_COEX",
+  SEOLLEUNG: "UHS_WINGS_HAR_SEOLLEUNG",
+  SAMSEONG: "UHS_WINGS_HAR_SAMSEONG",
+};
+
+const HAR_BRANCH_FILE_HINTS: Record<AppBranch, string> = {
+  GANGNAM: "gangnam",
+  COEX: "coex",
+  SEOLLEUNG: "seolleung",
+  SAMSEONG: "samseong",
+};
+
+const APP_BRANCH_SET = new Set<string>(APP_BRANCHES);
+
+function normalizeBranch(value: unknown): AppBranch | undefined {
+  const branch = normalizeText(value);
+  return APP_BRANCH_SET.has(branch as string) ? (branch as AppBranch) : undefined;
+}
 
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -246,15 +268,17 @@ function collectHarBranchEntriesFromEnv() {
     return configured.branches
       .filter((entry) => isRecord(entry))
       .map((entry) => ({
-        branch: normalizeText(entry.branch || entry.name || entry.branchName),
+        branch: normalizeBranch(entry.branch || entry.name || entry.branchName),
         harPath: normalizeText(entry.harPath || entry.path || entry.file),
       }))
-      .filter((entry) => entry.branch && entry.harPath);
+      .filter((entry) => entry.branch && entry.harPath) as Array<{ branch: AppBranch; harPath: string }>;
   }
-  return [
-    { branch: "GANGNAM", harPath: normalizeText(process.env.UHS_WINGS_HAR_GANGNAM) },
-    { branch: "COEX", harPath: normalizeText(process.env.UHS_WINGS_HAR_COEX) },
-  ].filter((entry) => entry.branch && entry.harPath);
+  return APP_BRANCHES
+    .map((branch) => ({
+      branch,
+      harPath: normalizeText(process.env[HAR_BRANCH_HINT_ENVS[branch]]),
+    }))
+    .filter((entry) => entry.harPath);
 }
 
 function getExistingHarPath(candidates: string[]) {
@@ -278,23 +302,23 @@ function buildDefaultHarDirectoryCandidates() {
 function collectHarBranchEntriesFromDefaults() {
   const directories = buildDefaultHarDirectoryCandidates();
   if (directories.length === 0) return [];
-  return [
-    {
-      branch: "GANGNAM",
-      harPath: getExistingHarPath(directories.map((directory) => path.join(directory, "pms.sanhait.com.ACCOUNT gangnam.har"))),
-    },
-    {
-      branch: "COEX",
-      harPath: getExistingHarPath(directories.map((directory) => path.join(directory, "pms.sanhait.com.ACCOUNT coex.har"))),
-    },
-  ].filter((entry) => entry.branch && entry.harPath);
+  return APP_BRANCHES
+    .map((branch) => ({
+      branch,
+      harPath: getExistingHarPath(
+        directories.map((directory) => path.join(directory, `pms.sanhait.com.ACCOUNT ${HAR_BRANCH_FILE_HINTS[branch]}.har`)),
+      ),
+    }))
+    .filter((entry) => entry.branch && entry.harPath);
 }
 
 async function getConfigCacheKey() {
   const runtimeAuthBundle = await buildRuntimeAuthBundle();
   return buildStableWingsRuntimeCacheKey({
     sync: normalizeText(process.env.UHS_WINGS_SYNC_CONFIG_JSON),
-    harBranches: normalizeText(process.env.UHS_WINGS_HAR_BRANCHES_JSON),
+    harBranches:
+      normalizeText(process.env.UHS_WINGS_HAR_BRANCHES_JSON) ||
+      APP_BRANCHES.map((branch) => `${branch}=${normalizeText(process.env[HAR_BRANCH_HINT_ENVS[branch]])}`).join("|"),
     gangnamHar: normalizeText(process.env.UHS_WINGS_HAR_GANGNAM),
     coexHar: normalizeText(process.env.UHS_WINGS_HAR_COEX),
     authBundle: runtimeAuthBundle,
@@ -376,9 +400,9 @@ export async function fetchWingsReservations(query: Record<string, unknown>) {
     const { pmsFetch } = loadWingsRuntimeModules();
     const runtimeConfig = await loadWingsRuntimeConfig();
     const originalFetch = globalThis.fetch;
-    const branchHint = normalizeText(query?.branch);
+    const branchHint = normalizeBranch(query?.branch);
     globalThis.fetch = ((input: string | URL, init?: Record<string, unknown>) =>
-      fetchWithProviderSession("wings-pms", input, init, branchHint === "COEX" || branchHint === "GANGNAM" ? branchHint : undefined)) as typeof fetch;
+      fetchWithProviderSession("wings-pms", input, init, branchHint)) as typeof fetch;
     try {
       return await pmsFetch.fetchProviderReservations("wings-pms", query, runtimeConfig.syncConfig);
     } finally {

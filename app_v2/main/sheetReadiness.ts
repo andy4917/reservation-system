@@ -41,6 +41,18 @@ function extractSpreadsheetId(value: string | null) {
   return match?.[1] || null;
 }
 
+function resolveConfiguredSheetNames(settings: AppSettingsSnapshot["config"]) {
+  const tabs = settings?.sheetTabs
+    ? [settings.sheetTabs.gangnam, settings.sheetTabs.coex, settings.sheetTabs.seolleung, settings.sheetTabs.samseong]
+    : [];
+  const names = tabs.map((value) => normalizeText(value)).filter(Boolean);
+  if (names.length > 0) {
+    return names;
+  }
+  const fallback = normalizeText(settings?.sheetName || "");
+  return fallback ? [fallback] : [];
+}
+
 function readSheetReadinessTimeoutMs() {
   const value = Number(process.env.UHS_APP_V2_SHEET_READINESS_TIMEOUT_MS || DEFAULT_SHEET_READINESS_TIMEOUT_MS);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_SHEET_READINESS_TIMEOUT_MS;
@@ -164,11 +176,12 @@ export async function evaluateSheetReadiness(settings: AppSettingsSnapshot): Pro
   }
 
   const spreadsheetId = extractSpreadsheetId(settings.config.spreadsheet);
-  const sheetName = normalizeText(settings.config.sheetName);
-  if (!spreadsheetId || !sheetName) {
+  const configuredSheetNames = resolveConfiguredSheetNames(settings.config);
+  const primarySheetName = configuredSheetNames[0] || null;
+  if (!spreadsheetId || configuredSheetNames.length === 0) {
     return buildSnapshot("invalid-settings", "저장된 시트 설정이 유효하지 않습니다.", {
       spreadsheetId,
-      sheetName: sheetName || null
+      sheetName: primarySheetName
     });
   }
 
@@ -178,7 +191,7 @@ export async function evaluateSheetReadiness(settings: AppSettingsSnapshot): Pro
   } catch (error) {
     return buildSnapshot("needs-auth", "Google Sheets 인증을 준비해야 합니다.", {
       spreadsheetId,
-      sheetName,
+      sheetName: primarySheetName,
       accessMode: "refresh-token",
       lastError: error instanceof Error ? error.message : String(error)
     });
@@ -187,7 +200,7 @@ export async function evaluateSheetReadiness(settings: AppSettingsSnapshot): Pro
   if (!tokenState.accessToken) {
     return buildSnapshot("needs-auth", "Google Sheets 인증이 없어 sheet-live를 확인할 수 없습니다.", {
       spreadsheetId,
-      sheetName,
+      sheetName: primarySheetName,
       accessMode: tokenState.accessMode
     });
   }
@@ -206,7 +219,7 @@ export async function evaluateSheetReadiness(settings: AppSettingsSnapshot): Pro
       const text = await response.text();
       return buildSnapshot("needs-auth", "Google Sheets 인증이 유효하지 않습니다.", {
         spreadsheetId,
-        sheetName,
+        sheetName: primarySheetName,
         accessMode: tokenState.accessMode,
         lastError: text.slice(0, 160) || `google-auth-failed:${response.status}`
       });
@@ -215,7 +228,7 @@ export async function evaluateSheetReadiness(settings: AppSettingsSnapshot): Pro
       const text = await response.text();
       return buildSnapshot("error", "Google Sheets 메타데이터 조회에 실패했습니다.", {
         spreadsheetId,
-        sheetName,
+        sheetName: primarySheetName,
         accessMode: tokenState.accessMode,
         lastError: `google-sheet-readiness-failed:${response.status}:${text.slice(0, 160)}`
       });
@@ -227,24 +240,25 @@ export async function evaluateSheetReadiness(settings: AppSettingsSnapshot): Pro
     const titles = Array.isArray(payload?.sheets)
       ? payload.sheets.map((sheet) => normalizeText(sheet?.properties?.title || "")).filter(Boolean)
       : [];
-    if (!titles.includes(sheetName)) {
+    const missingSheetName = configuredSheetNames.find((sheetName) => !titles.includes(sheetName));
+    if (missingSheetName) {
       return buildSnapshot("missing-sheet", "설정한 시트명이 Google Sheets 메타데이터에 없습니다.", {
         spreadsheetId,
-        sheetName,
+        sheetName: missingSheetName,
         accessMode: tokenState.accessMode,
-        lastError: `missing-sheet:${sheetName}`
+        lastError: `missing-sheet:${missingSheetName}`
       });
     }
 
     return buildSnapshot("ready", "Google Sheets read-only 접근이 준비되었습니다.", {
       spreadsheetId,
-      sheetName,
+      sheetName: primarySheetName,
       accessMode: tokenState.accessMode
     });
   } catch (error) {
     return buildSnapshot("error", "Google Sheets readiness check 중 예외가 발생했습니다.", {
       spreadsheetId,
-      sheetName,
+      sheetName: primarySheetName,
       accessMode: tokenState.accessMode,
       lastError: error instanceof Error ? error.message : String(error)
     });

@@ -47,6 +47,8 @@ def main() -> None:
     assert detect_branch_label("더 코엑스") == "COEX"
     assert detect_branch_label("더 삼성") == "BRANCH_THE_SAMSEONG"
     assert detect_branch_label("The Seolleung") == "BRANCH_THE_SEOLLEUNG"
+    assert detect_branch_label("선릉") == "BRANCH_THE_SEOLLEUNG"
+    assert detect_branch_label("samseong") == "BRANCH_THE_SAMSEONG"
 
     # near NAVER color variant should snap to known key
     assert resolve_closest_mapped_color_key("34a954") == "34a853"

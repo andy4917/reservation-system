@@ -32,11 +32,12 @@ function normalizeSheetTabs(input: unknown): AppSheetTabSettings | null {
   }
   const tabs = input as Record<string, unknown>;
   const normalized = {
-    coexMain: normalizeText(tabs.coexMain),
-    coexAnnex: normalizeText(tabs.coexAnnex),
     gangnam: normalizeText(tabs.gangnam),
+    coex: normalizeText(tabs.coex),
+    seolleung: normalizeText(tabs.seolleung),
+    samseong: normalizeText(tabs.samseong),
   };
-  if (!normalized.coexMain && !normalized.coexAnnex && !normalized.gangnam) {
+  if (!normalized.gangnam && !normalized.coex && !normalized.seolleung && !normalized.samseong) {
     return null;
   }
   return normalized;

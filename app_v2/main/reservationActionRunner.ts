@@ -11,13 +11,14 @@ import type {
   AppReservationActionSnapshot,
   AppSettingsSnapshot,
 } from "../../src/desktop/app-v2-contracts.js";
+import { APP_SOURCE_ACCESS_MODE } from "../../src/desktop/app-v2-contracts.js";
 import { describeEmbeddingAvailability, scoreTextPairs } from "./embeddingRuntime.js";
+import { isPythonCommandMissing, resolvePythonSpawnCommand } from "./pythonRuntime.js";
 import { buildPendingSourceActionSnapshot } from "./runtimeSafety.js";
 import { loadSettingsSnapshot } from "./settingsStore.js";
 import { buildSourceReservationsFromPmsRecords, writeSourceReservationsFixture } from "./sourceReservationRuntime.js";
 import { fetchWingsReservations } from "./wingsReservationRuntime.js";
 
-const PYTHON_COMMAND = process.env.PYTHON_BIN || "python3";
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 interface ContinuationCandidate {
@@ -125,39 +126,64 @@ function parseTabularRows(raw: string, action: AppReservationActionInput["action
 }
 
 function runPythonScript(args: string[], cwd: string) {
-  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    const child = spawn(PYTHON_COMMAND, args, {
-      cwd,
-      env: {
-        ...process.env,
-        PYTHONUTF8: "1",
-        PYTHONIOENCODING: "utf-8",
-      },
-      stdio: ["ignore", "pipe", "pipe"]
+  const candidates = resolvePythonSpawnCommand();
+  let lastError: Error | null = null;
+
+  const runCandidate = (command: string, prefixArgs: string[]) =>
+    new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+      const child = spawn(command, [...prefixArgs, ...args], {
+        cwd,
+        env: {
+          ...process.env,
+          PYTHONUTF8: "1",
+          PYTHONIOENCODING: "utf-8",
+        },
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk.toString();
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk.toString();
+      });
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve({ stdout, stderr });
+          return;
+        }
+        reject(new Error(stderr.trim() || stdout.trim() || `${command} exited with ${code}`));
+      });
     });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve({ stdout, stderr });
-        return;
+
+  return (async () => {
+    for (const candidate of candidates) {
+      try {
+        return await runCandidate(candidate.command, candidate.prefixArgs);
+      } catch (error) {
+        if (isPythonCommandMissing(error)) {
+          lastError = new Error(`Python runtime unavailable via ${candidate.label}`);
+          continue;
+        }
+        throw error;
       }
-      reject(new Error(stderr.trim() || stdout.trim() || `python exited with ${code}`));
-    });
-  });
+    }
+    throw lastError || new Error("Python runtime unavailable.");
+  })();
 }
 
 function resolveSheetNames(branch: AppBranch, settingsSnapshot: AppSettingsSnapshot) {
   const tabs = settingsSnapshot.config?.sheetTabs;
   if (tabs) {
-    return branch === "COEX" ? [tabs.coexMain, tabs.coexAnnex].filter(Boolean) : [tabs.gangnam].filter(Boolean);
+    return branch === "GANGNAM"
+      ? [tabs.gangnam].filter(Boolean)
+      : branch === "COEX"
+        ? [tabs.coex].filter(Boolean)
+        : branch === "SEOLLEUNG"
+          ? [tabs.seolleung].filter(Boolean)
+          : [tabs.samseong].filter(Boolean);
   }
   return settingsSnapshot.config?.sheetName ? [settingsSnapshot.config.sheetName] : [];
 }
@@ -314,7 +340,7 @@ async function runLiveOpsPreview(
         ? `${input.branch} 오더리스트 라이브 미리보기를 생성했습니다. 검토 후보 ${aiReview.scoredRows}건을 정렬했습니다.`
         : `${input.branch} 어라이벌 라이브 미리보기를 생성했습니다. 검토 후보 ${aiReview.scoredRows}건을 정렬했습니다.`,
     evidence: [
-      `python:${PYTHON_COMMAND}`,
+      `python:${resolvePythonSpawnCommand()[0]?.label || "unavailable"}`,
       `window:${input.startDate}..${input.endDate}`,
       `rows:${total}`,
       `embedding:${availability.reason}`,
@@ -354,6 +380,33 @@ function buildContinuationRows(
       detail: `${candidate.noteHead || "note-missing"}${similarityLabel}`,
     };
   });
+}
+
+function buildReadOnlyBlockedSnapshot(
+  input: AppReservationActionInput,
+  settingsSnapshot: AppSettingsSnapshot,
+): AppReservationActionSnapshot {
+  return {
+    action: input.action,
+    branch: input.branch,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    checkedAt: nowIso(),
+    status: "error",
+    summary: `${input.branch} ${input.action} 작업은 read-only 모드에서 차단되었습니다.`,
+    evidence: [
+      `sourceAccessMode:${APP_SOURCE_ACCESS_MODE}`,
+      "mutationBlocked:true",
+      ...makeEvidence(settingsSnapshot, input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false),
+    ],
+    rows: [],
+    outputPath: null,
+    engineStatus: "fallback",
+    issueCount: 0,
+    planToken: "",
+    requiresApproval: false,
+    applyAllowed: false,
+  };
 }
 
 async function buildEmbeddingScores(
@@ -405,11 +458,14 @@ function buildOpsAiReviewRows(
 
 export async function runReservationAction(input: AppReservationActionInput): Promise<AppReservationActionSnapshot> {
   const settingsSnapshot = await loadSettingsSnapshot();
+  if (input.action === "apply" && APP_SOURCE_ACCESS_MODE === "read-only") {
+    return buildReadOnlyBlockedSnapshot(input, settingsSnapshot);
+  }
   if (input.action === "order-list" || input.action === "arrival") {
     return runLiveOpsPreview(input, settingsSnapshot);
   }
 
-  if (input.action === "compare" || input.action === "reconcile" || input.action === "apply") {
+  if (input.action === "compare" || input.action === "reconcile") {
     const sourcePreparation = await prepareManagementSourceFixture(input);
     if (!sourcePreparation.ok) {
       return buildPendingSourceActionSnapshot({

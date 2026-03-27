@@ -10,7 +10,8 @@ import type {
   AppWingsLoginInput
 } from "../../src/desktop/app-v2-contracts.js";
 import { APP_PROVIDERS } from "../../src/desktop/app-v2-contracts.js";
-import { evaluateProviderOperatingState } from "./providerOperatingAdapter.js";
+import { waitForWingsLoginOperatingState } from "./providerOperatingWaiter.js";
+import { bootstrapWingsBrowserSession } from "./wingsSessionBootstrap.js";
 
 const { BrowserWindow, session } = electron;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -292,25 +293,6 @@ async function loadProviderStartUrl(windowRef: ElectronBrowserWindow, startUrl: 
   }
 }
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitForProviderOperatingState(
-  provider: AppProvider,
-  accept: (snapshot: AppProviderOperatingSnapshot) => boolean,
-  timeoutMs = 20000
-) {
-  const startedAt = Date.now();
-  let lastSnapshot = evaluateProviderOperatingState(await refreshProviderState(provider));
-  while (Date.now() - startedAt < timeoutMs) {
-    lastSnapshot = evaluateProviderOperatingState(await refreshProviderState(provider));
-    if (accept(lastSnapshot)) return lastSnapshot;
-    await delay(300);
-  }
-  return lastSnapshot;
-}
-
 export async function ensureProviderBrowser(provider: AppProvider, branchHint?: AppBranch): Promise<AppProviderBrowserState> {
   const record = getRecord(provider);
   if (record.window && !record.window.isDestroyed()) {
@@ -338,6 +320,9 @@ export async function ensureProviderBrowser(provider: AppProvider, branchHint?: 
 
   try {
     await loadProviderStartUrl(windowRef, config.startUrl);
+    if (provider === "wings-pms") {
+      await bootstrapWingsBrowserSession(windowRef, branchHint);
+    }
   } catch (error) {
     if (!windowRef.isDestroyed()) {
       windowRef.webContents.stop();
@@ -361,28 +346,10 @@ export async function loginWingsSession(input: AppWingsLoginInput): Promise<AppP
   if (!windowRef || windowRef.isDestroyed()) {
     throw new Error("Wings provider window is not available.");
   }
+  void input;
   if (typeof windowRef.show === "function") windowRef.show();
   if (typeof windowRef.focus === "function") windowRef.focus();
-
-  const loadedSnapshot = await waitForProviderOperatingState(
-    provider,
-    (snapshot) => snapshot.pageState === "loaded" || snapshot.operatingStatus === "error",
-    15000
-  );
-  if (loadedSnapshot.operatingStatus === "ready") {
-    return loadedSnapshot;
-  }
-  if (loadedSnapshot.operatingStatus === "error") {
-    return loadedSnapshot;
-  }
-  return waitForProviderOperatingState(
-    provider,
-    (snapshot) =>
-      snapshot.operatingStatus === "ready" ||
-      snapshot.operatingStatus === "needs-login" ||
-      snapshot.operatingStatus === "error",
-    20000
-  );
+  return waitForWingsLoginOperatingState(provider, () => refreshProviderState(provider));
 }
 
 

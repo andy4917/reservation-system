@@ -199,6 +199,7 @@ BRANCH_LABEL_RULES: Tuple[Tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?:^|\b)gangnam(?:\b|$)|강남", flags=re.I), BRANCH_GANGNAM),
     (re.compile(r"(?:^|\b)coex(?:\b|$)|코엑스", flags=re.I), BRANCH_COEX),
     (re.compile(r"(?:^|\b)samseong(?:\b|$)|삼성", flags=re.I), "BRANCH_THE_SAMSEONG"),
+    (re.compile(r"(?:^|\b)seolleung(?:\b|$)|선릉", flags=re.I), "BRANCH_THE_SEOLLEUNG"),
 )
 BRANCH_MARKER_HINT_RE = re.compile(r"(?:\bthe\b|더\s*|지점|branch)", flags=re.I)
 ROOM_NO_LIKE_RE = re.compile(r"^(?:A\d{3,4}|\d{3,4})$", flags=re.I)
@@ -260,6 +261,8 @@ NOTE_CHANNEL_PREFIX_RE = re.compile(r"^\s*\[\s*channel\s*:\s*([^\]]+?)\s*\]", fl
 PREFERRED_BRANCH_ORDER = {
     BRANCH_GANGNAM: 0,
     BRANCH_COEX: 1,
+    "BRANCH_THE_SEOLLEUNG": 2,
+    "BRANCH_THE_SAMSEONG": 3,
 }
 ROOM_STATUS_TEXT_HINTS = {
     "vac",

@@ -8,6 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Guardrail markers for app_v2 operating boundary contracts:
+# - verify-only paths such as UHS_APP_V2_RUNTIME_VERIFY and app-v2-smoke:
+# - providerWorkspaceManager must stay on window lifecycle and raw page signals
+# - preflight summary stays in the thin renderer/main contract, not fixture fallbacks
+
 ROOT = Path(__file__).resolve().parents[1]
 TEXT_EXTS = {
     ".js",
@@ -45,11 +50,11 @@ APP_RUNTIME_RULES = [
     {
         "paths": ("app_v2/renderer/",),
         "tokens": (
-            "const PROVIDER_LABELS",
-            'coexMain: "코엑스"',
-            'coexAnnex: "코엑스2"',
-            'gangnam: "강남"',
-            'reportWindowDays: "5"',
+            "Frontend Skeleton",
+            "Desktop runtime shell",
+            "EMPTY_CONFIG_JSON",
+            "EMPTY_LIVE_READ_INPUT_JSON",
+            "EMPTY_RESERVATION_INPUT_JSON",
             "mockShellData",
         ),
         "message": "Renderer still contains hardcoded operational defaults or legacy presentation data.",
@@ -71,9 +76,8 @@ APP_RUNTIME_RULES = [
     {
         "paths": ("app_v2/main/settingsStore.ts", "app_v2/main/ipc.ts", "app_v2/main/liveReadActions.ts", "app_v2/main/reservationActionRunner.ts"),
         "tokens": (
-            'coexMain: normalizeText(tabs.coexMain) || "코엑스"',
-            'coexAnnex: normalizeText(tabs.coexAnnex) || "코엑스2"',
-            'gangnam: normalizeText(tabs.gangnam) || "강남"',
+            "coexMain",
+            "coexAnnex",
             "reportWindowDays: Number(payload.reportWindowDays ?? 5)",
             "windowDays:${settings.config?.reportWindowDays ?? 5}",
             "windowDays:${settingsSummary.config?.reportWindowDays ?? 5}",
@@ -85,6 +89,24 @@ APP_RUNTIME_RULES = [
             "bgeThreshold:${bge?.scoreThreshold ?? 0.72}",
         ),
         "message": "Runtime still contains branch-specific or date-window default hardcoding.",
+    },
+    {
+        "paths": ("app_v2/main/wingsReservationRuntime.ts", "src/desktop/app-v2-contracts.ts"),
+        "tokens": (
+            'APP_BRANCHES = ["COEX", "GANGNAM"]',
+            'branchHint === "COEX" || branchHint === "GANGNAM"',
+        ),
+        "message": "Branch contract/runtime still contains two-branch gating or legacy hint handling.",
+    },
+    {
+        "paths": ("truth_dataset/branch_provider_mapping_v1.json",),
+        "tokens": (
+            '"sheet_tabs": ["코엑스", "코엑스2"]',
+            '"sheet_tabs": ["강남"]',
+            '"sheet_tabs": []',
+            '"branch": "BRANCH_THE_SAMSUNG"',
+        ),
+        "message": "Branch/provider truth dataset still contains legacy tab mapping or stale branch ids.",
     },
 ]
 EXCLUDES = (

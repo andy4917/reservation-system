@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import electron from "electron";
 import type { AppBgeInstallSnapshot, AppSettingsSnapshot } from "../../src/desktop/app-v2-contracts.js";
+import { loadTransformersRuntime } from "./embeddingRuntime.js";
 import { loadSettingsSnapshot, saveSettings } from "./settingsStore.js";
 
 const { app } = electron;
@@ -80,7 +81,20 @@ export async function installBgeM3Model(): Promise<AppBgeInstallSnapshot> {
   const modelPath = resolveModelPathFromRoot(installRoot, modelId);
   await fs.mkdir(installRoot, { recursive: true });
 
-  const transformers = (await import("@huggingface/transformers")) as any;
+  const runtime = await loadTransformersRuntime();
+  if (!runtime.ok) {
+    return {
+      checkedAt: nowIso(),
+      status: "error",
+      modelId,
+      installRoot,
+      modelPath,
+      installed: false,
+      summary: runtime.reason,
+      files: [],
+    };
+  }
+  const { transformers } = runtime;
   transformers.env.allowLocalModels = true;
   transformers.env.allowRemoteModels = true;
   transformers.env.cacheDir = installRoot;

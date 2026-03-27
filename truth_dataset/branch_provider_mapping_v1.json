@@ -4,7 +4,9 @@
     {
       "branch": "COEX",
       "display_name": "더 코엑스",
-      "sheet_tabs": ["코엑스", "코엑스2"],
+      "operational_status": "active",
+      "sheet_tabs": ["2026"],
+      "sheet_section_markers": ["더 코엑스", "코엑스"],
       "sheet_scope": {
         "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
         "sheet_name": "2026"
@@ -39,7 +41,9 @@
     {
       "branch": "GANGNAM",
       "display_name": "강남",
-      "sheet_tabs": ["강남"],
+      "operational_status": "active",
+      "sheet_tabs": ["2026"],
+      "sheet_section_markers": ["강남", "더 강남"],
       "sheet_scope": {
         "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
         "sheet_name": "2026"
@@ -74,7 +78,22 @@
     {
       "branch": "BRANCH_THE_SEOLLEUNG",
       "display_name": "선릉",
-      "sheet_tabs": [],
+      "operational_status": "active",
+      "sheet_tabs": ["2026"],
+      "sheet_section_markers": ["선릉", "선릉점", "The Seolleung"],
+      "sheet_scope": {
+        "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
+        "sheet_name": "2026"
+      },
+      "ota_profiles": {},
+      "wings_profiles": []
+    },
+    {
+      "branch": "BRANCH_THE_SAMSEONG",
+      "display_name": "삼성",
+      "operational_status": "preopen",
+      "sheet_tabs": ["2026"],
+      "sheet_section_markers": ["삼성", "삼성점", "더 삼성"],
       "sheet_scope": {
         "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
         "sheet_name": "2026"
@@ -84,6 +103,7 @@
     }
   ],
   "notes": [
+    "Sheet branch resolution is section-aware inside the shared 2026 tab; branch mapping must not assume one tab per branch.",
     "Naver/Station IDs are current shared defaults from repo constants and must be replaced with branch-specific verified IDs when sampled live capture starts.",
     "Wings property/bsns codes and current reservation endpoints were validated against 2026-03-12 official COEX/GANGNAM HAR captures.",
     "Legacy `/pms/biz/ir04_0100X/searchListRsvn.do` is retained only as backward-compatible HAR alias and is not the current default reservation-list path."

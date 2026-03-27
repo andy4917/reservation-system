@@ -16,8 +16,39 @@ interface EmbeddingAvailability {
   reason: string;
 }
 
+interface TransformersRuntimeLoadResult {
+  ok: true;
+  transformers: any;
+}
+
+interface TransformersRuntimeUnavailable {
+  ok: false;
+  reason: string;
+}
+
 let extractorPromise: Promise<any> | null = null;
 let extractorKey = "";
+
+function isTransformersRuntimeUnavailable(error: unknown) {
+  const message = String((error as { message?: unknown })?.message || error || "");
+  return (
+    message.includes("Cannot find package '@huggingface/transformers'") ||
+    message.includes("ERR_MODULE_NOT_FOUND") ||
+    message.includes("Cannot find module")
+  );
+}
+
+export async function loadTransformersRuntime(): Promise<TransformersRuntimeLoadResult | TransformersRuntimeUnavailable> {
+  try {
+    const transformers = (await import("@huggingface/transformers")) as any;
+    return { ok: true, transformers };
+  } catch (error) {
+    if (isTransformersRuntimeUnavailable(error)) {
+      return { ok: false, reason: "BGE-M3 runtime unavailable: @huggingface/transformers is not bundled in this runtime." };
+    }
+    throw error;
+  }
+}
 
 function dot(left: number[], right: number[]) {
   let total = 0;
@@ -58,21 +89,25 @@ function toMatrix(output: any, rowCount: number): number[][] {
 async function loadExtractor(settingsSnapshot: AppSettingsSnapshot) {
   const bge = settingsSnapshot.config?.bgeM3;
   const modelPath = bge?.modelPath?.trim() ?? "";
-  const runtime = bge?.runtime ?? "local-path";
-  const cacheKey = `${runtime}:${modelPath || bge?.modelId || "Xenova/bge-m3"}`;
+  const runtimeMode = bge?.runtime ?? "local-path";
+  const cacheKey = `${runtimeMode}:${modelPath || bge?.modelId || "Xenova/bge-m3"}`;
   if (extractorPromise && extractorKey === cacheKey) {
     return extractorPromise;
   }
   extractorKey = cacheKey;
   extractorPromise = (async () => {
-    const transformers = (await import("@huggingface/transformers")) as any;
+    const runtimeLoad = await loadTransformersRuntime();
+    if (!runtimeLoad.ok) {
+      throw new Error(runtimeLoad.reason);
+    }
+    const { transformers } = runtimeLoad;
     transformers.env.allowLocalModels = true;
-    transformers.env.allowRemoteModels = runtime === "download-if-missing";
+    transformers.env.allowRemoteModels = runtimeMode === "download-if-missing";
     const modelRef = modelPath || bge?.modelId || "Xenova/bge-m3";
     return transformers.pipeline("feature-extraction", modelRef, {
       model_file_name: "sentence_transformers",
       dtype: "q8",
-      local_files_only: runtime !== "download-if-missing",
+      local_files_only: runtimeMode !== "download-if-missing",
     });
   })();
   return extractorPromise;
@@ -93,7 +128,15 @@ export async function scoreTextPairs(
 ): Promise<PairScoreResult[]> {
   const availability = describeEmbeddingAvailability(settingsSnapshot);
   if (!availability.enabled || pairs.length === 0) return [];
-  const extractor = await loadExtractor(settingsSnapshot);
+  let extractor;
+  try {
+    extractor = await loadExtractor(settingsSnapshot);
+  } catch (error) {
+    if (isTransformersRuntimeUnavailable(error) || String((error as { message?: unknown })?.message || "").includes("BGE-M3 runtime unavailable")) {
+      return [];
+    }
+    throw error;
+  }
   const joined = pairs.flatMap((pair) => [pair.left, pair.right]);
   const output = await extractor(joined, { pooling: "mean", normalize: true });
   const matrix = toMatrix(output, joined.length);

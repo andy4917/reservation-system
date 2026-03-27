@@ -24,6 +24,8 @@ function main() {
   assert.match(JSON.stringify(pkg.build?.win?.target), /portable/i);
   assert.equal(Array.isArray(pkg.build?.extraResources), true);
   assert.match(JSON.stringify(pkg.build.extraResources), /"from":"src"/);
+  assert.match(JSON.stringify(pkg.build.extraResources), /"\*\*\/\*\.py"/);
+  assert.match(JSON.stringify(pkg.build.extraResources), /"from":"reservation_sheet_audit\.py"/);
   assert.match(JSON.stringify(pkg.build.extraResources), /app_v2_live_sheet_bridge\.py/);
   assert.match(JSON.stringify(pkg.build.extraResources), /app_v2_reservation_management_bridge\.py/);
   assert.match(installerScript, /electron-builder/);

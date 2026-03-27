@@ -44,6 +44,7 @@ function main() {
     "app_v2/main/providerOperatingAdapter.ts",
     "app_v2/main/settingsStore.ts",
     "app_v2/main/preflight.ts",
+    "app_v2/main/pythonRuntime.ts",
     "app_v2/main/runtimeVerificationProcess.ts",
     "app_v2/main/runtimeReadiness.ts",
     "app_v2/main/sheetReadiness.ts",

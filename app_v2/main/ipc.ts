@@ -53,17 +53,21 @@ function normalizeSettingsPayload(input: unknown): Partial<AppSettings> {
     sheetTabs:
       payload.sheetTabs && typeof payload.sheetTabs === "object"
         ? {
-            coexMain:
-              typeof (payload.sheetTabs as Record<string, unknown>).coexMain === "string"
-                ? String((payload.sheetTabs as Record<string, unknown>).coexMain)
-                : "",
-            coexAnnex:
-              typeof (payload.sheetTabs as Record<string, unknown>).coexAnnex === "string"
-                ? String((payload.sheetTabs as Record<string, unknown>).coexAnnex)
-                : "",
             gangnam:
               typeof (payload.sheetTabs as Record<string, unknown>).gangnam === "string"
                 ? String((payload.sheetTabs as Record<string, unknown>).gangnam)
+                : "",
+            coex:
+              typeof (payload.sheetTabs as Record<string, unknown>).coex === "string"
+                ? String((payload.sheetTabs as Record<string, unknown>).coex)
+                : "",
+            seolleung:
+              typeof (payload.sheetTabs as Record<string, unknown>).seolleung === "string"
+                ? String((payload.sheetTabs as Record<string, unknown>).seolleung)
+                : "",
+            samseong:
+              typeof (payload.sheetTabs as Record<string, unknown>).samseong === "string"
+                ? String((payload.sheetTabs as Record<string, unknown>).samseong)
                 : "",
           }
         : null,

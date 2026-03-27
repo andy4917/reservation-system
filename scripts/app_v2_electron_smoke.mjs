@@ -4,10 +4,10 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { resolveElectronLaunchPaths, shouldLaunchWindowsElectron } from "./app_v2_runtime_verify_support.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const electronCli = path.join(repoRoot, "node_modules", "electron", "cli.js");
-const electronExe = path.join(repoRoot, "node_modules", "electron", "dist", "electron.exe");
+const { electronCli, electronExe } = resolveElectronLaunchPaths(repoRoot);
 
 function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -55,7 +55,7 @@ async function main() {
   const smokeFile = path.join(smokeDir, "markers.log");
 
   let smokeChild;
-  if (process.platform === "linux" && electronExe.endsWith(".exe")) {
+  if (shouldLaunchWindowsElectron(electronExe)) {
     const repoRootWin = await readWindowsPath(repoRoot);
     const electronExeWin = await readWindowsPath(electronExe);
     const smokeFileWin = await readWindowsPath(smokeFile);

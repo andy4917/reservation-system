@@ -9,6 +9,12 @@ function main() {
   assert.match(source, /function normalizeSheetTabs\(input: unknown\): AppSheetTabSettings \| null/);
   assert.match(source, /if \(!input \|\| typeof input !== "object"\)\s*\{\s*return null;\s*\}/);
   assert.match(source, /sheetTabs: normalizeSheetTabs\(input\.sheetTabs\),/);
+  assert.match(source, /gangnam: normalizeText\(tabs\.gangnam\)/);
+  assert.match(source, /coex: normalizeText\(tabs\.coex\)/);
+  assert.match(source, /seolleung: normalizeText\(tabs\.seolleung\)/);
+  assert.match(source, /samseong: normalizeText\(tabs\.samseong\)/);
+  assert.doesNotMatch(source, /coexMain/);
+  assert.doesNotMatch(source, /coexAnnex/);
   assert.doesNotMatch(source, /코엑스|코엑스2|강남/);
   assert.doesNotMatch(source, /reportWindowDays:[\s\S]*:\s*5,/);
   assert.doesNotMatch(source, /\?\?\s*5/);

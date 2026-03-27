@@ -10,14 +10,15 @@ import type {
   AppProvider,
 } from "../../src/desktop/app-v2-contracts.js";
 import { describeEmbeddingAvailability, scoreTextPairs } from "./embeddingRuntime.js";
-import { fetchProviderRowsLive } from "./providerDataRuntime.js";
-import { evaluateProviderOperatingState } from "./providerOperatingAdapter.js";
+import { isPythonCommandMissing, resolvePythonSpawnCommand } from "./pythonRuntime.js";
+import { fetchProviderRowsLive, readProviderSourceAccessState } from "./providerDataRuntime.js";
+import { waitForProviderReadyOrSettledState } from "./providerOperatingWaiter.js";
+import { applyProviderSourceAccessToOperatingSnapshot } from "./providerSourceReadiness.js";
 import { ensureProviderBrowser, getProviderBrowserState } from "./providerWorkspaceManager.js";
 import { buildLiveReadRuntimeErrorSnapshot } from "./runtimeSafety.js";
 import { loadSettingsSnapshot } from "./settingsStore.js";
 import { fetchWingsReservations } from "./wingsReservationRuntime.js";
 
-const PYTHON_COMMAND = process.env.PYTHON_BIN || "python3";
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 function detectRuntimeAssetRoot() {
@@ -90,8 +91,12 @@ function buildError(
 
 async function ensureProviderReadable(provider: AppProvider, summaryLabel: string, branchHint?: AppBranch) {
   await ensureProviderBrowser(provider, branchHint);
-  const providerState = await getProviderBrowserState(provider);
-  const operatingState = evaluateProviderOperatingState(providerState);
+  let operatingState = await waitForProviderReadyOrSettledState(() => getProviderBrowserState(provider));
+  if (provider !== "wings-pms") {
+    const sourceAccess = await readProviderSourceAccessState(provider);
+    operatingState = applyProviderSourceAccessToOperatingSnapshot(operatingState, sourceAccess);
+  }
+  const providerState = operatingState;
   if (operatingState.operatingStatus !== "ready") {
     return {
       ok: false as const,
@@ -114,47 +119,70 @@ async function ensureProviderReadable(provider: AppProvider, summaryLabel: strin
       `operatingHost:${providerState.currentHost ?? "-"}`,
       `providerCookies:${providerState.providerCookieCount}`,
       `operatingStatus:${operatingState.operatingStatus}`,
+      ...operatingState.operatingEvidence.reasons.map((reason) => `operatingReason:${reason}`),
     ],
   };
 }
 
 function runPythonJson(args: string[], cwd: string) {
-  return new Promise<string>((resolve, reject) => {
-    const child = spawn(PYTHON_COMMAND, args, {
-      cwd,
-      env: {
-        ...process.env,
-        PYTHONUTF8: "1",
-        PYTHONIOENCODING: "utf-8",
-      },
-      stdio: ["ignore", "pipe", "pipe"]
+  const candidates = resolvePythonSpawnCommand();
+  let lastError: Error | null = null;
+
+  const runCandidate = (command: string, prefixArgs: string[]) =>
+    new Promise<string>((resolve, reject) => {
+      const child = spawn(command, [...prefixArgs, ...args], {
+        cwd,
+        env: {
+          ...process.env,
+          PYTHONUTF8: "1",
+          PYTHONIOENCODING: "utf-8",
+        },
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk.toString();
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk.toString();
+      });
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve(stdout);
+          return;
+        }
+        reject(new Error(stderr.trim() || stdout.trim() || `${command} exited with ${code}`));
+      });
     });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve(stdout);
-        return;
+
+  return (async () => {
+    for (const candidate of candidates) {
+      try {
+        return await runCandidate(candidate.command, candidate.prefixArgs);
+      } catch (error) {
+        if (isPythonCommandMissing(error)) {
+          lastError = new Error(`Python runtime unavailable via ${candidate.label}`);
+          continue;
+        }
+        throw error;
       }
-      reject(new Error(stderr.trim() || stdout.trim() || `python exited with ${code}`));
-    });
-  });
+    }
+    throw lastError || new Error("Python runtime unavailable.");
+  })();
 }
 
 function resolveSheetNames(branch: AppBranch, settings: Awaited<ReturnType<typeof loadSettingsSnapshot>>) {
   const tabs = settings.config?.sheetTabs;
   if (tabs) {
-    if (branch === "COEX") {
-      return [tabs.coexMain, tabs.coexAnnex].filter(Boolean);
-    }
-    return [tabs.gangnam].filter(Boolean);
+    return branch === "GANGNAM"
+      ? [tabs.gangnam].filter(Boolean)
+      : branch === "COEX"
+        ? [tabs.coex].filter(Boolean)
+        : branch === "SEOLLEUNG"
+          ? [tabs.seolleung].filter(Boolean)
+          : [tabs.samseong].filter(Boolean);
   }
   return settings.config?.sheetName ? [settings.config.sheetName] : [];
 }

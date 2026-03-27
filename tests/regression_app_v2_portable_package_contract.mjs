@@ -26,6 +26,8 @@ function main() {
   );
   assert.match(portableScript, /runtimeJsAssets/);
   assert.match(portableScript, /runtimePythonAssets/);
+  assert.match(portableScript, /reservation_sheet_audit\.py/);
+  assert.match(portableScript, /src\/\*\*\/\*\.py|copyRuntimeSupportTree|copyRuntimePythonTree/);
   assert.match(portableScript, /copyRuntimeAsset\(path\.join\(root,\s*asset\),\s*asset\)/);
   assert.match(portableScript, /copyRuntimeAsset\(path\.join\(root,\s*"scripts",\s*script\),\s*path\.join\("scripts",\s*script\)\)/);
   assert.match(windowRuntime, /icon:/);

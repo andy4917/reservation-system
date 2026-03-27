@@ -10,9 +10,10 @@ import {
   getProviderBrowserStorageSnapshot,
   getProviderSessionCookies,
 } from "./providerWorkspaceManager.js";
+import type { ProviderSourceAccessProvider, ProviderSourceAccessState } from "./providerSourceReadiness.js";
 import { runWithRuntimeGlobalsExclusive } from "./runtimeExclusive.js";
 
-type ProviderDataRuntimeProvider = Extract<AppProvider, "naver-partner" | "admin-station">;
+type ProviderDataRuntimeProvider = ProviderSourceAccessProvider;
 
 interface StorageEntry {
   key: string;
@@ -634,6 +635,18 @@ function ensureFreshProviderRuntimeModules(materials: Record<ProviderDataRuntime
   const modules = loadProviderRuntimeModules();
   applyResolvedAuthBundles(modules.normalize, materials);
   return modules;
+}
+
+export async function readProviderSourceAccessState(
+  providerType: ProviderDataRuntimeProvider,
+): Promise<ProviderSourceAccessState> {
+  const material = await buildAppProviderSessionMaterial(providerType);
+  return {
+    provider: providerType,
+    sessionAvailable: material.sessionAvailable,
+    source: material.source,
+    sessionSignals: [...(material.sessionSignals || [])],
+  };
 }
 
 export async function fetchProviderRowsLive(
