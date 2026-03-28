@@ -1,0 +1,7 @@
+profile = "full-trusted"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+
+[profiles.full-trusted]
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
