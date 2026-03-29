@@ -1,24 +1,24 @@
 # Active Memory
 
-- updated_at: 2026-03-18T22:50:13+09:00
-- branch: `codex/reference-ledger-shell`
-- commit: `fd37173`
+- updated_at: 2026-03-29T16:02:35+09:00
+- branch: `work/runtime-update`
+- commit: `8d345e1`
 
 ## Verified Facts
-- Stage 1 minimal live-read contract is implemented and verified at the code-path level.
-- Stage 2 mapping core v1 is implemented with exact room/reservation auto binding and precision metrics.
-- Operator export, search, handoff, and UI shell are aligned to the current product path.
-- The repo worktree was clean before this documentation refresh started.
+- The authoritative local checkout is `/home/dev/repos/reservation-system`.
+- Stage 1 minimal live-read and Stage 2 truth-aligned mapping core remain the current product baseline.
+- The latest completed work in this checkout is workspace-alignment hygiene, not a new product-path feature increment.
+- `python3 scripts/workspace_alignment/check.py` now returns `ok: true` with no warnings.
+- The current local diff includes runtime doc refresh plus app_v2 contamination cleanup.
 
 ## Current Constraint
-- The product is read-only.
-- The environment is not currently capable of proving `read-live`.
-- `offline-preview` is the correct classification for this machine right now.
+- The product remains read-only.
+- Current local evidence proves repository/workspace alignment only.
+- Live environment availability is still required to prove `read-live`.
 
 ## Active Risks
-- Do not describe fixture or contract completeness as operational live success.
-- Do not reintroduce hardcoded operational values to bypass live environment gaps.
-- Keep old stage design memos archived, not active, to avoid doc drift.
+- Do not describe local alignment success as live operational readiness.
+- Do not reuse the detached Windows mirror checkout as an implementation root.
 
 ## Resume Point
-- If work resumes, start from [HANDOFF.md](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/runtime/HANDOFF.md) and [STAGE_V1_CHECKLIST.md](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/runtime/STAGE_V1_CHECKLIST.md).
+- Start from [HANDOFF.md](/home/dev/repos/reservation-system/docs/runtime/HANDOFF.md) and [WORKSPACE_ALIGNMENT.md](/home/dev/repos/reservation-system/docs/runtime/WORKSPACE_ALIGNMENT.md).

@@ -29,9 +29,9 @@ function getSettingsPath() {
 function normalizeSheetTabs(input: unknown): AppSheetTabSettings {
   const tabs = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   return {
-    coexMain: normalizeText(tabs.coexMain) || "코엑스",
-    coexAnnex: normalizeText(tabs.coexAnnex) || "코엑스2",
-    gangnam: normalizeText(tabs.gangnam) || "강남",
+    coexMain: normalizeText(tabs.coexMain),
+    coexAnnex: normalizeText(tabs.coexAnnex),
+    gangnam: normalizeText(tabs.gangnam),
   };
 }
 
@@ -70,8 +70,9 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
 
 function buildSnapshot(config: AppSettings | null, updatedAt: string | null): AppSettingsSnapshot {
   const missingRequired: Array<keyof AppSettings> = [];
+  const hasSheetTabs = Boolean(config?.sheetTabs?.coexMain || config?.sheetTabs?.coexAnnex || config?.sheetTabs?.gangnam);
   if (!config?.spreadsheet) missingRequired.push("spreadsheet");
-  if (!config?.sheetName && !config?.sheetTabs) missingRequired.push("sheetName");
+  if (!config?.sheetName && !hasSheetTabs) missingRequired.push("sheetName");
   return {
     config,
     isConfigured: missingRequired.length === 0,

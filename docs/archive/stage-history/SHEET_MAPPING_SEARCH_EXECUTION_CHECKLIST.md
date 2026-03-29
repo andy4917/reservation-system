@@ -4,10 +4,14 @@ Last updated: 2026-03-14
 
 기준 문서:
 
-- [`SHEET_MAPPING_SEARCH_BASELINE.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/SHEET_MAPPING_SEARCH_BASELINE.md)
-- [`APP_PRODUCT_OPERATING_MODEL.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/APP_PRODUCT_OPERATING_MODEL.md)
+- `docs/archive/stage-history/SHEET_MAPPING_SEARCH_BASELINE.md`
+- `docs/architecture/APP_PRODUCT_OPERATING_MODEL.md`
 
 이 문서는 최신 Patch 1~7 결정을 실제 구현 순서와 검증 게이트로 고정하기 위한 실행 문서입니다.
+
+주의:
+- 아래 단계별 파일 예시는 `app_v2` 전환 이전 설계를 포함하는 reference map입니다.
+- 현재 활성 앱 셸과 운영 경계는 `docs/architecture/APP_IMPLEMENTATION_ROADMAP.md` 및 `docs/architecture/APP_V2_OPERATING_CONTRACT.md` 를 우선합니다.
 
 ## 1. 먼저 잠가야 하는 결정
 
@@ -80,19 +84,19 @@ Last updated: 2026-03-14
 
 ### 먼저 손댈 파일
 
-1. [`app/contracts/provider.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/contracts/provider.ts)
+1. `app/contracts/provider.ts` (historical pre-`app_v2` reference)
 - 시트 summary와 visible slice 계약 확장
 
-2. [`app/main/sheetRuntime.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/main/sheetRuntime.ts)
+2. `app/main/sheetRuntime.ts` (historical pre-`app_v2` reference)
 - token refresh / failure category / summary 조립
 
-3. [`src/io/sheets.fetch.js`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/src/io/sheets.fetch.js)
+3. `src/io/sheets.fetch.js`
 - metadata, named range, validation, retry reason 요약 구조화
 
-4. [`app/main/runArtifactStore.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/main/runArtifactStore.ts)
+4. `app/main/runArtifactStore.ts` (historical pre-`app_v2` reference)
 - run artifact 저장, visible slice 계산
 
-5. [`app/main/ipc.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/main/ipc.ts)
+5. `app/main/ipc.ts` (historical pre-`app_v2` reference)
 - sheet snapshot을 main-run artifact store에 적재한 뒤 renderer에 응답
 
 ### Stage A 완료 조건
@@ -127,13 +131,13 @@ Last updated: 2026-03-14
 
 ### 먼저 손댈 파일
 
-1. [`app/renderer/types.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/types.ts)
+1. `app/renderer/types.ts` (historical pre-`app_v2` reference)
 - `selectedRunId`, `visibleSlice` 반영
 
-2. [`app/renderer/state/uiStore.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/state/uiStore.ts)
+2. `app/renderer/state/uiStore.ts` (historical pre-`app_v2` reference)
 - sheetRead 상태를 summary + selectedRunId + visibleSlice 중심으로 저장
 
-3. [`app/renderer/components/surfaces/SettingsSurface.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/surfaces/SettingsSurface.tsx)
+3. `app/renderer/components/surfaces/SettingsSurface.tsx` (historical pre-`app_v2` reference)
 - visible slice와 선택된 run 표시
 
 ### Patch 2 완료 조건
@@ -162,10 +166,10 @@ Last updated: 2026-03-14
 
 ### 먼저 손댈 파일
 
-1. [`app/renderer/types.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/types.ts)
-2. [`src/io/sheets.fetch.js`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/src/io/sheets.fetch.js)
-3. [`src/domain/sheet_domain.py`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/src/domain/sheet_domain.py)
-4. [`app/main/runArtifactStore.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/main/runArtifactStore.ts)
+1. `app/renderer/types.ts` (historical pre-`app_v2` reference)
+2. `src/io/sheets.fetch.js`
+3. `src/domain/sheet_domain.py`
+4. `app/main/runArtifactStore.ts` (historical pre-`app_v2` reference)
 5. 관련 surface 파일
 
 ### Patch 3 완료 조건
@@ -189,9 +193,9 @@ Last updated: 2026-03-14
 
 ### 먼저 손댈 파일
 
-1. [`src/domain/sheet_domain.py`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/src/domain/sheet_domain.py)
-2. [`app/services/inventoryCompare.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/services/inventoryCompare.ts)
-3. [`app/services/reservationAudit.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/services/reservationAudit.ts)
+1. `src/domain/sheet_domain.py`
+2. `app/services/inventoryCompare.ts` (historical pre-`app_v2` reference)
+3. `app/services/reservationAudit.ts` (historical pre-`app_v2` reference)
 4. main IPC / worker bridge 관련 파일
 
 ### Patch 4 완료 조건
@@ -210,15 +214,15 @@ Last updated: 2026-03-14
 - `SearchDocument` 인덱스를 run 단위로 생성
 - unresolved / evidence / anomaly를 같은 corpus에 포함
 - renderer는 query를 보내고 `SearchHit[] + jumpTarget page`만 받음
-- `app/services/searchEngine.ts`는 renderer 순수 계산기 역할을 제거하거나 이동
+- `app/services/searchEngine.ts` (historical pre-`app_v2` reference) 는 renderer 순수 계산기 역할을 제거하거나 이동
 
 ### 먼저 손댈 파일
 
-1. [`app/services/searchEngine.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/services/searchEngine.ts)
+1. `app/services/searchEngine.ts` (historical pre-`app_v2` reference)
 2. main search runtime/worker 파일
-3. [`app/renderer/state/uiStore.ts`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/state/uiStore.ts)
-4. [`app/renderer/components/AppHeader.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/AppHeader.tsx)
-5. [`app/renderer/components/RightPanel.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/RightPanel.tsx)
+3. `app/renderer/state/uiStore.ts` (historical pre-`app_v2` reference)
+4. `app/renderer/components/AppHeader.tsx` (historical pre-`app_v2` reference)
+5. `app/renderer/components/RightPanel.tsx` (historical pre-`app_v2` reference)
 
 ### Patch 5 완료 조건
 
@@ -240,9 +244,9 @@ Last updated: 2026-03-14
 
 ### 먼저 손댈 파일
 
-1. [`app/renderer/components/AppHeader.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/AppHeader.tsx)
-2. [`app/renderer/components/RightPanel.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/RightPanel.tsx)
-3. [`app/renderer/components/TaskWorkspace.tsx`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/app/renderer/components/TaskWorkspace.tsx)
+1. `app/renderer/components/AppHeader.tsx` (historical pre-`app_v2` reference)
+2. `app/renderer/components/RightPanel.tsx` (historical pre-`app_v2` reference)
+3. `app/renderer/components/TaskWorkspace.tsx` (historical pre-`app_v2` reference)
 
 ### Patch 6 완료 조건
 
@@ -282,16 +286,16 @@ Last updated: 2026-03-14
 후속 구현 첫 라운드는 아래 순서로 진행합니다.
 
 1. Patch 1
-- `app/contracts/provider.ts`
-- `app/main/sheetRuntime.ts`
+- `app/contracts/provider.ts` (historical pre-`app_v2` reference)
+- `app/main/sheetRuntime.ts` (historical pre-`app_v2` reference)
 - `src/io/sheets.fetch.js`
-- `app/main/runArtifactStore.ts`
-- `app/main/ipc.ts`
+- `app/main/runArtifactStore.ts` (historical pre-`app_v2` reference)
+- `app/main/ipc.ts` (historical pre-`app_v2` reference)
 
 2. Patch 2
-- `app/renderer/types.ts`
-- `app/renderer/state/uiStore.ts`
-- `app/renderer/components/surfaces/SettingsSurface.tsx`
+- `app/renderer/types.ts` (historical pre-`app_v2` reference)
+- `app/renderer/state/uiStore.ts` (historical pre-`app_v2` reference)
+- `app/renderer/components/surfaces/SettingsSurface.tsx` (historical pre-`app_v2` reference)
 
 3. Patch 3
 - mapping 타입과 unresolved queue 초안

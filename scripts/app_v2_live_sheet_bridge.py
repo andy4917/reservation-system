@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     shared.add_argument("--start-date", required=True)
     shared.add_argument("--end-date", required=True)
     shared.add_argument("--start-row", type=int, default=1)
-    shared.add_argument("--year", type=int, default=2026)
+    shared.add_argument("--year", type=int, default=dt.date.today().year)
     shared.add_argument("--token-file", default=".google_oauth_token.json")
     shared.add_argument("--access-token", default="")
 

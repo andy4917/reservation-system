@@ -20,7 +20,7 @@ import {
   createIdleRead,
   deriveReservationActionAvailability,
   RESERVATION_ACTION_LABELS,
-} from "./mockShellData.js";
+} from "./shellState.js";
 
 const MODULE_LABELS: Record<Exclude<AppShellModule, "settings">, string> = {
   "pms-read": "PMS 조회",
@@ -120,9 +120,6 @@ export default function App() {
   const [reads, setReads] = useState(buildInitialReads("COEX"));
   const [reservationResult, setReservationResult] = useState<AppReservationActionSnapshot | null>(null);
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
-  const [pinOpen, setPinOpen] = useState(false);
-  const [pinValue, setPinValue] = useState("");
-  const [pinError, setPinError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const previousModuleRef = useRef<AppShellModule>("pms-read");
   const previousActionRef = useRef<AppReservationAction>("validate");
@@ -255,12 +252,20 @@ export default function App() {
     }
     setWorkspacePhase("working");
     setBusyKey("login");
-    await new Promise((resolve) => setTimeout(resolve, 220));
-    setIsLoggedIn(true);
-    setBranchSelectionOpen(true);
-    setWorkspacePhase("result");
-    setWorkspaceMessage("WINGS 로그인에 성공했습니다. PMS 조회에 같은 자격을 사용합니다.");
-    setBusyKey(null);
+    try {
+      const hasReadySession = Boolean(preflight?.providers.some((provider) => provider.operatingStatus === "ready"));
+      if (!hasReadySession) {
+        setWorkspacePhase("result");
+        setWorkspaceMessage("직접 로그인 폼은 실제 인증과 연결되어 있지 않습니다. Provider 창에서 세션을 먼저 준비해 주세요.");
+        return;
+      }
+      setIsLoggedIn(true);
+      setBranchSelectionOpen(true);
+      setWorkspacePhase("result");
+      setWorkspaceMessage("기존 provider 세션을 확인했습니다. 입력한 자격 증명은 별도 인증에 사용되지 않습니다.");
+    } finally {
+      setBusyKey(null);
+    }
   }
 
   function handleLogout() {
@@ -321,10 +326,8 @@ export default function App() {
         });
         return;
       }
-      setTimeout(() => {
-        setWorkspacePhase("result");
-        setWorkspaceMessage(`${RESERVATION_ACTION_LABELS[activeReservationAction]} 결과를 준비했습니다.`);
-      }, 220);
+      setWorkspacePhase("result");
+      setWorkspaceMessage("예약 관리 IPC가 연결되지 않았습니다. 결과를 생성하지 않았습니다.");
     } finally {
       setBusyKey(null);
     }
@@ -334,9 +337,8 @@ export default function App() {
     if (module === "settings") {
       previousModuleRef.current = activeModule;
       previousActionRef.current = activeReservationAction;
-      setPinOpen(true);
-      setPinValue("");
-      setPinError("");
+      setSettingsOpen(true);
+      setWorkspaceMessage("설정을 열었습니다.");
       return;
     }
     setActiveModule(module);
@@ -359,17 +361,6 @@ export default function App() {
     setWorkspaceMessage(`${selectedBranch} 작업창으로 이동했습니다.`);
   }
 
-  function confirmSettingsPin() {
-    if (pinValue !== "0000") {
-      setPinError("비밀번호가 맞지 않습니다.");
-      return;
-    }
-    setPinOpen(false);
-    setSettingsOpen(true);
-    setPinError("");
-    setPinValue("");
-  }
-
   function closeSettings() {
     setSettingsOpen(false);
     setActiveModule(previousModuleRef.current);
@@ -380,15 +371,12 @@ export default function App() {
   const reservationAvailability = useMemo(() => deriveReservationActionAvailability(reads), [reads]);
   const activeRead = sourceFromModule(activeModule) ? reads[sourceFromModule(activeModule)!] : null;
   const reviewItems = useMemo(
-    () => buildReviewQueue(selectedBranch, activeReservationAction, reads, windowStart, windowEnd),
-    [activeReservationAction, reads, selectedBranch, windowEnd, windowStart],
+    () => buildReviewQueue(selectedBranch, activeReservationAction, reads, reservationResult, windowStart, windowEnd),
+    [activeReservationAction, reads, reservationResult, selectedBranch, windowEnd, windowStart],
   );
   const selectedReview = reviewItems.find((item) => item.id === selectedReviewId) ?? reviewItems[0] ?? null;
   const previewItems = buildPreviewItems(activeRead, selectedBranch);
-  const actionOutputRows =
-    reservationResult?.action === activeReservationAction && reservationResult.rows.length > 0
-      ? reservationResult.rows
-      : buildActionOutputRows(activeReservationAction, selectedBranch, windowStart, windowEnd);
+  const actionOutputRows = buildActionOutputRows(activeReservationAction, selectedBranch, windowStart, windowEnd, reservationResult);
   const orderedProviders = ["wings-pms", "naver-partner", "admin-station"]
     .map((provider) => providers.find((candidate) => candidate.provider === provider))
     .filter(Boolean) as AppProviderBrowserState[];
@@ -570,7 +558,7 @@ export default function App() {
                   <p className="eyebrow">예약 관리</p>
                   <h3>{buildManagementTitle(activeReservationAction)}</h3>
                   <p className="support-copy">
-                    {reservationResult?.action === activeReservationAction ? reservationResult.summary : buildResultSummary(activeReservationAction, null)}
+                    {buildResultSummary(activeReservationAction, reservationResult)}
                   </p>
                   <div className="detail-panel">{windowStart} ~ {windowEnd} / {selectedBranch}</div>
                   <div className="step-chip-row">
@@ -671,7 +659,7 @@ export default function App() {
                         <div className="detail-panel">source bundle 필요: compare/reconcile/apply 엔진은 준비되었고 PMS/OTA raw source records 연결만 남았습니다.</div>
                       ) : null}
                       {reservationResult?.planToken ? (
-                        <div className="detail-panel">plan token: {reservationResult.planToken}</div>
+                        <div className="detail-panel">승인 토큰이 생성되었습니다. raw 값은 UI에 노출하지 않습니다.</div>
                       ) : null}
                     </div>
                   </div>
@@ -681,29 +669,6 @@ export default function App() {
           </main>
         </div>
       )}
-
-      {pinOpen ? (
-        <div className="overlay">
-          <div className={`pin-modal ${pinError ? "error" : ""}`}>
-            <h3>설정 열기</h3>
-            <input
-              type="password"
-              value={pinValue}
-              onChange={(event) => setPinValue(event.target.value)}
-              maxLength={4}
-            />
-            {pinError ? <p className="pin-error">{pinError}</p> : null}
-            <div className="button-row">
-              <button type="button" onClick={confirmSettingsPin}>
-                확인
-              </button>
-              <button type="button" className="ghost-button" onClick={() => setPinOpen(false)}>
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {settingsOpen ? (
         <div className="overlay overlay-settings">

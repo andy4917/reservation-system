@@ -15,8 +15,8 @@ export function buildPreflightSummary(
   const providerSummary = providers.map((provider) => buildProviderSummaryLine(provider)).join(", ");
   if (!isConfigured) {
     return providerSummary
-      ? `스프레드시트와 시트명을 먼저 저장해야 합니다. provider summary: ${providerSummary}`
-      : "스프레드시트와 시트명을 먼저 저장해야 합니다.";
+      ? `스프레드시트와 시트명 또는 시트 탭을 먼저 저장해야 합니다. provider summary: ${providerSummary}`
+      : "스프레드시트와 시트명 또는 시트 탭을 먼저 저장해야 합니다.";
   }
   return `provider summary: ${providerSummary}`;
 }

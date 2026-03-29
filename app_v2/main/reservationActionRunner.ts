@@ -55,6 +55,40 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function buildStatusRow(
+  id: string,
+  primary: string,
+  secondary: string,
+  statusLabel: string,
+  detail?: string,
+): AppReservationActionRow {
+  return { id, primary, secondary, statusLabel, detail };
+}
+
+function buildErrorRows(input: AppReservationActionInput, message: string): AppReservationActionRow[] {
+  return [
+    buildStatusRow(
+      `${input.action}-error`,
+      `${input.branch} ${input.action} 실행 실패`,
+      message,
+      "ERROR",
+      "runtime-error",
+    ),
+  ];
+}
+
+function buildWaitingRows(input: AppReservationActionInput): AppReservationActionRow[] {
+  return [
+    buildStatusRow(
+      `${input.action}-waiting`,
+      `${input.branch} ${input.action} 실행 대기`,
+      `${input.startDate} ~ ${input.endDate}`,
+      "WAIT",
+      "실제 실행 결과만 표시합니다.",
+    ),
+  ];
+}
+
 function makeEvidence(settingsSummary: AppSettingsSnapshot, excludeRoomMakeup: boolean) {
   const bge = settingsSummary.config?.bgeM3;
   return [
@@ -66,38 +100,6 @@ function makeEvidence(settingsSummary: AppSettingsSnapshot, excludeRoomMakeup: b
     `bgeModelPath:${bge?.modelPath ? "set" : "missing"}`,
     `bgeTopK:${bge?.topK ?? 5}`,
     `bgeThreshold:${bge?.scoreThreshold ?? 0.72}`,
-  ];
-}
-
-function buildMockRows(input: AppReservationActionInput): AppReservationActionRow[] {
-  const branchLabel = input.branch === "COEX" ? "코엑스" : "강남";
-  if (input.action === "compare") {
-    return [
-      { id: "cmp-1", primary: `${branchLabel} PMS ↔ OTA`, secondary: "판매수량 차이 2건", statusLabel: "검토" },
-      { id: "cmp-2", primary: `${branchLabel} OTA ↔ 시트`, secondary: "중복 예약 후보 1건", statusLabel: "주의" },
-    ];
-  }
-  if (input.action === "validate") {
-    return [
-      { id: "val-1", primary: `${branchLabel} 기준 검증`, secondary: `${input.startDate} ~ ${input.endDate}`, statusLabel: "정상" },
-      { id: "val-2", primary: "소프트 매치 후보", secondary: "예약번호 보정 필요 2건", statusLabel: "보조" },
-    ];
-  }
-  if (input.action === "reconcile") {
-    return [
-      { id: "rec-1", primary: `${branchLabel} PMS ↔ 시트`, secondary: "체크인 차이 1건", statusLabel: "대조" },
-      { id: "rec-2", primary: `${branchLabel} PMS ↔ OTA`, secondary: "상태 재동기화 후보", statusLabel: "주의" },
-    ];
-  }
-  if (input.action === "edit") {
-    return [
-      { id: "edit-1", primary: "수정 대기", secondary: "권장 수정 3건", statusLabel: "편집" },
-      { id: "edit-2", primary: "BGE-M3 보조", secondary: "후보 정렬 준비", statusLabel: "AI" },
-    ];
-  }
-  return [
-    { id: "apply-1", primary: "반영 전 점검", secondary: `${input.startDate} ~ ${input.endDate}`, statusLabel: "확인" },
-    { id: "apply-2", primary: "반영 대기", secondary: "승인 대상 2건", statusLabel: "실행" },
   ];
 }
 
@@ -222,13 +224,6 @@ async function runManagementBridge(
   }
   for (const sheetName of sheetNames) {
     args.push("--sheet-name", sheetName);
-  }
-  const sourceFixturePath = process.env.APP_V2_SOURCE_FIXTURE_JSON?.trim() ?? "";
-  if (sourceFixturePath) {
-    args.push("--source-fixture", sourceFixturePath);
-  }
-  if (process.env.APP_V2_FIXTURE_MODE === "1") {
-    args.push("--fixture-mode");
   }
   if (input.approvePlanToken?.trim()) {
     args.push("--approve-plan-token", input.approvePlanToken.trim());
@@ -384,6 +379,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
         applyAllowed: payload.applyAllowed ?? false,
       };
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       return {
         action: input.action,
         branch: input.branch,
@@ -392,10 +388,9 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
         checkedAt: nowIso(),
         status: "error",
         summary: `${input.branch} ${input.action} 엔진 실행에 실패했습니다.`,
-        evidence: [`error:${error instanceof Error ? error.message : String(error)}`],
-        rows: buildMockRows(input),
+        evidence: [`error:${message}`],
+        rows: buildErrorRows(input, message),
         outputPath: null,
-        engineStatus: "fallback",
         issueCount: 0,
         planToken: "",
         requiresApproval: false,
@@ -434,6 +429,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
         };
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       return {
         action: input.action,
         branch: input.branch,
@@ -442,8 +438,8 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
         checkedAt: nowIso(),
         status: "error",
         summary: `${input.branch} ${input.action} 라이브 검토에 실패했습니다.`,
-        evidence: [`error:${error instanceof Error ? error.message : String(error)}`],
-        rows: buildMockRows(input),
+        evidence: [`error:${message}`],
+        rows: buildErrorRows(input, message),
         outputPath: null,
       };
     }
@@ -458,7 +454,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
     status: "done",
     summary: `${input.branch} ${input.action} 작업 결과를 준비했습니다.`,
     evidence: [`window:${input.startDate}..${input.endDate}`, ...makeEvidence(settingsSnapshot, input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false)],
-    rows: buildMockRows(input),
+    rows: buildWaitingRows(input),
     outputPath: null,
   };
 }

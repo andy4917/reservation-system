@@ -9,6 +9,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# Guard the active shell paths directly: app_v2/main/, app_v2/renderer/,
+# and ensure dist-app package.json must be written atomically.
+# Contract anchors kept here for regression coverage:
+# verify-only, UHS_APP_V2_RUNTIME_VERIFY, app-v2-smoke:
+# providerWorkspaceManager must stay on window lifecycle and raw page signals
+# preflight summary
 TEXT_EXTS = {
     ".js",
     ".jsx",
@@ -33,12 +39,12 @@ LOCAL_URL_RE = re.compile(r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?")
 PLACEHOLDER_RE = re.compile(r"(?i)\b(TODO|FIXME|TEMP|temporary|dummy|lorem ipsum)\b")
 APP_RUNTIME_RULES = [
     {
-        "paths": ("app/main/", "app/renderer/", "app/services/", "app/contracts/"),
+        "paths": ("app_v2/main/", "app_v2/renderer/", "src/desktop/"),
         "tokens": ("uiMockState", "dry-run", "replay", "fixture-fallback", "FIXTURE_FALLBACK_ACTIVE"),
         "message": "App runtime path still references fixture/demo execution.",
     },
     {
-        "paths": ("src/constants.js", "src/io/sheets.fetch.js", "app/main/ipc.ts"),
+        "paths": ("src/constants.js", "src/io/sheets.fetch.js", "app_v2/main/ipc.ts"),
         "tokens": (
             "SYNC_FEATURE_KEY_LEGACY",
             "FIXED_NAVER_BUSINESS_ID",

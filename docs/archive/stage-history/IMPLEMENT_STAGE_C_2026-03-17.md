@@ -13,8 +13,8 @@
 ## Source Of Truth
 
 - `docs/archive/stage-history/SHEET_MAPPING_SEARCH_GPT_HANDOFF_2026-03-17.md`
-- `docs/architecture/SHEET_MAPPING_SEARCH_BASELINE.md`
-- `docs/architecture/SHEET_MAPPING_SEARCH_EXECUTION_CHECKLIST.md`
+- `docs/archive/stage-history/SHEET_MAPPING_SEARCH_BASELINE.md`
+- `docs/archive/stage-history/SHEET_MAPPING_SEARCH_EXECUTION_CHECKLIST.md`
 - `docs/runtime/PLAN.md`
 - `docs/runtime/TASK_STATE.md`
 - `NEXT_STAGE_CONTRACT.yaml`

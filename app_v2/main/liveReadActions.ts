@@ -232,24 +232,11 @@ export async function runPmsRead(input: AppLiveReadInput): Promise<AppLiveReadSn
     return buildError("pms", input.branch, readiness.reason, readiness.evidence);
   }
   const settingsEvidence = await buildSettingsEvidence();
-  return {
-    source: "pms",
-    branch: input.branch,
-    checkedAt: nowIso(),
-    status: "done",
-    summary: `${input.branch} PMS 조회는 현재 세션 준비 상태만 확인합니다.`,
-    recordsImported: 0,
-    blockedReason: null,
-    items: [
-      {
-        id: `pms-ready:${input.branch}`,
-        title: "WINGS 세션 준비",
-        subtitle: `${input.startDate} ~ ${input.endDate} 실조회 연결 전 readiness 확인`,
-        statusLabel: "READY",
-      },
-    ],
-    evidence: [...readiness.evidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
-  };
+  return buildError("pms", input.branch, "PMS 라이브 조회는 아직 연결되지 않았습니다.", [
+    ...readiness.evidence,
+    `window:${input.startDate}..${input.endDate}`,
+    ...settingsEvidence,
+  ]);
 }
 
 export async function runOtaRead(input: AppLiveReadInput): Promise<AppLiveReadSnapshot> {
@@ -259,24 +246,12 @@ export async function runOtaRead(input: AppLiveReadInput): Promise<AppLiveReadSn
     return buildError("ota", input.branch, "OTA 세션이 준비되지 않았습니다.", [...naver.evidence, ...station.evidence]);
   }
   const settingsEvidence = await buildSettingsEvidence();
-  return {
-    source: "ota",
-    branch: input.branch,
-    checkedAt: nowIso(),
-    status: "done",
-    summary: `${input.branch} OTA 조회는 현재 세션 준비 상태만 확인합니다.`,
-    recordsImported: 0,
-    blockedReason: null,
-    items: [
-      {
-        id: `ota-ready:${input.branch}`,
-        title: "OTA 세션 준비",
-        subtitle: `${input.startDate} ~ ${input.endDate} live adapter 연결 전 readiness 확인`,
-        statusLabel: "READY",
-      },
-    ],
-    evidence: [...naver.evidence, ...station.evidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
-  };
+  return buildError("ota", input.branch, "OTA 라이브 조회는 아직 연결되지 않았습니다.", [
+    ...naver.evidence,
+    ...station.evidence,
+    `window:${input.startDate}..${input.endDate}`,
+    ...settingsEvidence,
+  ]);
 }
 
 export async function runSheetRead(input: AppLiveReadInput): Promise<AppLiveReadSnapshot> {

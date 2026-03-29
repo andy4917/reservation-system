@@ -24,6 +24,22 @@ function main() {
   const preload = read(root, "app_v2/main/preload.ts");
   assert.doesNotMatch(preload, /authBundle|HAR|bridge fallback|legacy fallback/);
 
+  const liveRead = read(root, "app_v2/main/liveReadActions.ts");
+  assert.doesNotMatch(liveRead, /현재 세션 준비 상태만 확인/);
+  assert.doesNotMatch(liveRead, /live adapter 연결 전 readiness 확인/);
+  assert.doesNotMatch(liveRead, /실조회 연결 전 readiness 확인/);
+
+  const runner = read(root, "app_v2/main/reservationActionRunner.ts");
+  assert.doesNotMatch(runner, /APP_V2_FIXTURE_MODE|APP_V2_SOURCE_FIXTURE_JSON/);
+
+  const preflight = read(root, "app_v2/main/preflight.ts");
+  assert.doesNotMatch(preflight, /시트명을 먼저 저장/);
+
+  const settingsStore = read(root, "app_v2/main/settingsStore.ts");
+  assert.doesNotMatch(settingsStore, /coexMain\) \|\| "코엑스"/);
+  assert.doesNotMatch(settingsStore, /coexAnnex\) \|\| "코엑스2"/);
+  assert.doesNotMatch(settingsStore, /gangnam\) \|\| "강남"/);
+
   const main = read(root, "app_v2/main/main.ts");
   assert.doesNotMatch(main, /UHS_APP_V2_RUNTIME_PROBE/);
   assert.doesNotMatch(main, /UHS_APP_V2_SMOKE_TEST/);
@@ -50,6 +66,11 @@ function main() {
   assert.match(guardrails, /app-v2-smoke:/);
   assert.match(guardrails, /providerWorkspaceManager must stay on window lifecycle and raw page signals/i);
   assert.match(guardrails, /preflight\s+summary/i);
+
+  const liveSheetBridge = read(root, "scripts/app_v2_live_sheet_bridge.py");
+  const managementBridge = read(root, "scripts/app_v2_reservation_management_bridge.py");
+  assert.doesNotMatch(liveSheetBridge, /default=2026/);
+  assert.doesNotMatch(managementBridge, /default=2026/);
 
   const operatingContract = read(root, "docs/architecture/APP_V2_OPERATING_CONTRACT.md");
   assert.match(operatingContract, /Electron main is the source of truth/i);

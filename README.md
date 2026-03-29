@@ -4,8 +4,9 @@
 
 가장 먼저 읽을 문서:
 
-- 제품 정의 / 왜 만드는지 / v1 범위: [`docs/architecture/APP_PRODUCT_OPERATING_MODEL.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/APP_PRODUCT_OPERATING_MODEL.md)
-- 재구현 순서 / 운영 경로 중심 로드맵: [`docs/architecture/APP_IMPLEMENTATION_ROADMAP.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/APP_IMPLEMENTATION_ROADMAP.md)
+- 제품 정의 / 왜 만드는지 / v1 범위: `docs/architecture/APP_PRODUCT_OPERATING_MODEL.md`
+- 재구현 순서 / 운영 경로 중심 로드맵: `docs/architecture/APP_IMPLEMENTATION_ROADMAP.md`
+- 현재 앱 경계 규칙: `docs/architecture/APP_V2_OPERATING_CONTRACT.md`
 
 ## 문서 구조
 
@@ -13,10 +14,13 @@
 - 아키텍처/전환 문서: `docs/architecture/`
 - 시트 문서: `docs/sheets/`
 - 연동 문서: `docs/integrations/`
+- 이전 단계 설계/기록 보관: `docs/archive/`
 - 작업 인계/세션 메모: `tasks/handoffs/`
 
 아키텍처 참고:
 - 제품/운영 기준선: `docs/architecture/APP_PRODUCT_OPERATING_MODEL.md`
+- 운영 재개 순서: `docs/architecture/APP_IMPLEMENTATION_ROADMAP.md`
+- 현재 앱 경계 규칙: `docs/architecture/APP_V2_OPERATING_CONTRACT.md`
 - OTA Adapter Layer: `docs/integrations/OTA_ADAPTER_LAYER.md`
   - 운영 모드: NAVER 직접 API, BOOKING/AGODA/TRIP/AIRBNB는 WINGS HAR 기반
 - Inventory Planner: `docs/integrations/INVENTORY_PLANNER.md`
@@ -70,7 +74,7 @@ python3.10 setup.py build_ext --inplace
 
 ## 현재 주요 축
 
-- 데스크톱 앱 실행 폴더: `app/`
+- 데스크톱 앱 실행 폴더: `app_v2/`
 - 브리지 전용 확장:
   - 세션 캡처
   - 현재 탭 context
@@ -79,10 +83,10 @@ python3.10 setup.py build_ext --inplace
 
 ## 앱 실행
 
-`app/` 폴더에서 바로 실행합니다.
+`app_v2/` 폴더에서 바로 실행합니다.
 
 ```bash
-cd app
+cd app_v2
 npm start
 ```
 
@@ -105,7 +109,7 @@ npm start
 
 주의:
 - 현재 확장은 메인 작업 UI가 아니라 브리지 역할만 담당합니다.
-- 메인 사용자 플로우는 `app/` 아래 데스크톱 앱 런타임으로 이동 중입니다.
+- 메인 사용자 플로우는 `app_v2/` 아래 데스크톱 앱 런타임으로 이동했습니다.
 
 ## SSO 세션 재사용 / 인증 번들
 

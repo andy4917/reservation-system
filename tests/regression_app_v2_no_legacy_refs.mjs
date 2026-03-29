@@ -34,6 +34,7 @@ function main() {
   });
 
   const removedLegacyFiles = [
+    "app_v2/renderer/mockShellData.ts",
     "scripts/live_read_verify.mjs",
     "scripts/live_sheet_verify.mjs",
     "scripts/dryrun_wings_live_flow.mjs",

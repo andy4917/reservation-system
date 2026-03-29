@@ -32,9 +32,12 @@ function main() {
   assert.match(appSource, /반영/);
   assert.match(appSource, /오더리스트/);
   assert.match(appSource, /어라이벌/);
-  assert.match(appSource, /0000/);
   assert.match(appSource, /BGE-M3/);
   assert.match(appSource, /COEX|GANGNAM/);
+  assert.doesNotMatch(appSource, /0000/);
+  assert.doesNotMatch(appSource, /mockShellData/);
+  assert.doesNotMatch(appSource, /setTimeout\(/);
+  assert.doesNotMatch(appSource, /로그인에 성공했습니다\. PMS 조회에 같은 자격을 사용합니다\./);
 
   assert.match(preload, /runPmsRead/);
   assert.match(preload, /runOtaRead/);

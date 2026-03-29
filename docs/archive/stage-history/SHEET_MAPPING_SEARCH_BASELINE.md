@@ -6,7 +6,11 @@ Last updated: 2026-03-14
 
 이 주제에서 구현 판단이 갈릴 때는 이 문서를 우선합니다.
 
-실행 체크리스트와 파일별 착수 순서는 [`SHEET_MAPPING_SEARCH_EXECUTION_CHECKLIST.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/SHEET_MAPPING_SEARCH_EXECUTION_CHECKLIST.md) 를 따릅니다.
+실행 체크리스트와 파일별 착수 순서는 `docs/archive/stage-history/SHEET_MAPPING_SEARCH_EXECUTION_CHECKLIST.md` 를 따릅니다.
+
+주의:
+- 아래의 세부 파일 예시는 `app_v2` 전환 이전 설계 논의를 포함합니다.
+- 현재 활성 런타임 경계는 `docs/architecture/APP_IMPLEMENTATION_ROADMAP.md` 와 `docs/architecture/APP_V2_OPERATING_CONTRACT.md` 를 우선합니다.
 
 ## 1. 이 문서가 고정하는 것
 

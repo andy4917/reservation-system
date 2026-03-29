@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-date", required=True)
     parser.add_argument("--end-date", required=True)
     parser.add_argument("--start-row", type=int, default=1)
-    parser.add_argument("--year", type=int, default=2026)
+    parser.add_argument("--year", type=int, default=dt.date.today().year)
     parser.add_argument("--token-file", default=".google_oauth_token.json")
     parser.add_argument("--access-token", default="")
     parser.add_argument("--fixture-mode", action="store_true")

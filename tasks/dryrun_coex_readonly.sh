@@ -8,8 +8,13 @@ START_DATE="${1:-$(date +%Y-%m-%d)}"
 END_DATE="${2:-$(date -d "$START_DATE +7 day" +%Y-%m-%d)}"
 RUN_TAG="${3:-$(date +%Y%m%d_%H%M%S)}"
 
-STATION_HAR="${STATION_HAR:-/mnt/c/Users/anise/OneDrive/바탕 화면/admin.admin-stationbyuhc.com coex.har}"
-PMS_HAR="${PMS_HAR:-/mnt/c/Users/anise/OneDrive/바탕 화면/pms.sanhait.com.ACCOUNT coex.har}"
+STATION_HAR="${STATION_HAR:-}"
+PMS_HAR="${PMS_HAR:-}"
+
+if [[ -z "$STATION_HAR" || -z "$PMS_HAR" ]]; then
+  echo "Set STATION_HAR and PMS_HAR before running this dry-run." >&2
+  exit 2
+fi
 
 SYNC_OUT="output_review/live_sync_station_coex_${RUN_TAG}"
 ANALYZE_OUT="output_review/live_analyze_sheet_vs_wings_coex_scope_${RUN_TAG}"

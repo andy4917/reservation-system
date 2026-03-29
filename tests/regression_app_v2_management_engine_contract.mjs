@@ -16,13 +16,14 @@ function main() {
 
   assert.doesNotMatch(contracts, /\bmock\b/);
   assert.doesNotMatch(runner, /\bmock\b/);
+  assert.doesNotMatch(runner, /buildMockRows/);
   assert.match(contracts, /planToken/);
   assert.match(contracts, /requiresApproval/);
   assert.match(contracts, /applyAllowed/);
   assert.match(runner, /app_v2_reservation_management_bridge\.py/);
   assert.match(runner, /engineStatus/);
   assert.match(runner, /planToken/);
-  assert.match(appSource, /plan token/);
+  assert.doesNotMatch(appSource, /plan token/i);
   assert.match(appSource, /source bundle 필요/);
 
   console.log("regression_app_v2_management_engine_contract: OK");
