@@ -1,5 +1,10 @@
 # 예약 통합관리 앱 제품 정의 및 운영 모델
 
+Canonical design authority:
+
+- Top-level design source has moved to [`APP_SINGLE_SOURCE_BLUEPRINT.md`](./APP_SINGLE_SOURCE_BLUEPRINT.md).
+- This document remains valid as product rationale and operating-model background, but it is no longer the single top-level design authority.
+
 Last updated: 2026-03-18
 
 ## 1. 왜 이 앱을 만드는가

@@ -2,7 +2,8 @@
 
 기준 문서:
 
-- [`APP_PRODUCT_OPERATING_MODEL.md`](./APP_PRODUCT_OPERATING_MODEL.md)
+- [`APP_SINGLE_SOURCE_BLUEPRINT.md`](./APP_SINGLE_SOURCE_BLUEPRINT.md)
+- [`APP_V2_OPERATING_CONTRACT.md`](./APP_V2_OPERATING_CONTRACT.md)
 
 이 로드맵은 기능 나열이 아니라 `실제 운영 경로가 성립되는 순서`로 정렬한다.
 
