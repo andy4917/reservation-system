@@ -9,7 +9,14 @@ import type {
   AppReservationActionSnapshot,
   AppSettingsSnapshot,
 } from "../../src/desktop/app-v2-contracts.js";
-import { describeEmbeddingAvailability, scoreTextPairs } from "./embeddingRuntime.js";
+import { getAppBranchOption } from "../../src/desktop/app-v2-contracts.js";
+import { describeEmbeddingAvailability } from "./embeddingRuntime.js";
+import {
+  buildHybridCandidateDecisions,
+  type HybridCandidatePair,
+  type HybridDecision,
+  type HybridSearchBundle,
+} from "./hybridCandidateEngine.js";
 import { loadSettingsSnapshot } from "./settingsStore.js";
 
 const PYTHON_COMMAND = process.env.PYTHON_BIN || "python3";
@@ -22,15 +29,29 @@ interface ContinuationCandidate {
   departureText: string;
   arrivalText: string;
   noteHead: string;
+  departureReservationNo?: string;
+  arrivalReservationNo?: string;
+  sameReservationNo?: boolean;
+  sameGuestName?: boolean;
+  samePhone?: boolean;
+  departureChannel?: string;
+  arrivalChannel?: string;
+  noteSignature?: string;
+  packageMarkers?: string[];
+  roomChangeBlocker?: boolean;
+  candidateFeatures?: string[];
+  contradictionFlags?: string[];
 }
 
 interface OpsBridgePayload {
   branch: AppBranch;
   checkedAt: string;
   reservationBlocks: number;
+  windowReservationBlocks?: number;
   orderlistRows: number;
   arrivalRows: number;
   continuationCandidates: ContinuationCandidate[];
+  searchBundles?: HybridSearchBundle[];
   items: Array<{ id: string; title: string; subtitle: string; statusLabel: string }>;
   evidence: string[];
   error?: string;
@@ -154,7 +175,10 @@ function runPythonScript(args: string[], cwd: string) {
 function resolveSheetNames(branch: AppBranch, settingsSnapshot: AppSettingsSnapshot) {
   const tabs = settingsSnapshot.config?.sheetTabs;
   if (tabs) {
-    return branch === "COEX" ? [tabs.coexMain, tabs.coexAnnex].filter(Boolean) : [tabs.gangnam].filter(Boolean);
+    if (branch === "COEX") return [tabs.coexMain, tabs.coexAnnex].filter(Boolean);
+    if (branch === "GANGNAM") return [tabs.gangnam].filter(Boolean);
+    if (branch === "SEOLLEUNG") return [tabs.seolleung].filter(Boolean);
+    return [tabs.samsung].filter(Boolean);
   }
   return settingsSnapshot.config?.sheetName ? [settingsSnapshot.config.sheetName] : [];
 }
@@ -247,9 +271,9 @@ async function runLiveOpsPreview(
   const tableRaw = await fs.readFile(tsvPath, "utf8");
   const total = input.action === "order-list" ? payload.orderlistRows : payload.arrivalRows;
   const excludeRoomMakeup = input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false;
-  const scores = await buildEmbeddingScores(settingsSnapshot, payload);
+  const decisions = await buildHybridDecisionsForOps(settingsSnapshot, payload);
   const availability = describeEmbeddingAvailability(settingsSnapshot);
-  const aiReview = buildOpsAiReviewRows(parseTabularRows(tableRaw, input.action), payload, scores);
+  const aiReview = buildOpsAiReviewRows(parseTabularRows(tableRaw, input.action), decisions);
   return {
     action: input.action,
     branch: input.branch,
@@ -267,6 +291,8 @@ async function runLiveOpsPreview(
       `rows:${total}`,
       `embedding:${availability.reason}`,
       `scoredRows:${aiReview.scoredRows}`,
+      `recommendEdit:${aiReview.recommendEditRows}`,
+      `abstain:${aiReview.abstainRows}`,
       ...payload.evidence,
       ...makeEvidence(settingsSnapshot, excludeRoomMakeup),
     ],
@@ -275,80 +301,111 @@ async function runLiveOpsPreview(
   };
 }
 
-function buildContinuationRows(
-  input: AppReservationActionInput,
-  payload: OpsBridgePayload,
-  scores: Array<{ id: string; score: number }>,
-): AppReservationActionRow[] {
-  const scoreMap = new Map(scores.map((item) => [item.id, item.score]));
-  return payload.continuationCandidates.slice(0, 8).map((candidate, index) => {
-    const similarity = scoreMap.get(candidate.id);
-    const similarityLabel = typeof similarity === "number" ? ` / sim ${similarity.toFixed(2)}` : "";
-    const statusLabel =
-      input.action === "edit"
-        ? typeof similarity === "number" && similarity >= 0.9
-          ? "AI 추천"
-          : "AI 검토"
-        : typeof similarity === "number" && similarity >= 0.9
-          ? "추천"
-          : "검토";
-    return {
-      id: `${input.action}-${index}`,
-      primary: `${candidate.roomNo} / ${candidate.date}`,
-      secondary: [candidate.basis || "continuation", candidate.departureText, candidate.arrivalText]
-        .filter(Boolean)
-        .join(" · "),
-      statusLabel,
-      detail: `${candidate.noteHead || "note-missing"}${similarityLabel}`,
-    };
-  });
-}
-
-async function buildEmbeddingScores(
-  settingsSnapshot: AppSettingsSnapshot,
-  payload: OpsBridgePayload,
-) {
-  if (payload.continuationCandidates.length === 0) return [];
-  return scoreTextPairs(
-    settingsSnapshot,
-    payload.continuationCandidates.map((candidate) => ({
-      id: candidate.id,
-      left: candidate.departureText || candidate.noteHead || candidate.roomNo,
-      right: candidate.arrivalText || candidate.noteHead || candidate.roomNo,
-    })),
-  );
+function buildOpsBundle(branch: AppBranch, candidate: ContinuationCandidate, side: "left" | "right"): HybridSearchBundle {
+  const reservationNo = side === "left" ? candidate.departureReservationNo || candidate.departureText : candidate.arrivalReservationNo || candidate.arrivalText;
+  const channel = side === "left" ? candidate.departureChannel || "" : candidate.arrivalChannel || "";
+  return {
+    id: `${candidate.id}:${side}`,
+    branch,
+    roomNo: candidate.roomNo,
+    reservationNo,
+    reservationKey: reservationNo,
+    guestName: "",
+    phone: "",
+    channel,
+    checkin: side === "left" ? candidate.date : candidate.date,
+    checkout: side === "left" ? candidate.date : candidate.date,
+    noteHead: candidate.noteHead || "",
+    noteSignature: candidate.noteSignature || candidate.noteHead || "",
+    packageMarkers: candidate.packageMarkers ?? [],
+    roomChangeBlocker: candidate.roomChangeBlocker === true,
+  };
 }
 
 function buildOpsAiReviewRows(
   rows: AppReservationActionRow[],
-  payload: OpsBridgePayload,
-  scores: Array<{ id: string; score: number }>,
+  decisions: HybridDecision[],
 ) {
-  const scoreMap = new Map(scores.map((item) => [item.id, item.score]));
+  const decisionMap = new Map(decisions.map((item) => [item.pair.left.roomNo + ":" + item.pair.left.checkin, item]));
   let scoredRows = 0;
+  let recommendEditRows = 0;
+  let abstainRows = 0;
   const nextRows = rows.map((row) => {
     const [roomNo = ""] = row.primary.split(" / ");
     const [date = ""] = row.secondary.split(" · ");
-    const candidate = payload.continuationCandidates.find((item) => item.roomNo === roomNo.trim() && item.date === date.trim());
-    if (!candidate) return row;
-    const similarity = scoreMap.get(candidate.id);
-    const detailParts = [row.detail, `연박 후보 · ${candidate.basis || "continuation"}`];
-    if (typeof similarity === "number") {
-      detailParts.push(`sim ${similarity.toFixed(2)}`);
+    const decision = decisionMap.get(`${roomNo.trim()}:${date.trim()}`);
+    if (!decision) return row;
+    const detailParts = [row.detail, `연박 후보 · ${decision.reason}`];
+    if (typeof decision.score === "number") {
+      detailParts.push(`sim ${decision.score.toFixed(2)}`);
       scoredRows += 1;
     }
+    if (decision.state === "recommend-edit") recommendEditRows += 1;
+    if (decision.state === "abstain") abstainRows += 1;
     return {
       ...row,
+      statusLabel:
+        decision.state === "confirm"
+          ? "확정"
+          : decision.state === "recommend-edit"
+            ? "수정 추천"
+            : decision.state === "review"
+              ? "검토"
+              : "보류",
       detail: detailParts.filter(Boolean).join(" / "),
     };
   });
   return {
     rows: nextRows,
     scoredRows,
+    recommendEditRows,
+    abstainRows,
   };
 }
 
+async function buildHybridDecisionsForOps(settingsSnapshot: AppSettingsSnapshot, payload: OpsBridgePayload) {
+  const pairs: HybridCandidatePair[] = payload.continuationCandidates.map((candidate) => ({
+    id: candidate.id,
+    basis: [candidate.basis || "continuation"],
+    left: buildOpsBundle(payload.branch, candidate, "left"),
+    right: buildOpsBundle(payload.branch, candidate, "right"),
+  }));
+  return buildHybridCandidateDecisions(settingsSnapshot, pairs);
+}
+
+function buildContinuationRows(input: AppReservationActionInput, decisions: HybridDecision[]): AppReservationActionRow[] {
+  return decisions.slice(0, 8).map((decision, index) => ({
+    id: `${input.action}-${index}`,
+    primary: `${decision.pair.left.roomNo} / ${decision.pair.left.checkin || decision.pair.right.checkin}`,
+    secondary: [decision.reason, decision.pair.left.reservationNo, decision.pair.right.reservationNo].filter(Boolean).join(" · "),
+    statusLabel:
+      decision.state === "confirm"
+        ? "확정"
+        : decision.state === "recommend-edit"
+          ? "수정 추천"
+          : decision.state === "review"
+            ? "검토"
+            : "보류",
+    detail: [...decision.features.contradictionFlags, decision.pair.left.noteHead].filter(Boolean).join(" / "),
+  }));
+}
+
 export async function runReservationAction(input: AppReservationActionInput): Promise<AppReservationActionSnapshot> {
+  const branchOption = getAppBranchOption(input.branch);
+  if (branchOption.availability !== "active") {
+    return {
+      action: input.action,
+      branch: input.branch,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      checkedAt: nowIso(),
+      status: "error",
+      summary: `${branchOption.label} 지점은 아직 운영 경로가 열리지 않았습니다.`,
+      evidence: [`branch:${input.branch}`, `branchAvailability:${branchOption.availability}`, `branchReason:${branchOption.reason}`],
+      rows: buildErrorRows(input, `${branchOption.label} 지점은 아직 운영 경로가 열리지 않았습니다.`),
+      outputPath: null,
+    };
+  }
   const settingsSnapshot = await loadSettingsSnapshot();
   if (input.action === "order-list" || input.action === "arrival") {
     return runLiveOpsPreview(input, settingsSnapshot);
@@ -403,9 +460,9 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
     try {
       const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "uhs-app-v2-ops-validate-"));
       const payload = await runLiveOpsBridge(input, settingsSnapshot, outDir);
-      const scores = await buildEmbeddingScores(settingsSnapshot, payload);
+      const decisions = await buildHybridDecisionsForOps(settingsSnapshot, payload);
       const availability = describeEmbeddingAvailability(settingsSnapshot);
-      const rows = buildContinuationRows(input, payload, scores);
+      const rows = buildContinuationRows(input, decisions);
       if (rows.length > 0) {
         return {
           action: input.action,
@@ -422,6 +479,8 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
             ...payload.evidence,
             `embedding:${availability.reason}`,
             `continuationCandidates:${payload.continuationCandidates.length}`,
+            `recommendEdit:${decisions.filter((item) => item.state === "recommend-edit").length}`,
+            `abstain:${decisions.filter((item) => item.state === "abstain").length}`,
             ...makeEvidence(settingsSnapshot, input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false),
           ],
           rows,

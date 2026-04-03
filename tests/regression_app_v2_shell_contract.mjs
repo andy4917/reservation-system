@@ -40,6 +40,7 @@ function main() {
     "app_v2/main/mainRuntimeStartup.ts",
     "app_v2/main/preload.ts",
     "app_v2/main/ipc.ts",
+    "app_v2/main/authRequirements.ts",
     "app_v2/main/providerWorkspaceManager.ts",
     "app_v2/main/providerOperatingAdapter.ts",
     "app_v2/main/settingsStore.ts",
@@ -73,6 +74,11 @@ function main() {
   assert.match(sharedContracts, /export interface AppSheetReadinessSnapshot/);
   assert.match(sharedContracts, /export interface AppProviderRawRuntimeSignals/);
   assert.match(sharedContracts, /export interface AppProviderOperatingEvidence/);
+  assert.match(sharedContracts, /export interface AppBranchOption/);
+  assert.match(sharedContracts, /export type AppAuthMode/);
+  assert.match(sharedContracts, /export type AppAuthTarget/);
+  assert.match(sharedContracts, /export interface AppAuthRequirement/);
+  assert.match(sharedContracts, /export const APP_BRANCH_OPTIONS/);
   assert.match(sharedContracts, /rawSignals|operatingEvidence/);
   assert.match(sharedContracts, /providerCookieCount/);
 
@@ -82,12 +88,16 @@ function main() {
   assert.match(preload, /saveSettings/);
   assert.match(preload, /listProviderBrowsers/);
   assert.match(preload, /runPreflight/);
+  assert.match(preload, /listAuthRequirements/);
+  assert.match(preload, /getRuntimeReadiness/);
 
   const ipc = read(root, "app_v2/main/ipc.ts");
   assert.match(ipc, /desktop-app:load-settings/);
   assert.match(ipc, /desktop-app:save-settings/);
   assert.match(ipc, /desktop-app:list-provider-browsers/);
   assert.match(ipc, /desktop-app:run-preflight/);
+  assert.match(ipc, /desktop-app:list-auth-requirements/);
+  assert.match(ipc, /desktop-app:get-runtime-readiness/);
 
   const providerAdapter = read(root, "app_v2/main/providerOperatingAdapter.ts");
   assert.match(providerAdapter, /rawSignals/);

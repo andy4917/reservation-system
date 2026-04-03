@@ -18,6 +18,10 @@ function main() {
   assert.match(bridgeScript, /ops-preview/);
   assert.match(bridgeScript, /exclude-room-makeup/);
   assert.match(bridgeScript, /continuationCandidates|continuation_candidate/);
+  assert.match(bridgeScript, /searchBundles/);
+  assert.match(bridgeScript, /candidateFeatures|contradictionFlags/);
+  assert.match(bridgeScript, /window_blocks = \[block for block in payload\["blocks"\] if overlaps_window\(block, start_date, end_date\)\]/);
+  assert.match(bridgeScript, /"searchBundles": build_search_bundles\(window_blocks\)/);
 
   assert.match(liveRead, /sheetTabs/);
   assert.match(liveRead, /runLiveSheetBridge/);

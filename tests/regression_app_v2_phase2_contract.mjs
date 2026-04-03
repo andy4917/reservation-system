@@ -25,19 +25,26 @@ function main() {
   assert.match(contracts, /endDate/);
   assert.match(contracts, /sheetTabs/);
   assert.match(contracts, /excludeRoomMakeup/);
-  assert.match(appSource, /branchSelectionOpen/);
-
   assert.match(appSource, /오늘부터 5일/);
   assert.match(appSource, /조회 기간/);
   assert.match(appSource, /모델 경로/);
   assert.match(appSource, /로컬 모델 준비/);
   assert.match(appSource, /BGE-M3 설치/);
+  assert.match(appSource, /하이브리드 검색|근거 충돌 시 보류|확정/);
   assert.match(appSource, /오더리스트/);
   assert.match(appSource, /어라이벌/);
-  assert.match(appSource, /로그인 화면으로/);
-  assert.match(appSource, /지점 선택으로 돌아가기/);
   assert.match(appSource, /룸메이크업 제외/);
   assert.match(appSource, /코엑스2/);
+  assert.match(appSource, /환경 인증/);
+  assert.match(appSource, /브라우저 세션 인증/);
+  assert.match(appSource, /Provider 창 열기/);
+  assert.match(appSource, /인증 안내/);
+  assert.match(appSource, /전체 상태 새로고침/);
+  assert.doesNotMatch(appSource, /운영 세션 준비/);
+  assert.doesNotMatch(appSource, /셸로 이동/);
+  assert.doesNotMatch(appSource, /WINGS 계정으로 시작/);
+  assert.doesNotMatch(appSource, /로그인 화면으로/);
+  assert.doesNotMatch(appSource, /직접 로그인 폼은 실제 인증과 연결되어 있지 않습니다/);
 
   assert.match(settingsStore, /hasAnySettings/);
   assert.match(settingsStore, /sheetTabs/);
@@ -49,6 +56,7 @@ function main() {
   assert.match(ipc, /excludeRoomMakeup/);
   assert.match(runner, /embeddingRuntime/);
   assert.match(runner, /excludeRoomMakeup/);
+  assert.match(runner, /recommend-edit|abstain|confirm|review/);
   assert.match(liveRead, /app_v2_live_sheet_bridge.py/);
 
   console.log("regression_app_v2_phase2_contract: OK");

@@ -1,11 +1,12 @@
 export const APP_PROVIDERS = ["wings-pms", "naver-partner", "admin-station"] as const;
-export const APP_BRANCHES = ["COEX", "GANGNAM"] as const;
+export const APP_BRANCHES = ["COEX", "GANGNAM", "SEOLLEUNG", "SAMSUNG"] as const;
 export const APP_SHELL_MODULES = ["pms-read", "ota-read", "sheet-read", "reservation-management", "settings"] as const;
 export const APP_RESERVATION_ACTIONS = ["compare", "validate", "reconcile", "edit", "apply", "order-list", "arrival"] as const;
 export const APP_READ_SOURCES = ["pms", "ota", "sheet"] as const;
 
 export type AppProvider = (typeof APP_PROVIDERS)[number];
 export type AppBranch = (typeof APP_BRANCHES)[number];
+export type AppBranchAvailability = "active" | "inactive";
 export type AppShellModule = (typeof APP_SHELL_MODULES)[number];
 export type AppReservationAction = (typeof APP_RESERVATION_ACTIONS)[number];
 export type AppReadSource = (typeof APP_READ_SOURCES)[number];
@@ -18,6 +19,8 @@ export type AppRuntimeSupportLevel = "offline-preview" | "sheet-live" | "read-li
 export type AppRuntimeGate = "locked" | "open";
 export type AppReadinessBlockingSource = AppProvider | "sheet" | "sheet-auth" | "runtime-error";
 export type AppSheetReadinessStatus = "ready" | "needs-settings" | "invalid-settings" | "needs-auth" | "missing-sheet" | "error";
+export type AppAuthMode = "config-auth" | "session-auth";
+export type AppAuthTarget = "google-sheets" | AppProvider;
 export type AppLiveReadStatus = "idle" | "loading" | "done" | "error";
 export type AppBgeM3Runtime = "local-path" | "download-if-missing";
 export type AppBgeInstallStatus = "ready" | "installed" | "error";
@@ -27,7 +30,23 @@ export interface AppSheetTabSettings {
   coexMain: string;
   coexAnnex: string;
   gangnam: string;
+  seolleung: string;
+  samsung: string;
 }
+
+export interface AppBranchOption {
+  branch: AppBranch;
+  label: string;
+  availability: AppBranchAvailability;
+  reason: string;
+}
+
+export const APP_BRANCH_OPTIONS: readonly AppBranchOption[] = [
+  { branch: "COEX", label: "코엑스", availability: "active", reason: "운영 지점" },
+  { branch: "GANGNAM", label: "강남", availability: "active", reason: "운영 지점" },
+  { branch: "SEOLLEUNG", label: "선릉", availability: "active", reason: "운영 지점" },
+  { branch: "SAMSUNG", label: "삼성", availability: "inactive", reason: "preopen inactive branch" },
+] as const;
 
 export interface AppBgeM3Settings {
   enabled: boolean;
@@ -142,6 +161,18 @@ export interface AppRuntimeVerifySnapshot {
   preflight: AppPreflightSnapshot | null;
 }
 
+export interface AppAuthRequirement {
+  target: AppAuthTarget;
+  label: string;
+  authMode: AppAuthMode;
+  ready: boolean;
+  status: AppSheetReadinessStatus | AppProviderOperatingStatus;
+  summary: string;
+  nextAction: string;
+  hints: string[];
+  evidence: string[];
+}
+
 export interface AppLiveReadInput {
   branch: AppBranch;
   startDate: string;
@@ -208,6 +239,8 @@ export interface DesktopAppApi {
   loadSettings: () => Promise<AppSettingsSnapshot>;
   saveSettings: (input: Partial<AppSettings>) => Promise<AppSettingsSnapshot>;
   installBgeM3Model: () => Promise<AppBgeInstallSnapshot>;
+  listAuthRequirements: () => Promise<AppAuthRequirement[]>;
+  getRuntimeReadiness: (focus: AppRuntimeVerifyFocus) => Promise<AppRuntimeVerifySnapshot>;
   ensureProviderBrowser: (provider: AppProvider) => Promise<AppProviderBrowserState>;
   getProviderBrowserState: (provider: AppProvider) => Promise<AppProviderBrowserState>;
   listProviderBrowsers: () => Promise<AppProviderBrowserState[]>;
@@ -223,4 +256,8 @@ export interface DesktopAppApi {
 
 export function isAppProvider(value: unknown): value is AppProvider {
   return typeof value === "string" && APP_PROVIDERS.includes(value as AppProvider);
+}
+
+export function getAppBranchOption(branch: AppBranch): AppBranchOption {
+  return APP_BRANCH_OPTIONS.find((item) => item.branch === branch) ?? APP_BRANCH_OPTIONS[0];
 }

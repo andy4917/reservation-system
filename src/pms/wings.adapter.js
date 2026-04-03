@@ -85,6 +85,9 @@
     "rsvn_date_t",
     "rsvnDateT"
   ];
+  const ACTIVE_SHARED_BRANCHES = Object.freeze(["COEX", "GANGNAM", "BRANCH_THE_SEOLLEUNG"]);
+  const COEX_ONLY_BRANCHES = Object.freeze(["COEX"]);
+  const GANGNAM_ONLY_BRANCHES = Object.freeze(["GANGNAM"]);
 
   const WINGS_ENDPOINT_DETAILS = Object.freeze([
     Object.freeze({
@@ -93,7 +96,7 @@
       group: "reservation",
       readOnly: true,
       tags: Object.freeze(["lookup", "verification", "ota", "remark", "nationality"]),
-      branches: Object.freeze(["COEX", "GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03_SUM.do",
@@ -101,7 +104,7 @@
       group: "reservation",
       readOnly: true,
       tags: Object.freeze(["summary", "coverage"]),
-      branches: Object.freeze(["COEX", "GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir04_0200X_V03/searchListRsvn.do",
@@ -109,7 +112,7 @@
       group: "reservation",
       readOnly: true,
       tags: Object.freeze(["lookup", "reservation-list"]),
-      branches: Object.freeze(["COEX"])
+      branches: COEX_ONLY_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir01_0102/searchFITReserv.do",
@@ -117,7 +120,7 @@
       group: "reservation",
       readOnly: true,
       tags: Object.freeze(["detail", "guest", "nationality", "remark", "phone"]),
-      branches: Object.freeze(["COEX", "GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/fd01_0101/searchListLinkedReservation.do",
@@ -125,7 +128,7 @@
       group: "reservation",
       readOnly: true,
       tags: Object.freeze(["link", "reservation-graph"]),
-      branches: Object.freeze(["COEX", "GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir01_0300/searchListRoomBlockChart_V03.do",
@@ -133,7 +136,7 @@
       group: "inventory",
       readOnly: true,
       tags: Object.freeze(["room-state", "block-chart", "status"]),
-      branches: Object.freeze(["COEX", "GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir01_0300/searchListRoomAvaiable.do",
@@ -141,7 +144,7 @@
       group: "inventory",
       readOnly: true,
       tags: Object.freeze(["room-availability", "daily-status"]),
-      branches: Object.freeze(["COEX", "GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir02_0100/searchListRoomAvailable.do",
@@ -149,7 +152,7 @@
       group: "inventory",
       readOnly: true,
       tags: Object.freeze(["room-availability", "summary"]),
-      branches: Object.freeze(["COEX", "GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/widget_onlinebookinglist/searchOnlineBookingList.do",
@@ -165,7 +168,7 @@
       group: "guest",
       readOnly: true,
       tags: Object.freeze(["nationality", "language"]),
-      branches: Object.freeze(["COEX", "GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir04/searchListSource.do",
@@ -221,7 +224,7 @@
       group: "reservation",
       readOnly: true,
       tags: Object.freeze(["service", "upsell"]),
-      branches: Object.freeze(["COEX", "GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir01_0111/searchRoomRateOnRsvn.do",
@@ -229,7 +232,7 @@
       group: "reservation",
       readOnly: true,
       tags: Object.freeze(["rate", "reservation"]),
-      branches: Object.freeze(["COEX", "GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir01_0124/searchGuestInfo.do",
@@ -237,7 +240,7 @@
       group: "room_assignment",
       readOnly: true,
       tags: Object.freeze(["guest", "assignment"]),
-      branches: Object.freeze(["GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir01_0124/searchListAssignedRoom.do",
@@ -245,7 +248,7 @@
       group: "room_assignment",
       readOnly: true,
       tags: Object.freeze(["assigned-room", "vacancy"]),
-      branches: Object.freeze(["GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir01_0124/searchListRoom.do",
@@ -253,7 +256,7 @@
       group: "room_assignment",
       readOnly: true,
       tags: Object.freeze(["room-list", "vacancy"]),
-      branches: Object.freeze(["GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir01_0124/searchListRoomTypeByParam.do",
@@ -261,7 +264,7 @@
       group: "room_assignment",
       readOnly: true,
       tags: Object.freeze(["room-type", "assignment"]),
-      branches: Object.freeze(["GANGNAM"])
+      branches: ACTIVE_SHARED_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir01_0124/insertAssignedRoom.do",
@@ -269,7 +272,7 @@
       group: "room_assignment",
       readOnly: false,
       tags: Object.freeze(["mutation", "assigned-room"]),
-      branches: Object.freeze(["GANGNAM"])
+      branches: GANGNAM_ONLY_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir01_0124/deleteAssignedRoom.do",
@@ -277,7 +280,7 @@
       group: "room_assignment",
       readOnly: false,
       tags: Object.freeze(["mutation", "assigned-room"]),
-      branches: Object.freeze(["GANGNAM"])
+      branches: GANGNAM_ONLY_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/ir01_0300_V03/updateReservationProcessExpress.do",
@@ -285,7 +288,7 @@
       group: "reservation",
       readOnly: false,
       tags: Object.freeze(["mutation", "reservation", "express"]),
-      branches: Object.freeze(["COEX"])
+      branches: COEX_ONLY_BRANCHES
     }),
     Object.freeze({
       path: "/pms/biz/comn/sendBookingEngineAPI.do",
@@ -293,7 +296,7 @@
       group: "reservation",
       readOnly: false,
       tags: Object.freeze(["mutation", "booking-engine"]),
-      branches: Object.freeze(["COEX"])
+      branches: COEX_ONLY_BRANCHES
     })
   ]);
   const WINGS_ENDPOINT_CATALOG = Object.freeze(WINGS_ENDPOINT_DETAILS.map((entry) => entry.path));

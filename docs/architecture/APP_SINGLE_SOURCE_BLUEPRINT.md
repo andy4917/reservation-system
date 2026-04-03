@@ -145,6 +145,7 @@ Rules:
 - session-only providers must use runtime session paths
 - `.env` must not be used to fake or replace a human-authenticated browser session when the real source depends on live session state
 - renderer only sees explicit readiness and evidence summaries
+- renderer may launch provider browser windows and show auth guidance, but it must not pretend to collect provider credentials as the primary auth path
 - auth material is never treated as product output
 
 ### 4.5 Evidence and Handoff Layer
@@ -275,6 +276,13 @@ Current implementation also shows the intended layered shape:
 - runtime/provider readiness in `app_v2/main/providerOperatingAdapter.ts`
 - readiness gating in `app_v2/main/runtimeReadiness.ts`
 - live-read orchestration in `app_v2/main/liveReadActions.ts`
+- branch/runtime profile resolution in `app_v2/main/branchRuntimeConfig.ts`
+
+Current branch/runtime scope is:
+
+- active operator branches: `COEX`, `GANGNAM`, `SEOLLEUNG`
+- truth-mapped but runtime-inactive branch: `SAMSUNG`
+- session-auth provider paths: `wings-pms`, `naver-partner`, `admin-station`
 
 ## 10. Reconciliation Gaps
 
@@ -349,7 +357,8 @@ Problem:
 
 Current weakness:
 
-- not all real live read paths are fully closed in production-like runtime conditions
+- real session-auth read paths now exist for PMS, Naver OTA, and Station in Electron main
+- live operator proof for the full external environment is still pending in this checkout state
 
 Final rule:
 
@@ -382,6 +391,15 @@ Must explicitly list for each provider:
 - read capability
 - write capability
 - fallback policy
+
+Current implementation baseline:
+
+| Target | Source type | Auth type | Runtime owner | Readiness signals | Read capability | Write capability | Fallback policy |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Google Sheets | configured API integration | config-auth | config layer + Electron main readiness check | spreadsheet configured, sheet name present, Google token valid | yes | no | fail explicitly when settings or env auth are missing |
+| Wings PMS | browser session surface | session-auth | Electron main provider workspace | expected host/path, provider cookies, non-login route | yes | no | do not replace with `.env`; operator must log in through the app-owned browser window |
+| Naver Partner | browser session surface | session-auth | Electron main provider workspace | expected host/path, non-login route, provider cookies or recognized surface | yes | no | do not replace with `.env`; operator must log in through the app-owned browser window |
+| Station Admin | browser session surface | session-auth | Electron main provider workspace | expected host/path, non-login route | yes | no | do not replace with `.env`; operator must log in through the app-owned browser window |
 
 ### 11.2 Core engine contract
 

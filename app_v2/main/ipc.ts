@@ -5,9 +5,11 @@ import type {
   AppProvider,
   AppReservationAction,
   AppReservationActionInput,
+  AppRuntimeVerifyFocus,
   AppSettings
 } from "../../src/desktop/app-v2-contracts.js";
 import { APP_BRANCHES, isAppProvider } from "../../src/desktop/app-v2-contracts.js";
+import { listAuthRequirements } from "./authRequirements.js";
 import { installBgeM3Model } from "./bgeModelInstaller.js";
 import {
   ensureProviderBrowser,
@@ -20,6 +22,7 @@ import {
 import { runOtaRead, runPmsRead, runSheetRead } from "./liveReadActions.js";
 import { runPreflight } from "./preflight.js";
 import { runReservationAction } from "./reservationActionRunner.js";
+import { evaluateRuntimeReadiness } from "./runtimeReadiness.js";
 import { loadSettingsSnapshot, saveSettings } from "./settingsStore.js";
 
 const { ipcMain } = electron;
@@ -51,6 +54,14 @@ function normalizeSettingsPayload(input: unknown): Partial<AppSettings> {
             gangnam:
               typeof (payload.sheetTabs as Record<string, unknown>).gangnam === "string"
                 ? String((payload.sheetTabs as Record<string, unknown>).gangnam)
+                : "",
+            seolleung:
+              typeof (payload.sheetTabs as Record<string, unknown>).seolleung === "string"
+                ? String((payload.sheetTabs as Record<string, unknown>).seolleung)
+                : "",
+            samsung:
+              typeof (payload.sheetTabs as Record<string, unknown>).samsung === "string"
+                ? String((payload.sheetTabs as Record<string, unknown>).samsung)
                 : "",
           }
         : null,
@@ -95,6 +106,14 @@ function parseDateInput(value: unknown, label: string) {
     throw new Error(`${label} must be YYYY-MM-DD.`);
   }
   return text;
+}
+
+function parseRuntimeVerifyFocus(value: unknown): AppRuntimeVerifyFocus {
+  const focus = typeof value === "string" ? value.trim() : "";
+  if (focus !== "live-read" && focus !== "sheet-live") {
+    throw new Error(`Unsupported runtime verify focus: ${String(value)}`);
+  }
+  return focus as AppRuntimeVerifyFocus;
 }
 
 function parseLiveReadInput(input: unknown): AppLiveReadInput {
@@ -151,6 +170,10 @@ export function registerDesktopAppIpc() {
   ipcMain.handle("desktop-app:load-settings", async () => loadSettingsSnapshot());
   ipcMain.handle("desktop-app:save-settings", async (_event, input: unknown) => saveSettings(normalizeSettingsPayload(input)));
   ipcMain.handle("desktop-app:install-bge-m3-model", async () => installBgeM3Model());
+  ipcMain.handle("desktop-app:list-auth-requirements", async () => listAuthRequirements());
+  ipcMain.handle("desktop-app:get-runtime-readiness", async (_event, focus: unknown) =>
+    evaluateRuntimeReadiness(parseRuntimeVerifyFocus(focus))
+  );
   ipcMain.handle("desktop-app:ensure-provider-browser", async (_event, provider: unknown) => ensureProviderBrowser(parseProvider(provider)));
   ipcMain.handle("desktop-app:get-provider-browser-state", async (_event, provider: unknown) => getProviderBrowserState(parseProvider(provider)));
   ipcMain.handle("desktop-app:list-provider-browsers", async () => listProviderBrowsers());

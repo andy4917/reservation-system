@@ -266,6 +266,14 @@ export async function getProviderBrowserState(provider: AppProvider): Promise<Ap
   return refreshProviderState(provider);
 }
 
+export async function executeProviderReadScript<T>(provider: AppProvider, script: string): Promise<T> {
+  const record = getRecord(provider);
+  if (!record.window || record.window.isDestroyed()) {
+    throw new Error(`${provider} provider window is not available`);
+  }
+  return record.window.webContents.executeJavaScript(script, true) as Promise<T>;
+}
+
 export async function listProviderBrowsers(): Promise<AppProviderBrowserState[]> {
   return Promise.all(APP_PROVIDERS.map((provider) => refreshProviderState(provider)));
 }

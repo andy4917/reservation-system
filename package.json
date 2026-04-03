@@ -15,6 +15,7 @@
     "app:verify:artifacts": "npm run app:build:main && node scripts/app_v2_artifact_check.mjs",
     "app:verify:live-read": "node scripts/app_v2_runtime_verify.mjs --focus live-read",
     "app:verify:sheet-live": "node scripts/app_v2_runtime_verify.mjs --focus sheet-live",
+    "read-live": "node scripts/app_v2_read_live.mjs",
     "app:hygiene:check": "python3 scripts/check_contract_hygiene.py --cwd .",
     "app:check": "tsc -p tsconfig.json --noEmit && npm run app:hygiene:check",
     "extension:contracts:check": "tsc -p tsconfig.extension-contracts.json --noEmit",
@@ -22,6 +23,8 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
+    "flexsearch": "^0.8.212",
+    "json-rules-engine": "^7.3.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.5"

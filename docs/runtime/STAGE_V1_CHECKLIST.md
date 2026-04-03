@@ -1,9 +1,9 @@
 # Stage / V1 Checklist
 
-- updated_at: 2026-03-29T13:27:59+09:00
+- updated_at: 2026-03-31T22:30:00+09:00
 - branch: `work/runtime-update`
-- commit: `8d345e1`
-- scope: read-only live-read mapping core, operator/search surface, and workspace-alignment hygiene for the local Codex checkout
+- commit: `9c4d61a`
+- scope: active branch runtime expansion (`COEX`/`GANGNAM`/`SEOLLEUNG`), Samsung inactive gating, and Electron main session-auth live-read path closure for the local Codex checkout
 
 ## Current Status
 
@@ -16,6 +16,8 @@
 - [x] `LiveReadRunContext`와 main-owned bundle 경로 연결
 - [x] sheet / provider / wings를 공통 coverage로 묶음
 - [x] branch/date scope를 main 기준으로 정리
+- [x] `SEOLLEUNG` 활성 / `SAMSUNG` inactive branch contract 반영
+- [x] PMS / Naver OTA / Station session-auth read path를 Electron main에 연결
 - [ ] 실제 운영 세션으로 `read-live` smoke 확인
 메모: live environment proof is still pending.
 
@@ -52,4 +54,5 @@
 
 ## Next Cut
 1. Restore a live environment and rerun live-read verification.
-2. Keep write/apply as a separate follow-on track unless the product contract changes.
+2. Pin live branch identifiers for `SEOLLEUNG` in truth mapping once verified from runtime evidence.
+3. Keep write/apply as a separate follow-on track unless the product contract changes.

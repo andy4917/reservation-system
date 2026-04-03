@@ -1,5 +1,6 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  AppAuthRequirement,
   AppBranch,
   AppLiveReadSnapshot,
   AppPreflightSnapshot,
@@ -7,9 +8,11 @@ import type {
   AppProviderBrowserState,
   AppReservationAction,
   AppReservationActionSnapshot,
+  AppRuntimeVerifySnapshot,
   AppSettingsSnapshot,
   AppShellModule,
 } from "../../src/desktop/app-v2-contracts.js";
+import { getAppBranchOption } from "../../src/desktop/app-v2-contracts.js";
 import {
   buildActionOutputRows,
   buildActionSteps,
@@ -62,6 +65,20 @@ function providerLabel(provider: AppProvider) {
   return "STATION";
 }
 
+function authModeLabel(mode: AppAuthRequirement["authMode"]) {
+  return mode === "config-auth" ? ".env / 설정" : "브라우저 세션";
+}
+
+function authStatusLabel(status: AppAuthRequirement["status"]) {
+  if (status === "ready") return "준비됨";
+  if (status === "needs-settings") return "설정 필요";
+  if (status === "needs-auth" || status === "needs-login") return "인증 필요";
+  if (status === "attention") return "확인 필요";
+  if (status === "missing-sheet") return "시트 누락";
+  if (status === "invalid-settings") return "설정 오류";
+  return "오류";
+}
+
 function sourceFromModule(module: AppShellModule) {
   if (module === "pms-read") return "pms" as const;
   if (module === "ota-read") return "ota" as const;
@@ -88,14 +105,18 @@ function buildManagementTitle(action: AppReservationAction) {
 }
 
 export default function App() {
+  const [authRequirements, setAuthRequirements] = useState<AppAuthRequirement[]>([]);
   const [settingsSnapshot, setSettingsSnapshot] = useState<AppSettingsSnapshot | null>(null);
   const [providers, setProviders] = useState<AppProviderBrowserState[]>([]);
   const [preflight, setPreflight] = useState<AppPreflightSnapshot | null>(null);
+  const [runtimeReadiness, setRuntimeReadiness] = useState<AppRuntimeVerifySnapshot | null>(null);
   const [spreadsheet, setSpreadsheet] = useState("");
   const [sheetName, setSheetName] = useState("");
   const [sheetTabCoexMain, setSheetTabCoexMain] = useState("코엑스");
   const [sheetTabCoexAnnex, setSheetTabCoexAnnex] = useState("코엑스2");
   const [sheetTabGangnam, setSheetTabGangnam] = useState("강남");
+  const [sheetTabSeolleung, setSheetTabSeolleung] = useState("선릉");
+  const [sheetTabSamsung, setSheetTabSamsung] = useState("삼성");
   const [reportWindowDays, setReportWindowDays] = useState("5");
   const [excludeRoomMakeup, setExcludeRoomMakeup] = useState(false);
   const [flagContinuationCandidates, setFlagContinuationCandidates] = useState(true);
@@ -106,11 +127,7 @@ export default function App() {
   const [bgeScoreThreshold, setBgeScoreThreshold] = useState("0.72");
   const [bgeInstallSummary, setBgeInstallSummary] = useState("BGE-M3 로컬 모델 설치가 필요합니다.");
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [loginId, setLoginId] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<AppBranch>("COEX");
-  const [branchSelectionOpen, setBranchSelectionOpen] = useState(false);
   const [activeModule, setActiveModule] = useState<AppShellModule>("pms-read");
   const [activeReservationAction, setActiveReservationAction] = useState<AppReservationAction>("validate");
   const [workspacePhase, setWorkspacePhase] = useState<WorkspacePhase>("idle");
@@ -123,6 +140,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const previousModuleRef = useRef<AppShellModule>("pms-read");
   const previousActionRef = useRef<AppReservationAction>("validate");
+  const autoOpenedProvidersRef = useRef<Set<AppProvider>>(new Set());
 
   const api = window.desktopApp;
 
@@ -138,6 +156,8 @@ export default function App() {
       setSheetTabCoexMain(snapshot.config?.sheetTabs?.coexMain ?? "코엑스");
       setSheetTabCoexAnnex(snapshot.config?.sheetTabs?.coexAnnex ?? "코엑스2");
       setSheetTabGangnam(snapshot.config?.sheetTabs?.gangnam ?? "강남");
+      setSheetTabSeolleung(snapshot.config?.sheetTabs?.seolleung ?? "선릉");
+      setSheetTabSamsung(snapshot.config?.sheetTabs?.samsung ?? "삼성");
       setReportWindowDays(String(nextWindowDays));
       setExcludeRoomMakeup(snapshot.config?.opsView?.excludeRoomMakeup ?? false);
       setFlagContinuationCandidates(snapshot.config?.opsView?.flagContinuationCandidates ?? true);
@@ -158,6 +178,12 @@ export default function App() {
     startTransition(() => setProviders(nextProviders));
   }
 
+  async function refreshAuthRequirements() {
+    if (!api?.listAuthRequirements) return;
+    const nextRequirements = await api.listAuthRequirements();
+    startTransition(() => setAuthRequirements(nextRequirements));
+  }
+
   async function refreshPreflight() {
     if (!api?.runPreflight) return;
     const snapshot = await api.runPreflight();
@@ -167,9 +193,19 @@ export default function App() {
     });
   }
 
+  async function refreshRuntimeReadiness() {
+    if (!api?.getRuntimeReadiness) return;
+    const snapshot = await api.getRuntimeReadiness("live-read");
+    startTransition(() => {
+      setRuntimeReadiness(snapshot);
+      setPreflight(snapshot.preflight);
+      setProviders(snapshot.preflight?.providers ?? []);
+    });
+  }
+
   async function bootstrap() {
     if (!api) return;
-    await Promise.all([refreshSettings(), refreshProviders(), refreshPreflight()]);
+    await Promise.all([refreshSettings(), refreshProviders(), refreshPreflight(), refreshAuthRequirements(), refreshRuntimeReadiness()]);
   }
 
   useEffect(() => {
@@ -196,6 +232,8 @@ export default function App() {
           coexMain: sheetTabCoexMain,
           coexAnnex: sheetTabCoexAnnex,
           gangnam: sheetTabGangnam,
+          seolleung: sheetTabSeolleung,
+          samsung: sheetTabSamsung,
         },
         opsView: {
           excludeRoomMakeup,
@@ -216,7 +254,7 @@ export default function App() {
       const defaultWindow = buildDefaultWindow(Number(reportWindowDays));
       setWindowStart(defaultWindow.start);
       setWindowEnd(defaultWindow.end);
-      await refreshPreflight();
+      await Promise.all([refreshPreflight(), refreshAuthRequirements(), refreshRuntimeReadiness()]);
     } finally {
       setBusyKey(null);
     }
@@ -245,36 +283,34 @@ export default function App() {
     }
   }
 
-  async function handleLogin() {
-    if (!loginId.trim() || !loginPassword.trim()) {
-      setWorkspaceMessage("WINGS 아이디와 비밀번호를 입력해 주세요.");
-      return;
-    }
+  async function openProviderSession(provider: AppProvider) {
+    if (!api?.openProviderBrowser) return;
+    setBusyKey(`provider:${provider}`);
     setWorkspacePhase("working");
-    setBusyKey("login");
+    setWorkspaceMessage(`${providerLabel(provider)} 브라우저 세션 창을 여는 중입니다.`);
     try {
-      const hasReadySession = Boolean(preflight?.providers.some((provider) => provider.operatingStatus === "ready"));
-      if (!hasReadySession) {
-        setWorkspacePhase("result");
-        setWorkspaceMessage("직접 로그인 폼은 실제 인증과 연결되어 있지 않습니다. Provider 창에서 세션을 먼저 준비해 주세요.");
-        return;
-      }
-      setIsLoggedIn(true);
-      setBranchSelectionOpen(true);
+      await api.openProviderBrowser(provider);
+      await Promise.all([refreshProviders(), refreshPreflight(), refreshAuthRequirements(), refreshRuntimeReadiness()]);
       setWorkspacePhase("result");
-      setWorkspaceMessage("기존 provider 세션을 확인했습니다. 입력한 자격 증명은 별도 인증에 사용되지 않습니다.");
+      setWorkspaceMessage(`${providerLabel(provider)} 창을 열었습니다. 로그인 후 상태를 새로고침해 주세요.`);
     } finally {
       setBusyKey(null);
     }
   }
 
-  function handleLogout() {
-    setIsLoggedIn(false);
-    setBranchSelectionOpen(false);
-    setWorkspacePhase("idle");
-    setWorkspaceMessage("로그인 화면으로 돌아왔습니다.");
-    setReservationResult(null);
-    setSelectedReviewId(null);
+  async function reloadProviderSession(provider: AppProvider) {
+    if (!api?.reloadProviderBrowser) return;
+    setBusyKey(`provider-reload:${provider}`);
+    setWorkspacePhase("working");
+    setWorkspaceMessage(`${providerLabel(provider)} 세션 상태를 다시 확인하는 중입니다.`);
+    try {
+      await api.reloadProviderBrowser(provider);
+      await Promise.all([refreshProviders(), refreshPreflight(), refreshAuthRequirements(), refreshRuntimeReadiness()]);
+      setWorkspacePhase("result");
+      setWorkspaceMessage(`${providerLabel(provider)} 세션 상태를 새로고침했습니다.`);
+    } finally {
+      setBusyKey(null);
+    }
   }
 
   async function runRead(module: Extract<AppShellModule, "pms-read" | "ota-read" | "sheet-read">) {
@@ -297,8 +333,7 @@ export default function App() {
         setWorkspacePhase("result");
         setWorkspaceMessage(result.summary);
       });
-      await refreshPreflight();
-      await refreshProviders();
+      await Promise.all([refreshPreflight(), refreshProviders(), refreshAuthRequirements(), refreshRuntimeReadiness()]);
     } finally {
       setBusyKey(null);
     }
@@ -356,11 +391,6 @@ export default function App() {
     setWorkspaceMessage(`${RESERVATION_ACTION_LABELS[action]} 화면을 준비했습니다.`);
   }
 
-  function confirmBranchSelection() {
-    setBranchSelectionOpen(false);
-    setWorkspaceMessage(`${selectedBranch} 작업창으로 이동했습니다.`);
-  }
-
   function closeSettings() {
     setSettingsOpen(false);
     setActiveModule(previousModuleRef.current);
@@ -368,7 +398,8 @@ export default function App() {
     setWorkspaceMessage("이전 작업으로 돌아왔습니다.");
   }
 
-  const reservationAvailability = useMemo(() => deriveReservationActionAvailability(reads), [reads]);
+  const branchOption = useMemo(() => getAppBranchOption(selectedBranch), [selectedBranch]);
+  const reservationAvailability = useMemo(() => deriveReservationActionAvailability(reads, selectedBranch), [reads, selectedBranch]);
   const activeRead = sourceFromModule(activeModule) ? reads[sourceFromModule(activeModule)!] : null;
   const reviewItems = useMemo(
     () => buildReviewQueue(selectedBranch, activeReservationAction, reads, reservationResult, windowStart, windowEnd),
@@ -380,41 +411,26 @@ export default function App() {
   const orderedProviders = ["wings-pms", "naver-partner", "admin-station"]
     .map((provider) => providers.find((candidate) => candidate.provider === provider))
     .filter(Boolean) as AppProviderBrowserState[];
+  const authBlockingRequirements = authRequirements.filter((item) => !item.ready);
+  const configAuthRequirements = authBlockingRequirements.filter((item) => item.authMode === "config-auth");
+  const sessionAuthRequirements = authBlockingRequirements.filter((item) => item.authMode === "session-auth");
 
   const reservationSteps = buildActionSteps(activeReservationAction, selectedBranch);
 
+  useEffect(() => {
+    const nextProvider = sessionAuthRequirements.find(
+      (item) =>
+        (item.status === "needs-login" || item.status === "attention") &&
+        !autoOpenedProvidersRef.current.has(item.target as AppProvider),
+    );
+    if (!nextProvider) return;
+    autoOpenedProvidersRef.current.add(nextProvider.target as AppProvider);
+    void openProviderSession(nextProvider.target as AppProvider);
+  }, [sessionAuthRequirements]);
+
   return (
     <div className="end-user-shell">
-      {!isLoggedIn ? (
-        <section className="login-shell">
-          <div className="login-panel" data-phase={workspacePhase}>
-            <div>
-              <p className="eyebrow">UHS OPS SHELL</p>
-              <h1>WINGS 계정으로 시작</h1>
-              <p className="support-copy">처음 로그인한 계정은 PMS 조회에도 그대로 사용합니다.</p>
-            </div>
-            <label className="field">
-              <span>WINGS 아이디</span>
-              <input value={loginId} onChange={(event) => setLoginId(event.target.value)} />
-            </label>
-            <label className="field">
-              <span>비밀번호</span>
-              <input
-                type="password"
-                value={loginPassword}
-                onChange={(event) => setLoginPassword(event.target.value)}
-              />
-            </label>
-            <div className="button-row">
-              <button type="button" onClick={() => void handleLogin()} disabled={busyKey !== null}>
-                로그인
-              </button>
-            </div>
-            <div className="login-note">{workspaceMessage}</div>
-          </div>
-        </section>
-      ) : (
-        <div className="shell-frame">
+      <div className="shell-frame">
           <aside className="sidebar">
             <div className="sidebar-block">
               <p className="eyebrow">Branch</p>
@@ -422,15 +438,20 @@ export default function App() {
                 <span>지점 선택</span>
                 <select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value as AppBranch)}>
                   {BRANCH_OPTIONS.map((branch) => (
-                    <option key={branch} value={branch}>
-                      {branch}
+                    <option key={branch.branch} value={branch.branch} disabled={branch.availability !== "active"}>
+                      {branch.label}
                     </option>
                   ))}
                 </select>
               </label>
+              <div className="detail-panel">{branchOption.reason}</div>
               <div className="button-row compact-button-row">
-                <button type="button" className="ghost-button" onClick={() => setBranchSelectionOpen(true)}>
-                  지점 선택으로 돌아가기
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => void Promise.all([refreshAuthRequirements(), refreshRuntimeReadiness(), refreshPreflight()])}
+                >
+                  전체 상태 새로고침
                 </button>
               </div>
             </div>
@@ -474,15 +495,19 @@ export default function App() {
             <button type="button" className="sidebar-button settings-button" onClick={() => handleModuleChange("settings")}>
               설정
             </button>
-            <button type="button" className="sidebar-button ghost-sidebar-button" onClick={handleLogout}>
-              로그인 화면으로
+            <button
+              type="button"
+              className="sidebar-button ghost-sidebar-button"
+              onClick={() => void Promise.all([refreshAuthRequirements(), refreshRuntimeReadiness(), refreshPreflight()])}
+            >
+              인증 상태 새로고침
             </button>
           </aside>
 
           <main className="workspace">
             <header className="workspace-header">
               <div>
-                <p className="workspace-kicker">{selectedBranch}</p>
+                <p className="workspace-kicker">{branchOption.label}</p>
                 <h2>{activeModule === "reservation-management" ? buildManagementTitle(activeReservationAction) : MODULE_LABELS[activeModule as Exclude<AppShellModule, "settings">]}</h2>
               </div>
               <div className="workspace-header-tools">
@@ -505,6 +530,73 @@ export default function App() {
               </div>
             </header>
 
+            <section className="auth-banner">
+              <div className="auth-banner-header">
+                <div>
+                  <p className="eyebrow">인증 안내</p>
+                  <h3>앱은 바로 사용 가능하지만, live-read는 필요한 인증이 준비돼야 열립니다.</h3>
+                </div>
+                <div className="detail-panel">
+                  live-read: {runtimeReadiness?.supportLevel ?? "unknown"} / blocking: {runtimeReadiness?.blockingSources.join(", ") || "-"}
+                </div>
+              </div>
+              {authBlockingRequirements.length === 0 ? (
+                <div className="detail-panel">현재 필요한 추가 인증이 없습니다. 그대로 조회를 진행하면 됩니다.</div>
+              ) : (
+                <div className="auth-card-grid inline-auth-card-grid">
+                  {configAuthRequirements.length > 0 ? <p className="section-title">환경 인증</p> : null}
+                  {configAuthRequirements.map((requirement) => (
+                    <article key={requirement.target} className="auth-card compact-auth-card">
+                      <div className="auth-card-header">
+                        <strong>{requirement.label}</strong>
+                        <span>{authStatusLabel(requirement.status)}</span>
+                      </div>
+                      <div className="detail-panel">{authModeLabel(requirement.authMode)}</div>
+                      <p className="support-copy">{requirement.nextAction}</p>
+                      <div className="auth-chip-row">
+                        {requirement.hints.map((hint) => (
+                          <span key={hint} className="auth-chip">{hint}</span>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                  {sessionAuthRequirements.length > 0 ? <p className="section-title">브라우저 세션 인증</p> : null}
+                  {sessionAuthRequirements.map((requirement) => (
+                    <article key={requirement.target} className="auth-card compact-auth-card">
+                      <div className="auth-card-header">
+                        <strong>{requirement.label}</strong>
+                        <span>{authStatusLabel(requirement.status)}</span>
+                      </div>
+                      <div className="detail-panel">{authModeLabel(requirement.authMode)}</div>
+                      <p className="support-copy">{requirement.nextAction}</p>
+                      <div className="auth-chip-row">
+                        {requirement.evidence.map((item) => (
+                          <span key={item} className="auth-chip">{item}</span>
+                        ))}
+                      </div>
+                      <div className="button-row">
+                        <button
+                          type="button"
+                          onClick={() => void openProviderSession(requirement.target as AppProvider)}
+                          disabled={busyKey !== null}
+                        >
+                          Provider 창 열기
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => void reloadProviderSession(requirement.target as AppProvider)}
+                          disabled={busyKey !== null}
+                        >
+                          상태 새로고침
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
             {activeModule !== "reservation-management" && activeRead ? (
               <section className="workspace-grid" data-phase={workspacePhase}>
                 <article className="hero-card">
@@ -519,7 +611,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => void runRead(activeModule as Extract<AppShellModule, "pms-read" | "ota-read" | "sheet-read">)}
-                      disabled={busyKey !== null}
+                      disabled={busyKey !== null || branchOption.availability !== "active"}
                     >
                       {MODULE_LABELS[activeModule as Extract<AppShellModule, "pms-read" | "ota-read" | "sheet-read">]} 시작
                     </button>
@@ -560,7 +652,7 @@ export default function App() {
                   <p className="support-copy">
                     {buildResultSummary(activeReservationAction, reservationResult)}
                   </p>
-                  <div className="detail-panel">{windowStart} ~ {windowEnd} / {selectedBranch}</div>
+                  <div className="detail-panel">{windowStart} ~ {windowEnd} / {branchOption.label}</div>
                   <div className="step-chip-row">
                     {(Object.keys(RESERVATION_ACTION_LABELS) as AppReservationAction[]).map((action) => (
                       <span
@@ -575,7 +667,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => void executeReservationAction()}
-                      disabled={!reservationAvailability[activeReservationAction].enabled || busyKey !== null}
+                      disabled={!reservationAvailability[activeReservationAction].enabled || busyKey !== null || branchOption.availability !== "active"}
                     >
                       {activeReservationAction === "order-list" || activeReservationAction === "arrival"
                         ? `${RESERVATION_ACTION_LABELS[activeReservationAction]} 생성`
@@ -668,7 +760,6 @@ export default function App() {
             )}
           </main>
         </div>
-      )}
 
       {settingsOpen ? (
         <div className="overlay overlay-settings">
@@ -707,11 +798,20 @@ export default function App() {
                   <input value={sheetTabGangnam} onChange={(event) => setSheetTabGangnam(event.target.value)} />
                 </label>
                 <label className="field">
+                  <span>선릉</span>
+                  <input value={sheetTabSeolleung} onChange={(event) => setSheetTabSeolleung(event.target.value)} />
+                </label>
+                <label className="field">
+                  <span>삼성</span>
+                  <input value={sheetTabSamsung} onChange={(event) => setSheetTabSamsung(event.target.value)} />
+                </label>
+                <label className="field">
                   <span>기본 조회 기간(일)</span>
                   <input value={reportWindowDays} onChange={(event) => setReportWindowDays(event.target.value)} />
                 </label>
                 <div className="detail-panel">사용자 기본값은 오늘부터 {reportWindowDays || "5"}일 범위로 열립니다.</div>
-                <div className="detail-panel">COEX는 {sheetTabCoexMain} + {sheetTabCoexAnnex}, 강남은 {sheetTabGangnam} 탭을 읽습니다.</div>
+                <div className="detail-panel">COEX는 {sheetTabCoexMain} + {sheetTabCoexAnnex}, 강남은 {sheetTabGangnam}, 선릉은 {sheetTabSeolleung} 탭을 읽습니다.</div>
+                <div className="detail-panel">삼성은 preopen 상태로 유지되며 truth mapping 대상만 유지합니다.</div>
                 <div className="button-row">
                   <button type="button" onClick={() => void saveSettings()} disabled={busyKey !== null}>
                     저장
@@ -737,7 +837,8 @@ export default function App() {
                   />
                   <span>연박 후보 표시</span>
                 </label>
-                <div className="detail-panel">예약번호, 예약키, 이름, 노트 겹침을 기준으로 연박 후보를 read-only로 표시합니다.</div>
+                <div className="detail-panel">하이브리드 검색이 예약번호, 예약키, 이름, 연락처, 채널, 노트 겹침, 날짜 인접성을 함께 사용해 연박 후보를 찾습니다.</div>
+                <div className="detail-panel">결과 단계는 확정 / 수정 추천 / 검토 / 보류이며, 근거 충돌 시 보류로 남깁니다.</div>
                 <div className="button-row">
                   <button type="button" onClick={() => void saveSettings()} disabled={busyKey !== null}>
                     옵션 저장
@@ -748,7 +849,8 @@ export default function App() {
               <article className="settings-section">
                 <h4>BGE-M3 보조 설정</h4>
                 <p className="support-copy">매핑/추천 보조 모델은 BGE-M3를 기본값으로 사용합니다.</p>
-                <div className="detail-panel">시트 조회, 검증, 오더리스트, 어라이벌에서 추천 후보와 검토 후보를 read-only로 정렬합니다.</div>
+                <div className="detail-panel">시트 조회, 검증, 오더리스트, 어라이벌에서 하이브리드 검색이 후보를 만들고 BGE-M3가 규칙 근거가 정리된 후보만 보조 정렬합니다.</div>
+                <div className="detail-panel">BGE-M3는 충돌 근거를 무시하지 않으며, 약한 근거는 보류로 남깁니다.</div>
                 <label className="field">
                   <span>사용 여부</span>
                   <select value={bgeEnabled ? "on" : "off"} onChange={(event) => setBgeEnabled(event.target.value === "on")}>
@@ -779,7 +881,7 @@ export default function App() {
                   <span>Score Threshold</span>
                   <input value={bgeScoreThreshold} onChange={(event) => setBgeScoreThreshold(event.target.value)} />
                 </label>
-                <div className="detail-panel">로컬 모델 준비: 1. 경로 입력 2. 활성화 3. 저장 4. 수정/검토 단계에서 보조 상태 확인</div>
+                <div className="detail-panel">로컬 모델 준비: 1. 경로 입력 2. 활성화 3. 저장 4. 하이브리드 검색 결과에서 수정 추천/검토/보류 상태 확인</div>
                 <div className="detail-panel">Xenova/bge-m3 / {bgeRuntime} / {bgeModelPath ? "path-set" : "path-missing"}</div>
                 <div className="button-row">
                   <button type="button" onClick={() => void installBgeM3Model()} disabled={busyKey !== null}>
@@ -822,32 +924,6 @@ export default function App() {
         </div>
       ) : null}
 
-      {isLoggedIn && branchSelectionOpen ? (
-        <div className="overlay">
-          <div className="pin-modal branch-picker">
-            <h3>지점 선택</h3>
-            <p className="support-copy">셸에 들어온 뒤에도 언제든 다시 선택할 수 있습니다.</p>
-            <label className="field">
-              <span>현재 작업 지점</span>
-              <select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value as AppBranch)}>
-                {BRANCH_OPTIONS.map((branch) => (
-                  <option key={branch} value={branch}>
-                    {branch}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="button-row">
-              <button type="button" onClick={confirmBranchSelection}>
-                선택 완료
-              </button>
-              <button type="button" className="ghost-button" onClick={handleLogout}>
-                로그인 화면으로
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

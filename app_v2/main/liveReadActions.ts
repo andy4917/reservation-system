@@ -7,9 +7,13 @@ import type {
   AppLiveReadSnapshot,
   AppProvider,
 } from "../../src/desktop/app-v2-contracts.js";
-import { describeEmbeddingAvailability, scoreTextPairs } from "./embeddingRuntime.js";
-import { getProviderBrowserState } from "./providerWorkspaceManager.js";
+import { getAppBranchOption } from "../../src/desktop/app-v2-contracts.js";
+import { describeEmbeddingAvailability } from "./embeddingRuntime.js";
+import { getBranchRuntimeProfile, getProviderBinding } from "./branchRuntimeConfig.js";
+import { buildHybridCandidateDecisions, buildHybridCandidatePairs, type HybridSearchBundle } from "./hybridCandidateEngine.js";
+import { executeProviderReadScript, getProviderBrowserState } from "./providerWorkspaceManager.js";
 import { loadSettingsSnapshot } from "./settingsStore.js";
+import { buildWingsSessionReadScript } from "./wingsSessionContract.js";
 
 const PYTHON_COMMAND = process.env.PYTHON_BIN || "python3";
 
@@ -20,6 +24,9 @@ interface LiveSheetBridgePayload {
   summary: string;
   items: AppLiveReadPreviewItem[];
   reviewCandidates?: SheetReviewCandidate[];
+  searchBundles?: HybridSearchBundle[];
+  candidateFeatures?: string[];
+  contradictionFlags?: string[];
   evidence: string[];
   error?: string;
 }
@@ -33,6 +40,15 @@ interface SheetReviewCandidate {
   rightText: string;
   leftSummary: string;
   rightSummary: string;
+}
+
+interface ProviderSessionReadPayload {
+  checkedAt: string;
+  recordsImported: number;
+  summary: string;
+  items: AppLiveReadPreviewItem[];
+  evidence: string[];
+  error?: string;
 }
 
 function nowIso() {
@@ -58,6 +74,16 @@ function buildError(
   };
 }
 
+function buildBranchBlockedRead(source: AppLiveReadSnapshot["source"], branch: AppBranch): AppLiveReadSnapshot | null {
+  const profile = getBranchRuntimeProfile(branch);
+  if (profile.gate.readAllowed) return null;
+  return buildError(source, branch, `${profile.label} 지점은 아직 운영 경로가 열리지 않았습니다.`, [
+    `branch:${branch}`,
+    `branchAvailability:${profile.availability}`,
+    `branchReason:${profile.reason}`,
+  ]);
+}
+
 async function ensureProviderReadable(provider: AppProvider, summaryLabel: string) {
   const providerState = await getProviderBrowserState(provider);
   if (providerState.pageState !== "loaded") {
@@ -66,7 +92,7 @@ async function ensureProviderReadable(provider: AppProvider, summaryLabel: strin
       reason: `${summaryLabel} 세션이 아직 준비되지 않았습니다.`,
       evidence: [
         `pageState:${providerState.pageState}`,
-        `operatingHost:${providerState.currentHost ?? "-"}`,
+        `runtimeHost:${providerState.currentHost ?? "-"}`,
         `providerCookies:${providerState.providerCookieCount}`,
       ],
     };
@@ -75,8 +101,9 @@ async function ensureProviderReadable(provider: AppProvider, summaryLabel: strin
     ok: true as const,
     evidence: [
       `pageState:${providerState.pageState}`,
-      `operatingHost:${providerState.currentHost ?? "-"}`,
+      `runtimeHost:${providerState.currentHost ?? "-"}`,
       `providerCookies:${providerState.providerCookieCount}`,
+      "sessionReadiness:browser-session",
     ],
   };
 }
@@ -109,7 +136,13 @@ function resolveSheetNames(branch: AppBranch, settings: Awaited<ReturnType<typeo
     if (branch === "COEX") {
       return [tabs.coexMain, tabs.coexAnnex].filter(Boolean);
     }
-    return [tabs.gangnam].filter(Boolean);
+    if (branch === "GANGNAM") {
+      return [tabs.gangnam].filter(Boolean);
+    }
+    if (branch === "SEOLLEUNG") {
+      return [tabs.seolleung].filter(Boolean);
+    }
+    return [tabs.samsung].filter(Boolean);
   }
   return settings.config?.sheetName ? [settings.config.sheetName] : [];
 }
@@ -142,7 +175,7 @@ async function runLiveSheetBridge(input: AppLiveReadInput): Promise<LiveSheetBri
     "--spreadsheet",
     spreadsheet,
     "--branch",
-    input.branch,
+    getBranchRuntimeProfile(input.branch).canonicalBranch,
     "--start-date",
     input.startDate,
     "--end-date",
@@ -167,94 +200,334 @@ function formatAiStatus(score: number | undefined) {
 async function scoreSheetReviewCandidates(payload: LiveSheetBridgePayload) {
   const settings = await loadSettingsSnapshot();
   const availability = describeEmbeddingAvailability(settings);
-  const candidates = payload.reviewCandidates ?? [];
-  if (candidates.length === 0) {
+  const bundles = payload.searchBundles ?? [];
+  const pairs = buildHybridCandidatePairs(bundles);
+  if (pairs.length === 0) {
     return {
       items: payload.items,
-      evidence: [...payload.evidence, `embedding:${availability.reason}`, "reviewCandidates:0"],
+      evidence: [...payload.evidence, `embedding:${availability.reason}`, "hybridPairs:0"],
       summary: payload.summary,
     };
   }
 
-  let scores: Array<{ id: string; score: number }> = [];
   try {
-    scores = await scoreTextPairs(
-      settings,
-      candidates.map((candidate) => ({
-        id: candidate.id,
-        left: candidate.leftText || candidate.leftSummary || candidate.roomNo,
-        right: candidate.rightText || candidate.rightSummary || candidate.roomNo,
-      })),
-    );
+    const decisions = await buildHybridCandidateDecisions(settings, pairs);
+    const reviewItems = decisions
+      .slice(0, 4)
+      .map((decision) => ({
+        id: `sheet-review:${decision.id}`,
+        title: `${decision.pair.left.roomNo || "-"} 판단 후보`,
+        subtitle: [decision.reason, decision.pair.left.guestName || decision.pair.left.reservationNo, decision.pair.right.guestName || decision.pair.right.reservationNo]
+          .filter(Boolean)
+          .join(" · "),
+        statusLabel:
+          decision.state === "confirm"
+            ? "확정"
+            : decision.state === "recommend-edit"
+              ? "수정 추천"
+              : decision.state === "review"
+                ? "검토"
+                : "보류",
+      }));
+    const confirmCount = decisions.filter((item) => item.state === "confirm").length;
+    const reviewCount = decisions.filter((item) => item.state === "review").length;
+    const abstainCount = decisions.filter((item) => item.state === "abstain").length;
+    return {
+      items: [...payload.items, ...reviewItems].slice(0, 8),
+      evidence: [
+        ...payload.evidence,
+        `embedding:${availability.reason}`,
+        `hybridPairs:${pairs.length}`,
+        `confirm:${confirmCount}`,
+        `review:${reviewCount}`,
+        `abstain:${abstainCount}`,
+      ],
+      summary: reviewItems.length > 0 ? `${payload.summary} 판단 후보 ${reviewItems.length}건을 정리했습니다.` : payload.summary,
+    };
   } catch (error) {
     return {
       items: payload.items,
       evidence: [
         ...payload.evidence,
         `embedding:error:${error instanceof Error ? error.message : String(error)}`,
-        `reviewCandidates:${candidates.length}`,
+        `hybridPairs:${pairs.length}`,
       ],
-      summary: `${payload.summary} 검토 후보 점수화는 건너뛰었습니다.`,
+      summary: `${payload.summary} 하이브리드 판단 후보 계산은 건너뛰었습니다.`,
     };
   }
+}
 
-  const scoreMap = new Map(scores.map((item) => [item.id, item.score]));
-  const reviewItems = candidates
-    .map((candidate) => {
-      const score = scoreMap.get(candidate.id);
-      return {
-        id: `sheet-review:${candidate.id}`,
-        title: `${candidate.roomNo || "-"} 검토 후보`,
-        subtitle: [candidate.basis || "sheet-review", candidate.leftSummary, candidate.rightSummary].filter(Boolean).join(" · "),
-        statusLabel: formatAiStatus(score),
-        score: typeof score === "number" ? score : -1,
-      };
-    })
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 4)
-    .map(({ score: _score, ...item }) => item);
+function buildPmsSessionScript(input: AppLiveReadInput) {
+  const binding = getProviderBinding(input.branch, "wings-pms");
+  return buildWingsSessionReadScript({
+    branch: input.branch,
+    label: getAppBranchOption(input.branch).label,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    endpointPath: binding.metadata.endpointPath || "/pms/biz/ir04_0200X_V03/searchListRsvn.do",
+    presetKey: binding.metadata.presetKey || "wings-reservation-list",
+    propertyNo: binding.metadata.propertyNo || "",
+    bsnsCode: binding.metadata.bsnsCode || "",
+  });
+}
 
-  return {
-    items: [...payload.items, ...reviewItems].slice(0, 8),
-    evidence: [
-      ...payload.evidence,
-      `embedding:${availability.reason}`,
-      `reviewCandidates:${candidates.length}`,
-      `reviewScores:${scores.length}`,
-    ],
-    summary: reviewItems.length > 0 ? `${payload.summary} 검토 후보 ${reviewItems.length}건을 정리했습니다.` : payload.summary,
+function buildStationSessionScript(input: AppLiveReadInput) {
+  const binding = getProviderBinding(input.branch, "admin-station");
+  const payload = {
+    branch: input.branch,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    branchId: binding.metadata.branchId || "",
   };
+  return `
+    (async () => {
+      const ctx = ${JSON.stringify(payload)};
+      const normalize = (value) => typeof value === "string" ? value.trim() : "";
+      const branchId = ctx.branchId || (location.pathname.match(/\\/branch\\/(\\d+)/i) || [])[1] || "";
+      if (!branchId) {
+        throw new Error("Station branch id is missing");
+      }
+      const url = new URL("/admin/branch/" + branchId + "/calendar", "https://api.admin-stationbyuhc.com");
+      url.searchParams.set("startDate", ctx.startDate);
+      url.searchParams.set("endDate", ctx.endDate);
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        credentials: "include",
+        headers: { "Accept": "application/json" }
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error("Station API (" + response.status + "): " + text.slice(0, 160));
+      }
+      const parsed = JSON.parse(text);
+      const stack = [parsed && parsed.data ? parsed.data : parsed];
+      const rows = [];
+      while (stack.length > 0) {
+        const node = stack.pop();
+        if (!node || typeof node !== "object") continue;
+        if (Array.isArray(node)) {
+          for (const item of node) stack.push(item);
+          continue;
+        }
+        const date = normalize(node.date || node.businessDate || node.day || "");
+        const roomName = normalize(node.roomName || node.name || node.bizItemName || "");
+        if (date && roomName) {
+          rows.push(node);
+        }
+        for (const value of Object.values(node)) {
+          if (value && typeof value === "object") stack.push(value);
+        }
+      }
+      const items = rows.slice(0, 4).map((row, index) => ({
+        id: "station:" + index,
+        title: normalize(row.roomName || row.name || row.bizItemName || "Station"),
+        subtitle: [normalize(row.date || row.businessDate || ""), String(row.settingStock ?? row.stockCount ?? row.stock ?? "")].filter(Boolean).join(" · "),
+        statusLabel: normalize(row.openStatus || row.status || "LIVE") || "LIVE",
+      }));
+      return {
+        checkedAt: new Date().toISOString(),
+        recordsImported: rows.length,
+        summary: "Station 라이브 데이터를 읽었습니다.",
+        items,
+        evidence: [
+          "provider:admin-station",
+          "branch:" + ctx.branch,
+          "runtimeHost:" + (location.host || "-"),
+          "sessionReadiness:browser-session",
+          "sourceLineage:" + url.pathname,
+          "stationBranchId:" + branchId,
+        ]
+      };
+    })()
+  `;
+}
+
+function buildNaverSessionScript(input: AppLiveReadInput) {
+  const binding = getProviderBinding(input.branch, "naver-partner");
+  const payload = {
+    branch: input.branch,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    businessId: binding.metadata.businessId || "",
+  };
+  return `
+    (async () => {
+      const ctx = ${JSON.stringify(payload)};
+      const normalize = (value) => typeof value === "string" ? value.trim() : "";
+      const businessId =
+        ctx.businessId ||
+        (location.pathname.match(/\\/businesses\\/(\\d+)/i) || [])[1] ||
+        ((location.href.match(/[?&](?:businessId|business_id|bizId|biz_id)=(\\d+)/i) || [])[1] || "");
+      if (!businessId) {
+        throw new Error("Naver business id is missing");
+      }
+      const itemUrl = new URL("/v3.1/businesses/" + businessId + "/biz-items", "https://api-partner.booking.naver.com");
+      itemUrl.searchParams.set("projections", "resource,type-value,option-category,BIZ_ITEM_AMENITY,biz-item-detail,language-resource");
+      itemUrl.searchParams.set("size", "300");
+      itemUrl.searchParams.set("lang", "ko");
+      const itemResponse = await fetch(itemUrl.toString(), {
+        method: "GET",
+        credentials: "include",
+        headers: { "Accept": "application/json" }
+      });
+      const itemText = await itemResponse.text();
+      if (!itemResponse.ok) {
+        throw new Error("Naver item API (" + itemResponse.status + "): " + itemText.slice(0, 160));
+      }
+      const itemPayload = JSON.parse(itemText);
+      const items = Array.isArray(itemPayload && itemPayload.items) ? itemPayload.items : [];
+      const schedules = [];
+      for (const row of items.slice(0, 20)) {
+        const itemId = normalize(row.bizItemId || row.id || "");
+        if (!itemId) continue;
+        const scheduleUrl = new URL("/v3.0/businesses/" + businessId + "/biz-items/" + itemId + "/daily-schedules", "https://api-partner.booking.naver.com");
+        scheduleUrl.searchParams.set("startDateTime", ctx.startDate + "T00:00:00");
+        scheduleUrl.searchParams.set("endDateTime", ctx.endDate + "T00:00:00");
+        const scheduleResponse = await fetch(scheduleUrl.toString(), {
+          method: "GET",
+          credentials: "include",
+          headers: { "Accept": "application/json" }
+        });
+        const scheduleText = await scheduleResponse.text();
+        if (!scheduleResponse.ok) {
+          throw new Error("Naver schedule API (" + scheduleResponse.status + "): " + scheduleText.slice(0, 160));
+        }
+        const payload = JSON.parse(scheduleText);
+        for (const [date, schedule] of Object.entries(payload || {})) {
+          if (!schedule || typeof schedule !== "object") continue;
+          schedules.push({
+            date,
+            roomName: normalize(row.bizItemName || row.name || ""),
+            bookingCount: schedule.bookingCount ?? schedule.reservationCount ?? schedule.currentBookingCount ?? 0,
+          });
+        }
+      }
+      const preview = schedules.slice(0, 4).map((row, index) => ({
+        id: "naver:" + index,
+        title: row.roomName || "Naver",
+        subtitle: [row.date, String(row.bookingCount)].filter(Boolean).join(" · "),
+        statusLabel: "LIVE",
+      }));
+      return {
+        checkedAt: new Date().toISOString(),
+        recordsImported: schedules.length,
+        summary: "네이버 OTA 라이브 데이터를 읽었습니다.",
+        items: preview,
+        evidence: [
+          "provider:naver-partner",
+          "branch:" + ctx.branch,
+          "runtimeHost:" + (location.host || "-"),
+          "sessionReadiness:browser-session",
+          "sourceLineage:/v3.0/businesses/" + businessId + "/biz-items/:id/daily-schedules",
+          "naverBusinessId:" + businessId,
+        ]
+      };
+    })()
+  `;
+}
+
+async function executeSessionRead(provider: AppProvider, script: string): Promise<ProviderSessionReadPayload> {
+  const payload = await executeProviderReadScript<ProviderSessionReadPayload>(provider, script);
+  if (payload.error) {
+    throw new Error(payload.error);
+  }
+  return payload;
 }
 
 export async function runPmsRead(input: AppLiveReadInput): Promise<AppLiveReadSnapshot> {
+  const branchBlocked = buildBranchBlockedRead("pms", input.branch);
+  if (branchBlocked) return branchBlocked;
+
   const readiness = await ensureProviderReadable("wings-pms", "PMS");
   if (!readiness.ok) {
     return buildError("pms", input.branch, readiness.reason, readiness.evidence);
   }
-  const settingsEvidence = await buildSettingsEvidence();
-  return buildError("pms", input.branch, "PMS 라이브 조회는 아직 연결되지 않았습니다.", [
-    ...readiness.evidence,
-    `window:${input.startDate}..${input.endDate}`,
-    ...settingsEvidence,
-  ]);
+
+  try {
+    const payload = await executeSessionRead("wings-pms", buildPmsSessionScript(input));
+    const settingsEvidence = await buildSettingsEvidence();
+    return {
+      source: "pms",
+      branch: input.branch,
+      checkedAt: payload.checkedAt,
+      status: "done",
+      summary: `${payload.summary} (${input.startDate} ~ ${input.endDate})`,
+      recordsImported: payload.recordsImported,
+      blockedReason: null,
+      items: payload.items,
+      evidence: [...readiness.evidence, ...payload.evidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
+    };
+  } catch (error) {
+    return buildError("pms", input.branch, "PMS 라이브 조회에 실패했습니다.", [
+      ...readiness.evidence,
+      `provider:wings-pms`,
+      `branch:${input.branch}`,
+      `error:${error instanceof Error ? error.message : String(error)}`,
+      `window:${input.startDate}..${input.endDate}`,
+    ]);
+  }
 }
 
 export async function runOtaRead(input: AppLiveReadInput): Promise<AppLiveReadSnapshot> {
-  const naver = await ensureProviderReadable("naver-partner", "OTA");
-  const station = await ensureProviderReadable("admin-station", "OTA");
+  const branchBlocked = buildBranchBlockedRead("ota", input.branch);
+  if (branchBlocked) return branchBlocked;
+
+  const naver = await ensureProviderReadable("naver-partner", "네이버 OTA");
+  const station = await ensureProviderReadable("admin-station", "Station OTA");
   if (!naver.ok && !station.ok) {
     return buildError("ota", input.branch, "OTA 세션이 준비되지 않았습니다.", [...naver.evidence, ...station.evidence]);
   }
+
+  const successPayloads: ProviderSessionReadPayload[] = [];
+  const failureEvidence: string[] = [];
+
+  if (naver.ok) {
+    try {
+      successPayloads.push(await executeSessionRead("naver-partner", buildNaverSessionScript(input)));
+    } catch (error) {
+      failureEvidence.push(`provider:naver-partner:error:${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (station.ok) {
+    try {
+      successPayloads.push(await executeSessionRead("admin-station", buildStationSessionScript(input)));
+    } catch (error) {
+      failureEvidence.push(`provider:admin-station:error:${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (successPayloads.length === 0) {
+    return buildError("ota", input.branch, "OTA 라이브 조회에 실패했습니다.", [
+      ...naver.evidence,
+      ...station.evidence,
+      ...failureEvidence,
+      `window:${input.startDate}..${input.endDate}`,
+    ]);
+  }
+
   const settingsEvidence = await buildSettingsEvidence();
-  return buildError("ota", input.branch, "OTA 라이브 조회는 아직 연결되지 않았습니다.", [
-    ...naver.evidence,
-    ...station.evidence,
-    `window:${input.startDate}..${input.endDate}`,
-    ...settingsEvidence,
-  ]);
+  const items = successPayloads.flatMap((payload) => payload.items).slice(0, 8);
+  const recordsImported = successPayloads.reduce((sum, payload) => sum + payload.recordsImported, 0);
+  const summary = successPayloads.map((payload) => payload.summary).join(" / ");
+  const evidence = successPayloads.flatMap((payload) => payload.evidence);
+  return {
+    source: "ota",
+    branch: input.branch,
+    checkedAt: successPayloads[0]?.checkedAt ?? nowIso(),
+    status: "done",
+    summary: `${summary} (${input.startDate} ~ ${input.endDate})`,
+    recordsImported,
+    blockedReason: null,
+    items,
+    evidence: [...naver.evidence, ...station.evidence, ...evidence, ...failureEvidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
+  };
 }
 
 export async function runSheetRead(input: AppLiveReadInput): Promise<AppLiveReadSnapshot> {
+  const branchBlocked = buildBranchBlockedRead("sheet", input.branch);
+  if (branchBlocked) return branchBlocked;
+
   const settings = await loadSettingsSnapshot();
   if (!settings.isConfigured) {
     return buildError("sheet", input.branch, "예약 시트 설정을 먼저 저장해 주세요.", [

@@ -32,6 +32,8 @@ function normalizeSheetTabs(input: unknown): AppSheetTabSettings {
     coexMain: normalizeText(tabs.coexMain),
     coexAnnex: normalizeText(tabs.coexAnnex),
     gangnam: normalizeText(tabs.gangnam),
+    seolleung: normalizeText(tabs.seolleung),
+    samsung: normalizeText(tabs.samsung),
   };
 }
 
@@ -70,7 +72,13 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
 
 function buildSnapshot(config: AppSettings | null, updatedAt: string | null): AppSettingsSnapshot {
   const missingRequired: Array<keyof AppSettings> = [];
-  const hasSheetTabs = Boolean(config?.sheetTabs?.coexMain || config?.sheetTabs?.coexAnnex || config?.sheetTabs?.gangnam);
+  const hasSheetTabs = Boolean(
+    config?.sheetTabs?.coexMain ||
+      config?.sheetTabs?.coexAnnex ||
+      config?.sheetTabs?.gangnam ||
+      config?.sheetTabs?.seolleung ||
+      config?.sheetTabs?.samsung
+  );
   if (!config?.spreadsheet) missingRequired.push("spreadsheet");
   if (!config?.sheetName && !hasSheetTabs) missingRequired.push("sheetName");
   return {

@@ -2,7 +2,7 @@
 
 ## Current Baseline
 
-- Source of truth for this document: official `2026-03-12` COEX/GANGNAM HAR captures.
+- Source of truth for this document: official `2026-03-12` COEX/GANGNAM HAR captures plus the `2026-03-31` SEOLLEUNG sample HAR.
 - Wings PMS is operating as a shared multi-property surface keyed by `PROPERTY_NO` and `BSNS_CODE`.
 - Reservation read flow is `POST + application/x-www-form-urlencoded` rather than simple `GET`.
 - The system must remain read-only. `update`, `insert`, `delete`, `send` endpoints are explicitly blocked.
@@ -30,7 +30,7 @@ Current read paths directly tied to this project:
 
 - `wings-global-guest-list`
   - default path: `/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do`
-  - current branches: `COEX`, `GANGNAM`
+  - current branches: `COEX`, `GANGNAM`, `BRANCH_THE_SEOLLEUNG`
 - `wings-reservation-list`
   - default path: `/pms/biz/ir04_0200X_V03/searchListRsvn.do`
   - current observed branch: `COEX`
@@ -55,6 +55,8 @@ The legacy reservation-list path is kept only so older HAR bundles still parse. 
 
 - HAR remains a structure source, not the long-term auth source.
 - If the official browser session is live, runtime uses the browser-assisted auth path and does not enter managed recovery mode.
+- The default session owner is the app-managed persistent BrowserWindow partition for `wings-pms`, not an external browser handoff.
+- `.env` is not an allowed replacement for Wings PMS login because the live read path depends on the browser session owned by Electron main.
 - Managed recovery runs only when the browser session is offline or unavailable.
 - UI surfaces keep this silent and expose only generic live availability, not recovery logs or session state strings.
 

@@ -127,6 +127,50 @@ select {
   margin-top: 1rem;
 }
 
+.auth-section {
+  margin-top: 1.35rem;
+}
+
+.auth-section h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.auth-card-grid {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.85rem;
+}
+
+.auth-card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 1rem;
+}
+
+.auth-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.auth-chip-row {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-top: 0.85rem;
+}
+
+.auth-chip {
+  border-radius: 999px;
+  background: #edf2f6;
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+}
+
 .field span {
   display: block;
   margin-bottom: 0.45rem;
@@ -302,6 +346,37 @@ select {
 
 .workspace-grid[data-phase="working"] {
   animation: fadeShift 220ms ease;
+}
+
+.auth-banner {
+  margin-bottom: 1rem;
+  border-radius: 24px;
+  border: 1px solid rgba(19, 32, 49, 0.08);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 14px 28px rgba(17, 28, 40, 0.06);
+  padding: 1.15rem 1.2rem;
+}
+
+.auth-banner-header {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: start;
+}
+
+.auth-banner h3 {
+  margin: 0.45rem 0 0;
+  font-size: 1.2rem;
+  line-height: 1.3;
+}
+
+.inline-auth-card-grid {
+  margin-top: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.compact-auth-card {
+  padding: 0.95rem;
 }
 
 .hero-card,

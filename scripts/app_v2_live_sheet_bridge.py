@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -13,12 +14,39 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from reservation_sheet_audit import get_access_token
+from rapidfuzz import fuzz, process, utils
 from src.domain.report_policy import OrderlistPolicy
 from src.domain.sheet_domain import AuditError, extract_sheet_id, infer_year_from_sheet_name, normalize_text
 from src.io.sheet_loader import load_sheet_matrix_and_dates
 from src.io.sheets_api import GoogleSheetsReadonlyClient
 from src.report.ops_workflow import build_ops_artifacts, write_ops_outputs
 from src.scan.sheet_scan import extract_reservation_blocks, map_room_rows
+
+CHANNEL_PATTERN = re.compile(r"\[CHANNEL:\s*([^\]]+)\]")
+RESERVATION_NO_PATTERN = re.compile(r"예약번호\s*:\s*([A-Za-z0-9-]+)")
+GUEST_NAME_PATTERN = re.compile(r"예약자\s*:\s*([^\n|]+)")
+PHONE_PATTERN = re.compile(r"연락처\s*:\s*([+0-9()\-\s]+)")
+FEATURE_KEYS = [
+    "same_room",
+    "same_room_alias",
+    "same_reservation_no",
+    "same_guest_name",
+    "guest_name_similarity",
+    "same_phone",
+    "same_channel",
+    "same_note_signature",
+    "note_head_similarity",
+    "package_marker_match",
+    "room_change_blocker",
+    "branch_match",
+]
+CONTRADICTION_FLAG_KEYS = [
+    "room_change_blocker",
+    "date_gap_conflict",
+    "identity_conflict",
+    "identity_gap_conflict",
+    "channel_conflict",
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -145,6 +173,75 @@ def build_note_head(block: Any) -> str:
     return raw.splitlines()[0].strip()
 
 
+def normalize_phone(text: Any) -> str:
+    digits = "".join(ch for ch in str(text or "") if ch.isdigit())
+    if len(digits) >= 8:
+        return digits[-11:]
+    return digits
+
+
+def extract_channel_marker(text: Any) -> str:
+    raw = normalize_text(text)
+    match = CHANNEL_PATTERN.search(raw)
+    if match:
+        return normalize_text(match.group(1)).upper()
+    return ""
+
+
+def extract_reservation_no_from_text(text: Any) -> str:
+    raw = normalize_text(text)
+    match = RESERVATION_NO_PATTERN.search(raw)
+    if match:
+        return normalize_text(match.group(1))
+    return ""
+
+
+def extract_guest_name(text: Any) -> str:
+    raw = normalize_text(text)
+    match = GUEST_NAME_PATTERN.search(raw)
+    if match:
+        value = match.group(1).split("국적")[0].split("연락처")[0].strip()
+        return normalize_text(value)
+    return ""
+
+
+def extract_phone_from_text(text: Any) -> str:
+    raw = normalize_text(text)
+    match = PHONE_PATTERN.search(raw)
+    if match:
+        return normalize_phone(match.group(1))
+    return normalize_phone(raw)
+
+
+def extract_package_markers(text: Any) -> List[str]:
+    raw = normalize_text(text).lower()
+    markers: List[str] = []
+    for label, token in (
+        ("package", "패키지"),
+        ("wellness", "웰니스"),
+        ("headspa", "헤드스파"),
+        ("continuation", "연박"),
+        ("room_change_blocker", "방 변경x"),
+        ("room_change_blocker_compact", "방변경x"),
+    ):
+        if token in raw:
+            markers.append(label)
+    return sorted(set(markers))
+
+
+def has_room_change_blocker(text: Any) -> bool:
+    raw = normalize_text(text).lower()
+    return "방 변경x" in raw or "방변경x" in raw or "room change" in raw
+
+
+def build_note_signature(text: Any) -> str:
+    raw = normalize_text(text).lower()
+    normalized = re.sub(r"[0-9]", "", raw)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    normalized = normalized.replace("예약번호 :", "").replace("예약자 :", "").replace("연락처 :", "")
+    return normalized[:120]
+
+
 def build_review_text(block: Any) -> str:
     return " | ".join(
         [
@@ -157,6 +254,85 @@ def build_review_text(block: Any) -> str:
             normalize_text(build_note_head(block)),
         ]
     )
+
+
+def normalize_search_key(text: Any) -> str:
+    normalized = utils.default_process(normalize_text(text))
+    return normalized if isinstance(normalized, str) else ""
+
+
+def attach_fuzzy_candidate_ids(bundles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    guest_choices = {
+        bundle["id"]: bundle["guestNameSearchKey"]
+        for bundle in bundles
+        if normalize_text(bundle.get("guestNameSearchKey", ""))
+    }
+    note_choices = {
+        bundle["id"]: bundle["noteHeadSearchKey"]
+        for bundle in bundles
+        if len(normalize_text(bundle.get("noteHeadSearchKey", ""))) >= 8
+    }
+
+    for bundle in bundles:
+        guest_key = normalize_text(bundle.get("guestNameSearchKey", ""))
+        note_key = normalize_text(bundle.get("noteHeadSearchKey", ""))
+
+        guest_matches = process.extract(
+            guest_key,
+            guest_choices,
+            scorer=fuzz.WRatio,
+            limit=5,
+            score_cutoff=88,
+        ) if guest_key else []
+        note_matches = process.extract(
+            note_key,
+            note_choices,
+            scorer=fuzz.WRatio,
+            limit=5,
+            score_cutoff=85,
+        ) if note_key else []
+
+        bundle["fuzzyGuestMatchIds"] = [
+            match_id for match_id, _score, _value in guest_matches if match_id != bundle["id"]
+        ]
+        bundle["fuzzyNoteMatchIds"] = [
+            match_id for match_id, _score, _value in note_matches if match_id != bundle["id"]
+        ]
+    return bundles
+
+
+def build_search_bundles(blocks: List[Any]) -> List[Dict[str, Any]]:
+    bundles: List[Dict[str, Any]] = []
+    for block in blocks:
+        note_head = normalize_text(build_note_head(block))
+        reservation_no = normalize_text(getattr(block, "reservation_no", "")) or extract_reservation_no_from_text(note_head)
+        guest_name = normalize_text(getattr(block, "guest_name", "")) or extract_guest_name(note_head)
+        guest_name_search_key = normalize_search_key(guest_name)
+        note_head_search_key = normalize_search_key(note_head)
+        bundles.append(
+            {
+                "id": f"{normalize_text(getattr(block, 'room_no', ''))}:{iso_or_empty(getattr(block, 'checkin', None))}:{reservation_no or normalize_text(getattr(block, 'reservation_key', ''))}",
+                "branch": normalize_text(getattr(block, "branch", "")),
+                "roomNo": normalize_text(getattr(block, "room_no", "")),
+                "reservationNo": reservation_no,
+                "reservationKey": normalize_text(getattr(block, "reservation_key", "")),
+                "guestName": guest_name,
+                "phone": extract_phone_from_text(note_head),
+                "channel": normalize_text(getattr(block, "channel", "")) or extract_channel_marker(note_head),
+                "checkin": iso_or_empty(getattr(block, "checkin", None)),
+                "checkout": iso_or_empty(getattr(block, "checkout", None)),
+                "nightCount": getattr(block, "nights", 0) or 0,
+                "noteHead": note_head,
+                "noteSignature": build_note_signature(note_head),
+                "guestNameSearchKey": guest_name_search_key,
+                "noteHeadSearchKey": note_head_search_key,
+                "packageMarkers": extract_package_markers(note_head),
+                "roomChangeBlocker": has_room_change_blocker(note_head),
+                "fuzzyGuestMatchIds": [],
+                "fuzzyNoteMatchIds": [],
+            }
+        )
+    return attach_fuzzy_candidate_ids(bundles)
 
 
 def build_review_candidates(blocks: List[Any]) -> List[Dict[str, str]]:
@@ -242,6 +418,7 @@ def command_sheet_read(args: argparse.Namespace) -> int:
     end_date = dt.date.fromisoformat(args.end_date)
     window_blocks = [block for block in payload["blocks"] if overlaps_window(block, start_date, end_date)]
     review_candidates = build_review_candidates(window_blocks)
+    search_bundles = build_search_bundles(window_blocks)
     print(
         json.dumps(
             {
@@ -254,6 +431,9 @@ def command_sheet_read(args: argparse.Namespace) -> int:
                 "summary": f"{args.branch} 예약 시트 라이브 데이터를 읽었습니다.",
                 "items": payload["items"][:8],
                 "reviewCandidates": review_candidates,
+                "searchBundles": search_bundles,
+                "candidateFeatures": FEATURE_KEYS,
+                "contradictionFlags": CONTRADICTION_FLAG_KEYS,
                 "evidence": payload["evidence"] + [f"reviewCandidates:{len(review_candidates)}"],
             },
             ensure_ascii=False,
@@ -264,6 +444,9 @@ def command_sheet_read(args: argparse.Namespace) -> int:
 
 def command_ops_preview(args: argparse.Namespace) -> int:
     payload = load_sheet_blocks(args)
+    start_date = dt.date.fromisoformat(args.start_date)
+    end_date = dt.date.fromisoformat(args.end_date)
+    window_blocks = [block for block in payload["blocks"] if overlaps_window(block, start_date, end_date)]
     orderlist_policy = OrderlistPolicy(exclude_room_makeup=bool(args.exclude_room_makeup))
     artifacts = build_ops_artifacts(
         payload["blocks"],
@@ -282,6 +465,18 @@ def command_ops_preview(args: argparse.Namespace) -> int:
             "departureText": row.get("departure_reservation_nos", ""),
             "arrivalText": row.get("arrival_reservation_nos", ""),
             "noteHead": row.get("note_head", ""),
+            "departureReservationNo": normalize_text(row.get("departure_reservation_nos", "")),
+            "arrivalReservationNo": normalize_text(row.get("arrival_reservation_nos", "")),
+            "sameReservationNo": normalize_text(row.get("departure_reservation_nos", "")) == normalize_text(row.get("arrival_reservation_nos", "")),
+            "sameGuestName": False,
+            "samePhone": False,
+            "departureChannel": extract_channel_marker(row.get("note_head", "").split("|")[-1]),
+            "arrivalChannel": extract_channel_marker(row.get("note_head", "").split("|")[0]),
+            "noteSignature": build_note_signature(row.get("note_head", "")),
+            "packageMarkers": extract_package_markers(row.get("note_head", "")),
+            "roomChangeBlocker": has_room_change_blocker(row.get("note_head", "")),
+            "candidateFeatures": FEATURE_KEYS,
+            "contradictionFlags": ["room_change_blocker"] if has_room_change_blocker(row.get("note_head", "")) else [],
         }
         for row in artifacts["arrival_artifact"]["rows"]
         if row.get("continuation_candidate") == "Y"
@@ -295,12 +490,17 @@ def command_ops_preview(args: argparse.Namespace) -> int:
                 "sheetNames": args.sheet_names,
                 "checkedAt": dt.datetime.now().isoformat(),
                 "reservationBlocks": len(payload["blocks"]),
+                "windowReservationBlocks": len(window_blocks),
                 "orderlistRows": len(artifacts["orderlist_artifact"]["rows"]),
                 "arrivalRows": len(artifacts["arrival_artifact"]["rows"]),
                 "continuationCandidates": continuation_candidates,
+                "searchBundles": build_search_bundles(window_blocks),
+                "candidateFeatures": FEATURE_KEYS,
+                "contradictionFlags": CONTRADICTION_FLAG_KEYS,
                 "items": payload["items"][:8],
                 "evidence": payload["evidence"]
                 + [
+                    f"windowReservationBlocks:{len(window_blocks)}",
                     f"excludeRoomMakeup:{'on' if args.exclude_room_makeup else 'off'}",
                     f"continuationCandidates:{len(continuation_candidates)}",
                 ],

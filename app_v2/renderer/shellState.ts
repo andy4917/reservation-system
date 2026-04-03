@@ -1,5 +1,6 @@
 import type {
   AppBranch,
+  AppBranchOption,
   AppLiveReadPreviewItem,
   AppLiveReadSnapshot,
   AppReadSource,
@@ -7,6 +8,7 @@ import type {
   AppReservationActionRow,
   AppReservationActionSnapshot,
 } from "../../src/desktop/app-v2-contracts.js";
+import { APP_BRANCH_OPTIONS, getAppBranchOption } from "../../src/desktop/app-v2-contracts.js";
 
 export interface ShellReviewItem {
   id: string;
@@ -30,7 +32,7 @@ export interface ReservationActionState {
 
 export type ReservationActionAvailability = Record<AppReservationAction, ReservationActionState>;
 
-export const BRANCH_OPTIONS: AppBranch[] = ["COEX", "GANGNAM"];
+export const BRANCH_OPTIONS: readonly AppBranchOption[] = APP_BRANCH_OPTIONS;
 
 export const RESERVATION_ACTION_LABELS: Record<AppReservationAction, string> = {
   compare: "비교",
@@ -73,7 +75,7 @@ function toGenericReviewItem(
   startDate: string,
   endDate: string,
 ): ShellReviewItem {
-  const prefix = branch === "COEX" ? "코엑스" : "강남";
+  const prefix = getAppBranchOption(branch).label;
   return {
     id: `${action}-waiting`,
     title: `${prefix} / ${RESERVATION_ACTION_LABELS[action]} 대기`,
@@ -84,7 +86,21 @@ function toGenericReviewItem(
 
 export function deriveReservationActionAvailability(
   reads: Record<AppReadSource, AppLiveReadSnapshot>,
+  branch: AppBranch,
 ): ReservationActionAvailability {
+  const branchOption = getAppBranchOption(branch);
+  if (branchOption.availability !== "active") {
+    const reason = `${branchOption.label} 지점은 아직 운영 경로가 열리지 않았습니다.`;
+    return {
+      compare: { enabled: false, reason },
+      validate: { enabled: false, reason },
+      reconcile: { enabled: false, reason },
+      edit: { enabled: false, reason },
+      apply: { enabled: false, reason },
+      "order-list": { enabled: false, reason },
+      arrival: { enabled: false, reason },
+    };
+  }
   const pms = hasDone(reads, "pms");
   const ota = hasDone(reads, "ota");
   const sheet = hasDone(reads, "sheet");
@@ -155,7 +171,7 @@ export function buildReviewQueue(
 }
 
 export function buildActionSteps(action: AppReservationAction, branch: AppBranch): string[] {
-  const prefix = branch === "COEX" ? "코엑스" : "강남";
+  const prefix = getAppBranchOption(branch).label;
   if (action === "compare") return [`${prefix} 기준 선택`, "조회 결과 정렬", "차이 항목 추출"];
   if (action === "validate") return ["기준 소스 확인", "예약 묶음 검증", "이상 후보 정리"];
   if (action === "reconcile") return ["대조 소스 선택", "불일치 검토", "대조 결과 저장"];
@@ -172,7 +188,7 @@ export function buildResultSummary(action: AppReservationAction, result: AppRese
 
 export function buildPreviewItems(read: AppLiveReadSnapshot | null, branch: AppBranch): AppLiveReadPreviewItem[] {
   if (read && read.items.length > 0) return read.items;
-  const prefix = branch === "COEX" ? "코엑스" : "강남";
+  const prefix = getAppBranchOption(branch).label;
   return [
     { id: "preview-wait-1", title: `${prefix} 미리보기`, subtitle: "조회 후 실제 항목이 표시됩니다.", statusLabel: "WAIT" },
   ];
@@ -186,7 +202,7 @@ export function buildActionOutputRows(
   result: AppReservationActionSnapshot | null,
 ): ActionOutputRow[] {
   if (result?.action === action && result.rows.length > 0) return result.rows;
-  const prefix = branch === "COEX" ? "코엑스" : "강남";
+  const prefix = getAppBranchOption(branch).label;
   return [
     {
       id: `${action}-waiting`,

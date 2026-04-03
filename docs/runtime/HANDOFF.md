@@ -1,12 +1,14 @@
 # Handoff
 
-- updated_at: 2026-03-29T16:02:35+09:00
+- updated_at: 2026-03-31T22:30:00+09:00
 - branch: `work/runtime-update`
-- commit: `8d345e1`
+- commit: `9c4d61a`
 - status: verified handoff snapshot
 
 ## What Is Done
 - Stage 1 minimal live-read path remains implemented as the main-owned bundle.
+- Active branch contract now includes `SEOLLEUNG`; `SAMSUNG` remains truth-mapped but runtime-inactive.
+- Electron main now owns branch-aware session-auth read attempts for PMS, Naver OTA, and Station.
 - Stage 2 mapping core v1 remains implemented with truth signals, exact alias/identity auto binding, soft-triage retention, and precision metrics.
 - Workspace alignment cleanup is implemented and verified so Codex points at the Linux checkout instead of the detached Windows mirror path.
 - Runtime docs have been refreshed to the current local HEAD state.
@@ -40,6 +42,7 @@
 
 ## Remaining Risks
 - Real `read-live` success is still blocked on the external sheet/provider/wings environment.
+- `SEOLLEUNG` Wings PMS identifiers are pinned in truth mapping from verified HAR evidence; Naver/Station identifiers still need live pinning.
 - This handoff proves local repo state and Codex workspace alignment, not live operational success.
 
 ## Next Recommended Action
