@@ -5,12 +5,27 @@ import type {
   AppProviderRawRuntimeSignals,
   AppProviderOperatingStatus
 } from "../../src/desktop/app-v2-contracts.js";
+import { getAppProviderOption } from "../../src/desktop/app-v2-contracts.js";
 
 const LOGIN_RE = /login|signin|auth|로그인/i;
-const WINGS_SSO_RE = /identity\/samlsso|sso|redirect/i;
 
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function hasAllowedHost(host: string, provider: AppProviderBrowserState["provider"]) {
+  const config = getAppProviderOption(provider);
+  return config.allowedHostSuffixes.some((suffix) => host.endsWith(suffix));
+}
+
+function isReadyHost(host: string, provider: AppProviderBrowserState["provider"]) {
+  const config = getAppProviderOption(provider);
+  return config.readyHosts.includes(host);
+}
+
+function hasProviderLoginHint(url: string, provider: AppProviderBrowserState["provider"]) {
+  const config = getAppProviderOption(provider);
+  return config.loginUrlHints.some((hint) => url.includes(hint));
 }
 
 function buildRawSignals(state: AppProviderBrowserState): AppProviderRawRuntimeSignals {
@@ -61,49 +76,57 @@ function buildSnapshot(
 }
 
 function classifyWingsOperatingState(state: AppProviderBrowserState): AppProviderOperatingSnapshot {
+  const config = getAppProviderOption("wings-pms");
   const url = normalizeText(state.currentUrl).toLowerCase();
   const title = normalizeText(state.title).toLowerCase();
   const host = normalizeText(state.currentHost).toLowerCase();
   if (!url) return buildSnapshot(state, "attention", "작업 창 주소를 아직 읽지 못했습니다.", ["url-missing"]);
-  if (!host.endsWith("sanhait.com")) return buildSnapshot(state, "error", "예상한 Wings 도메인이 아닙니다.", ["unexpected-host"]);
-  if (WINGS_SSO_RE.test(url) || LOGIN_RE.test(url) || LOGIN_RE.test(title)) {
-    return buildSnapshot(state, "needs-login", "Wings 로그인 확인이 필요합니다.", ["login-route"]);
+  if (!hasAllowedHost(host, state.provider)) {
+    return buildSnapshot(state, "error", `예상한 ${config.label} 도메인이 아닙니다.`, ["unexpected-host"]);
   }
-  if (state.providerCookieCount === 0) return buildSnapshot(state, "needs-login", "Wings 세션 쿠키가 없습니다.", ["provider-cookie-missing"]);
-  return buildSnapshot(state, "ready", "Wings read 작업 준비가 확인되었습니다.", ["host-matched", "provider-cookie-present"]);
+  if (hasProviderLoginHint(url, state.provider) || LOGIN_RE.test(url) || LOGIN_RE.test(title)) {
+    return buildSnapshot(state, "needs-login", `${config.label} 로그인 확인이 필요합니다.`, ["login-route"]);
+  }
+  if (state.providerCookieCount === 0) return buildSnapshot(state, "needs-login", `${config.label} 세션 쿠키가 없습니다.`, ["provider-cookie-missing"]);
+  if (!isReadyHost(host, state.provider)) {
+    return buildSnapshot(state, "attention", `${config.label} 운영 화면을 다시 확인해야 합니다.`, ["surface-unrecognized"]);
+  }
+  return buildSnapshot(state, "ready", `${config.label} read 작업 준비가 확인되었습니다.`, ["host-matched", "provider-cookie-present"]);
 }
 
 function classifyNaverOperatingState(state: AppProviderBrowserState): AppProviderOperatingSnapshot {
+  const config = getAppProviderOption("naver-partner");
   const url = normalizeText(state.currentUrl).toLowerCase();
   const title = normalizeText(state.title).toLowerCase();
   const host = normalizeText(state.currentHost).toLowerCase();
-  if (!url) return buildSnapshot(state, "attention", "네이버 작업 창 주소를 아직 읽지 못했습니다.", ["url-missing"]);
-  if (!host.includes("naver.com")) return buildSnapshot(state, "error", "예상한 네이버 도메인이 아닙니다.", ["unexpected-host"]);
+  if (!url) return buildSnapshot(state, "attention", `${config.label} 작업 창 주소를 아직 읽지 못했습니다.`, ["url-missing"]);
+  if (!hasAllowedHost(host, state.provider)) return buildSnapshot(state, "error", `예상한 ${config.label} 도메인이 아닙니다.`, ["unexpected-host"]);
   if (LOGIN_RE.test(url) || LOGIN_RE.test(title)) {
-    return buildSnapshot(state, "needs-login", "네이버 파트너 로그인 확인이 필요합니다.", ["login-route"]);
+    return buildSnapshot(state, "needs-login", `${config.label} 로그인 확인이 필요합니다.`, ["login-route"]);
   }
-  if (host === "new.smartplace.naver.com" || host === "partner.booking.naver.com") {
-    return buildSnapshot(state, "ready", "네이버 파트너 read 작업 준비가 확인되었습니다.", ["host-matched", "surface-recognized"]);
+  if (isReadyHost(host, state.provider)) {
+    return buildSnapshot(state, "ready", `${config.label} read 작업 준비가 확인되었습니다.`, ["host-matched", "surface-recognized"]);
   }
   if (state.providerCookieCount > 0) {
-    return buildSnapshot(state, "attention", "네이버 세션은 있으나 운영 대상 화면이 아닙니다.", ["provider-cookie-present", "surface-unrecognized"]);
+    return buildSnapshot(state, "attention", `${config.label} 세션은 있으나 운영 대상 화면이 아닙니다.`, ["provider-cookie-present", "surface-unrecognized"]);
   }
-  return buildSnapshot(state, "needs-login", "네이버 세션 쿠키가 없습니다.", ["provider-cookie-missing"]);
+  return buildSnapshot(state, "needs-login", `${config.label} 세션 쿠키가 없습니다.`, ["provider-cookie-missing"]);
 }
 
 function classifyStationOperatingState(state: AppProviderBrowserState): AppProviderOperatingSnapshot {
+  const config = getAppProviderOption("admin-station");
   const url = normalizeText(state.currentUrl).toLowerCase();
   const title = normalizeText(state.title).toLowerCase();
   const host = normalizeText(state.currentHost).toLowerCase();
-  if (!url) return buildSnapshot(state, "attention", "Station 작업 창 주소를 아직 읽지 못했습니다.", ["url-missing"]);
-  if (!host.includes("admin-stationbyuhc.com")) return buildSnapshot(state, "error", "예상한 Station 도메인이 아닙니다.", ["unexpected-host"]);
+  if (!url) return buildSnapshot(state, "attention", `${config.label} 작업 창 주소를 아직 읽지 못했습니다.`, ["url-missing"]);
+  if (!hasAllowedHost(host, state.provider)) return buildSnapshot(state, "error", `예상한 ${config.label} 도메인이 아닙니다.`, ["unexpected-host"]);
   if (LOGIN_RE.test(url) || LOGIN_RE.test(title)) {
-    return buildSnapshot(state, "needs-login", "Station 로그인 확인이 필요합니다.", ["login-route"]);
+    return buildSnapshot(state, "needs-login", `${config.label} 로그인 확인이 필요합니다.`, ["login-route"]);
   }
-  if (host === "admin.admin-stationbyuhc.com") {
-    return buildSnapshot(state, "ready", "Station read 작업 준비가 확인되었습니다.", ["host-matched"]);
+  if (isReadyHost(host, state.provider)) {
+    return buildSnapshot(state, "ready", `${config.label} read 작업 준비가 확인되었습니다.`, ["host-matched"]);
   }
-  return buildSnapshot(state, "attention", "Station 운영 화면을 다시 확인해야 합니다.", ["surface-unrecognized"]);
+  return buildSnapshot(state, "attention", `${config.label} 운영 화면을 다시 확인해야 합니다.`, ["surface-unrecognized"]);
 }
 
 export function evaluateProviderOperatingState(state: AppProviderBrowserState): AppProviderOperatingSnapshot {

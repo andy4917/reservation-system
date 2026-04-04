@@ -8,11 +8,10 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: path.resolve(__dirname, "..", "dist-app", "app_v2", "renderer"),
-    emptyOutDir: false
+    emptyOutDir: true
   },
   server: {
     port: 4173,
     strictPort: true
   }
 });
-

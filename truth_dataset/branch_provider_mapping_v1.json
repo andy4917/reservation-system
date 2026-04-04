@@ -4,7 +4,6 @@
     {
       "branch": "COEX",
       "display_name": "더 코엑스",
-      "sheet_tabs": ["코엑스", "코엑스2"],
       "sheet_scope": {
         "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
         "sheet_name": "2026"
@@ -39,7 +38,6 @@
     {
       "branch": "GANGNAM",
       "display_name": "강남",
-      "sheet_tabs": ["강남"],
       "sheet_scope": {
         "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
         "sheet_name": "2026"
@@ -74,7 +72,6 @@
     {
       "branch": "BRANCH_THE_SEOLLEUNG",
       "display_name": "선릉",
-      "sheet_tabs": ["선릉"],
       "sheet_scope": {
         "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
         "sheet_name": "2026"
@@ -109,7 +106,6 @@
     {
       "branch": "BRANCH_THE_SAMSEONG",
       "display_name": "삼성",
-      "sheet_tabs": ["삼성"],
       "sheet_scope": {
         "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
         "sheet_name": "2026"

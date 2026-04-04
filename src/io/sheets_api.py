@@ -105,3 +105,54 @@ class GoogleSheetsReadonlyClient:
         if not sheets:
             raise AuditError("?쒗듃 ?묐떟?먯꽌 ???곗씠?곕? 李얠쓣 ???놁뒿?덈떎.")
         return sheets[0]
+
+
+class GoogleSheetsClient(GoogleSheetsReadonlyClient):
+    def _request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
+        headers = kwargs.pop("headers", {})
+        headers["Authorization"] = f"Bearer {self.access_token}"
+        headers["Accept"] = "application/json"
+        resp = self._session.request(method, url, headers=headers, timeout=30, **kwargs)
+        if resp.status_code >= 400:
+            raise AuditError(
+                f"Google Sheets API error {resp.status_code}: {resp.text[:500]}"
+            )
+        if not resp.text.strip():
+            return {}
+        return resp.json()
+
+    def clear_values(self, spreadsheet_id: str, range_a1: str) -> Dict[str, Any]:
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{range_a1}:clear"
+        return self._request("POST", url, json={})
+
+    def update_values(
+        self,
+        spreadsheet_id: str,
+        range_a1: str,
+        values: List[List[Any]],
+        value_input_option: str = "USER_ENTERED",
+    ) -> Dict[str, Any]:
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{range_a1}"
+        params = {"valueInputOption": value_input_option}
+        return self._request(
+            "PUT",
+            url,
+            params=params,
+            json={"range": range_a1, "majorDimension": "ROWS", "values": values},
+        )
+
+    def batch_update_values(
+        self,
+        spreadsheet_id: str,
+        data: List[Dict[str, Any]],
+        value_input_option: str = "USER_ENTERED",
+    ) -> Dict[str, Any]:
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values:batchUpdate"
+        return self._request(
+            "POST",
+            url,
+            json={
+                "valueInputOption": value_input_option,
+                "data": data,
+            },
+        )

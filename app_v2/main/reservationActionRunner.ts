@@ -4,12 +4,20 @@ import os from "node:os";
 import path from "node:path";
 import type {
   AppBranch,
+  AppOpsArrivalRow,
+  AppOpsOrderRow,
+  AppOpsViewSnapshot,
   AppReservationActionInput,
   AppReservationActionRow,
   AppReservationActionSnapshot,
   AppSettingsSnapshot,
 } from "../../src/desktop/app-v2-contracts.js";
-import { getAppBranchOption } from "../../src/desktop/app-v2-contracts.js";
+import {
+  DEFAULT_APP_BGE_SCORE_THRESHOLD,
+  DEFAULT_APP_BGE_TOP_K,
+  DEFAULT_APP_REPORT_WINDOW_DAYS,
+  getAppBranchOption
+} from "../../src/desktop/app-v2-contracts.js";
 import { describeEmbeddingAvailability } from "./embeddingRuntime.js";
 import {
   buildHybridCandidateDecisions,
@@ -113,14 +121,14 @@ function buildWaitingRows(input: AppReservationActionInput): AppReservationActio
 function makeEvidence(settingsSummary: AppSettingsSnapshot, excludeRoomMakeup: boolean) {
   const bge = settingsSummary.config?.bgeM3;
   return [
-    `windowDays:${settingsSummary.config?.reportWindowDays ?? 5}`,
-    `sheetTabs:${settingsSummary.config?.sheetTabs ? "set" : "missing"}`,
+    `windowDays:${settingsSummary.config?.reportWindowDays ?? DEFAULT_APP_REPORT_WINDOW_DAYS}`,
+    `sheetName:${settingsSummary.config?.sheetName ? "set" : "missing"}`,
     `excludeRoomMakeup:${excludeRoomMakeup ? "on" : "off"}`,
     `bgeM3:${bge?.enabled ? "on" : "off"}`,
     `bgeRuntime:${bge?.runtime ?? "local-path"}`,
     `bgeModelPath:${bge?.modelPath ? "set" : "missing"}`,
-    `bgeTopK:${bge?.topK ?? 5}`,
-    `bgeThreshold:${bge?.scoreThreshold ?? 0.72}`,
+    `bgeTopK:${bge?.topK ?? DEFAULT_APP_BGE_TOP_K}`,
+    `bgeThreshold:${bge?.scoreThreshold ?? DEFAULT_APP_BGE_SCORE_THRESHOLD}`,
   ];
 }
 
@@ -150,6 +158,78 @@ function parseTabularRows(raw: string, action: AppReservationActionInput["action
   });
 }
 
+function parseTsvRecords(raw: string) {
+  const lines = raw.trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].replace(/^\uFEFF/, "").split("\t");
+  return lines.slice(1).map((line) => {
+    const values = line.split("\t");
+    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
+  });
+}
+
+function toNumber(value: string | undefined) {
+  const parsed = Number(value ?? "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toBooleanFlag(value: string | undefined) {
+  return String(value ?? "").trim().toUpperCase() === "Y";
+}
+
+function buildOpsViewSnapshot(orderRaw: string, arrivalRaw: string): AppOpsViewSnapshot {
+  const orderListRows: AppOpsOrderRow[] = parseTsvRecords(orderRaw).map((row) => ({
+    date: String(row.date || ""),
+    weekday: String(row.weekday || ""),
+    branch: String(row.branch || ""),
+    building: String(row.building || ""),
+    roomNo: String(row.room_no || ""),
+    opsRoomLabel: String(row.ops_room_label || ""),
+    roomType: String(row.room_type || ""),
+    taskLabel: String(row.task_label || ""),
+    taskRuleId: String(row.task_rule_id || ""),
+    arrivalCount: toNumber(String(row.arrival_count || "")),
+    departureCount: toNumber(String(row.departure_count || "")),
+    stayoverCount: toNumber(String(row.stayover_count || "")),
+    turnoverFlag: toBooleanFlag(String(row.turnover_flag || "")),
+    arrivalReservationNos: String(row.arrival_reservation_nos || ""),
+    departureReservationNos: String(row.departure_reservation_nos || ""),
+    stayoverReservationNos: String(row.stayover_reservation_nos || ""),
+    channels: String(row.channels || ""),
+    noteHeads: String(row.note_heads || ""),
+    continuationCandidate: toBooleanFlag(String(row.continuation_candidate || "")),
+    continuationBasis: String(row.continuation_basis || ""),
+  }));
+
+  const arrivalRows: AppOpsArrivalRow[] = parseTsvRecords(arrivalRaw).map((row) => ({
+    section: String(row.section || ""),
+    date: String(row.date || ""),
+    weekday: String(row.weekday || ""),
+    branch: String(row.branch || ""),
+    building: String(row.building || ""),
+    roomNo: String(row.room_no || ""),
+    opsRoomLabel: String(row.ops_room_label || ""),
+    roomType: String(row.room_type || ""),
+    reservationNo: String(row.reservation_no || ""),
+    reservationKey: String(row.reservation_key || ""),
+    channel: String(row.channel || ""),
+    checkin: String(row.checkin || ""),
+    checkout: String(row.checkout || ""),
+    nights: toNumber(String(row.nights || "")),
+    turnoverFlag: toBooleanFlag(String(row.turnover_flag || "")),
+    arrivalReservationNos: String(row.arrival_reservation_nos || ""),
+    departureReservationNos: String(row.departure_reservation_nos || ""),
+    arrivalChannels: String(row.arrival_channels || ""),
+    departureChannels: String(row.departure_channels || ""),
+    noteHead: String(row.note_head || ""),
+    nationalityNights: String(row.nationality_nights || ""),
+    continuationCandidate: toBooleanFlag(String(row.continuation_candidate || "")),
+    continuationBasis: String(row.continuation_basis || ""),
+  }));
+
+  return { orderListRows, arrivalRows };
+}
+
 function runPythonScript(args: string[], cwd: string) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(PYTHON_COMMAND, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
@@ -172,14 +252,7 @@ function runPythonScript(args: string[], cwd: string) {
   });
 }
 
-function resolveSheetNames(branch: AppBranch, settingsSnapshot: AppSettingsSnapshot) {
-  const tabs = settingsSnapshot.config?.sheetTabs;
-  if (tabs) {
-    if (branch === "COEX") return [tabs.coexMain, tabs.coexAnnex].filter(Boolean);
-    if (branch === "GANGNAM") return [tabs.gangnam].filter(Boolean);
-    if (branch === "SEOLLEUNG") return [tabs.seolleung].filter(Boolean);
-    return [tabs.samsung].filter(Boolean);
-  }
+function resolveSheetNames(settingsSnapshot: AppSettingsSnapshot) {
   return settingsSnapshot.config?.sheetName ? [settingsSnapshot.config.sheetName] : [];
 }
 
@@ -189,7 +262,7 @@ async function runLiveOpsBridge(
   outDir: string,
 ): Promise<OpsBridgePayload> {
   const spreadsheet = settingsSnapshot.config?.spreadsheet?.trim() ?? "";
-  const sheetNames = resolveSheetNames(input.branch, settingsSnapshot);
+  const sheetNames = resolveSheetNames(settingsSnapshot);
   if (!spreadsheet || sheetNames.length === 0) {
     throw new Error("예약 시트 설정이 비어 있습니다.");
   }
@@ -230,7 +303,7 @@ async function runManagementBridge(
   settingsSnapshot: AppSettingsSnapshot,
 ): Promise<ManagementBridgePayload> {
   const spreadsheet = settingsSnapshot.config?.spreadsheet?.trim() ?? "";
-  const sheetNames = resolveSheetNames(input.branch, settingsSnapshot);
+  const sheetNames = resolveSheetNames(settingsSnapshot);
   const cwd = process.cwd();
   const scriptPath = path.join(cwd, "scripts", "app_v2_reservation_management_bridge.py");
   const args = [
@@ -267,13 +340,19 @@ async function runLiveOpsPreview(
 ): Promise<AppReservationActionSnapshot> {
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "uhs-app-v2-ops-live-"));
   const payload = await runLiveOpsBridge(input, settingsSnapshot, outDir);
-  const tsvPath = path.join(outDir, input.action === "order-list" ? "orderlist_report.tsv" : "arrival_report.tsv");
-  const tableRaw = await fs.readFile(tsvPath, "utf8");
+  const orderTsvPath = path.join(outDir, "orderlist_report.tsv");
+  const arrivalTsvPath = path.join(outDir, "arrival_report.tsv");
+  const [orderTableRaw, arrivalTableRaw] = await Promise.all([
+    fs.readFile(orderTsvPath, "utf8"),
+    fs.readFile(arrivalTsvPath, "utf8"),
+  ]);
+  const tableRaw = input.action === "order-list" ? orderTableRaw : arrivalTableRaw;
   const total = input.action === "order-list" ? payload.orderlistRows : payload.arrivalRows;
   const excludeRoomMakeup = input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false;
   const decisions = await buildHybridDecisionsForOps(settingsSnapshot, payload);
   const availability = describeEmbeddingAvailability(settingsSnapshot);
   const aiReview = buildOpsAiReviewRows(parseTabularRows(tableRaw, input.action), decisions);
+  const opsView = buildOpsViewSnapshot(orderTableRaw, arrivalTableRaw);
   return {
     action: input.action,
     branch: input.branch,
@@ -298,6 +377,7 @@ async function runLiveOpsPreview(
     ],
     rows: aiReview.rows,
     outputPath: outDir,
+    opsView,
   };
 }
 
@@ -404,6 +484,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
       evidence: [`branch:${input.branch}`, `branchAvailability:${branchOption.availability}`, `branchReason:${branchOption.reason}`],
       rows: buildErrorRows(input, `${branchOption.label} 지점은 아직 운영 경로가 열리지 않았습니다.`),
       outputPath: null,
+      opsView: null,
     };
   }
   const settingsSnapshot = await loadSettingsSnapshot();
@@ -434,6 +515,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
         planToken: payload.planToken ?? "",
         requiresApproval: payload.requiresApproval ?? false,
         applyAllowed: payload.applyAllowed ?? false,
+        opsView: null,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -452,6 +534,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
         planToken: "",
         requiresApproval: false,
         applyAllowed: false,
+        opsView: null,
       };
     }
   }
@@ -485,6 +568,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
           ],
           rows,
           outputPath: outDir,
+          opsView: null,
         };
       }
     } catch (error) {
@@ -500,6 +584,7 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
         evidence: [`error:${message}`],
         rows: buildErrorRows(input, message),
         outputPath: null,
+        opsView: null,
       };
     }
   }
@@ -515,5 +600,6 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
     evidence: [`window:${input.startDate}..${input.endDate}`, ...makeEvidence(settingsSnapshot, input.excludeRoomMakeup ?? settingsSnapshot.config?.opsView?.excludeRoomMakeup ?? false)],
     rows: buildWaitingRows(input),
     outputPath: null,
+    opsView: null,
   };
 }

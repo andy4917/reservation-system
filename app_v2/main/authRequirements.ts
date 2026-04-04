@@ -30,9 +30,6 @@ function buildSheetHints(settings: AppSettingsSnapshot, sheet: AppSheetReadiness
     "env: UHS_GOOGLE_ACCESS_TOKEN or GOOGLE_ACCESS_TOKEN",
     "env: UHS_GOOGLE_REFRESH_TOKEN + UHS_GOOGLE_CLIENT_ID + UHS_GOOGLE_CLIENT_SECRET",
   ];
-  if (settings.config?.sheetTabs) {
-    hints.unshift("settings: branch sheet tabs");
-  }
   if (sheet.accessMode !== "none") {
     hints.push(`accessMode:${sheet.accessMode}`);
   }

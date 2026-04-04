@@ -19,4 +19,6 @@ contextBridge.exposeInMainWorld("desktopApp", {
   runOtaRead: (input: unknown) => ipcRenderer.invoke("desktop-app:run-ota-read", input),
   runSheetRead: (input: unknown) => ipcRenderer.invoke("desktop-app:run-sheet-read", input),
   runReservationAction: (input: unknown) => ipcRenderer.invoke("desktop-app:run-reservation-action", input),
+  attemptWingsLogin: () => ipcRenderer.invoke("desktop-app:attempt-wings-login"),
+  applyOpsSheetOutput: (input: unknown) => ipcRenderer.invoke("desktop-app:apply-ops-sheet-output", input),
 });

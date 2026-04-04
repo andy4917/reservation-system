@@ -3,6 +3,10 @@ export const APP_BRANCHES = ["COEX", "GANGNAM", "SEOLLEUNG", "SAMSUNG"] as const
 export const APP_SHELL_MODULES = ["pms-read", "ota-read", "sheet-read", "reservation-management", "settings"] as const;
 export const APP_RESERVATION_ACTIONS = ["compare", "validate", "reconcile", "edit", "apply", "order-list", "arrival"] as const;
 export const APP_READ_SOURCES = ["pms", "ota", "sheet"] as const;
+export const DEFAULT_APP_REPORT_WINDOW_DAYS = 5;
+export const DEFAULT_APP_BGE_MODEL_ID = "Xenova/bge-m3";
+export const DEFAULT_APP_BGE_TOP_K = 5;
+export const DEFAULT_APP_BGE_SCORE_THRESHOLD = 0.72;
 
 export type AppProvider = (typeof APP_PROVIDERS)[number];
 export type AppBranch = (typeof APP_BRANCHES)[number];
@@ -26,13 +30,61 @@ export type AppBgeM3Runtime = "local-path" | "download-if-missing";
 export type AppBgeInstallStatus = "ready" | "installed" | "error";
 export type AppReservationEngineStatus = "pending-source" | "planned";
 
-export interface AppSheetTabSettings {
-  coexMain: string;
-  coexAnnex: string;
-  gangnam: string;
-  seolleung: string;
-  samsung: string;
+export interface AppProviderOption {
+  provider: AppProvider;
+  label: string;
+  shortLabel: string;
+  partition: string;
+  startUrl: string;
+  sessionOrigin: string;
+  apiOrigin: string;
+  cookieScopeUrls: readonly string[];
+  allowedHostSuffixes: readonly string[];
+  readyHosts: readonly string[];
+  loginUrlHints: readonly string[];
 }
+
+export const APP_PROVIDER_OPTIONS: readonly AppProviderOption[] = [
+  {
+    provider: "wings-pms",
+    label: "Wings",
+    shortLabel: "WINGS",
+    partition: "persist:app-v2-wings",
+    startUrl: "https://pms.sanhait.com/",
+    sessionOrigin: "https://pms.sanhait.com",
+    apiOrigin: "https://pms.sanhait.com",
+    cookieScopeUrls: ["https://pms.sanhait.com/"],
+    allowedHostSuffixes: ["sanhait.com"],
+    readyHosts: ["pms.sanhait.com"],
+    loginUrlHints: ["identity/samlsso", "sso", "redirect"],
+  },
+  {
+    provider: "naver-partner",
+    label: "네이버 파트너",
+    shortLabel: "OTA",
+    partition: "persist:app-v2-naver",
+    startUrl: "https://partner.booking.naver.com/",
+    sessionOrigin: "https://partner.booking.naver.com",
+    apiOrigin: "https://api-partner.booking.naver.com",
+    cookieScopeUrls: ["https://partner.booking.naver.com/", "https://new.smartplace.naver.com/"],
+    allowedHostSuffixes: ["naver.com"],
+    readyHosts: ["partner.booking.naver.com", "new.smartplace.naver.com"],
+    loginUrlHints: [],
+  },
+  {
+    provider: "admin-station",
+    label: "Station",
+    shortLabel: "STATION",
+    partition: "persist:app-v2-station",
+    startUrl: "https://admin.admin-stationbyuhc.com/",
+    sessionOrigin: "https://admin.admin-stationbyuhc.com",
+    apiOrigin: "https://api.admin-stationbyuhc.com",
+    cookieScopeUrls: ["https://admin.admin-stationbyuhc.com/"],
+    allowedHostSuffixes: ["admin-stationbyuhc.com"],
+    readyHosts: ["admin.admin-stationbyuhc.com"],
+    loginUrlHints: [],
+  },
+] as const;
 
 export interface AppBranchOption {
   branch: AppBranch;
@@ -50,7 +102,6 @@ export const APP_BRANCH_OPTIONS: readonly AppBranchOption[] = [
 
 export interface AppBgeM3Settings {
   enabled: boolean;
-  modelId: string;
   runtime: AppBgeM3Runtime;
   modelPath: string;
   topK: number;
@@ -73,13 +124,18 @@ export interface AppOpsViewSettings {
   flagContinuationCandidates: boolean;
 }
 
+export interface AppWingsLoginSettings {
+  loginId: string;
+  password: string;
+}
+
 export interface AppSettings {
   spreadsheet: string;
   sheetName: string;
-  sheetTabs?: AppSheetTabSettings | null;
   opsView?: AppOpsViewSettings | null;
   reportWindowDays?: number;
   bgeM3?: AppBgeM3Settings | null;
+  wingsLogin?: AppWingsLoginSettings | null;
 }
 
 export interface AppSettingsSnapshot {
@@ -184,6 +240,17 @@ export interface AppLiveReadPreviewItem {
   title: string;
   subtitle: string;
   statusLabel: string;
+  kind?: "summary" | "reservation-block";
+  branchLabel?: string;
+  roomNo?: string;
+  roomType?: string;
+  guestName?: string;
+  reservationNo?: string;
+  checkin?: string;
+  checkout?: string;
+  nightCount?: number;
+  channel?: string;
+  noteHead?: string;
 }
 
 export interface AppLiveReadSnapshot {
@@ -217,6 +284,81 @@ export interface AppReservationActionRow {
   detail?: string;
 }
 
+export interface AppOpsOrderRow {
+  date: string;
+  weekday: string;
+  branch: string;
+  building: string;
+  roomNo: string;
+  opsRoomLabel: string;
+  roomType: string;
+  taskLabel: string;
+  taskRuleId: string;
+  arrivalCount: number;
+  departureCount: number;
+  stayoverCount: number;
+  turnoverFlag: boolean;
+  arrivalReservationNos: string;
+  departureReservationNos: string;
+  stayoverReservationNos: string;
+  channels: string;
+  noteHeads: string;
+  continuationCandidate: boolean;
+  continuationBasis: string;
+}
+
+export interface AppOpsArrivalRow {
+  section: string;
+  date: string;
+  weekday: string;
+  branch: string;
+  building: string;
+  roomNo: string;
+  opsRoomLabel: string;
+  roomType: string;
+  reservationNo: string;
+  reservationKey: string;
+  channel: string;
+  checkin: string;
+  checkout: string;
+  nights: number;
+  turnoverFlag: boolean;
+  arrivalReservationNos: string;
+  departureReservationNos: string;
+  arrivalChannels: string;
+  departureChannels: string;
+  noteHead: string;
+  nationalityNights: string;
+  continuationCandidate: boolean;
+  continuationBasis: string;
+}
+
+export interface AppOpsViewSnapshot {
+  orderListRows: AppOpsOrderRow[];
+  arrivalRows: AppOpsArrivalRow[];
+}
+
+export interface AppOpsSheetApplyInput {
+  action: "order-list" | "arrival";
+  branch: AppBranch;
+  startDate: string;
+  endDate: string;
+  spreadsheet: string;
+  sheetNames: string[];
+  reportDate?: string;
+}
+
+export interface AppOpsSheetApplySnapshot {
+  action: "order-list" | "arrival";
+  branch: AppBranch;
+  reportDate: string;
+  summary: string;
+  appliedCount: number;
+  spreadsheetId: string;
+  targetSheetNames: string[];
+  appliedAt: string;
+ }
+
 export interface AppReservationActionSnapshot {
   action: AppReservationAction;
   branch: AppBranch;
@@ -233,6 +375,15 @@ export interface AppReservationActionSnapshot {
   planToken?: string | null;
   requiresApproval?: boolean;
   applyAllowed?: boolean;
+  opsView?: AppOpsViewSnapshot | null;
+}
+
+export interface AppWingsLoginAttemptSnapshot {
+  attempted: boolean;
+  submitted: boolean;
+  summary: string;
+  loginId: string;
+  loggedAt: string | null;
 }
 
 export interface DesktopAppApi {
@@ -252,10 +403,16 @@ export interface DesktopAppApi {
   runOtaRead: (input: AppLiveReadInput) => Promise<AppLiveReadSnapshot>;
   runSheetRead: (input: AppLiveReadInput) => Promise<AppLiveReadSnapshot>;
   runReservationAction: (input: AppReservationActionInput) => Promise<AppReservationActionSnapshot>;
+  attemptWingsLogin: () => Promise<AppWingsLoginAttemptSnapshot>;
+  applyOpsSheetOutput: (input: AppOpsSheetApplyInput) => Promise<AppOpsSheetApplySnapshot>;
 }
 
 export function isAppProvider(value: unknown): value is AppProvider {
   return typeof value === "string" && APP_PROVIDERS.includes(value as AppProvider);
+}
+
+export function getAppProviderOption(provider: AppProvider): AppProviderOption {
+  return APP_PROVIDER_OPTIONS.find((item) => item.provider === provider) ?? APP_PROVIDER_OPTIONS[0];
 }
 
 export function getAppBranchOption(branch: AppBranch): AppBranchOption {

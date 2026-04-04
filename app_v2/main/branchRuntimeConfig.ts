@@ -7,7 +7,6 @@ import { APP_BRANCH_OPTIONS, getAppBranchOption } from "../../src/desktop/app-v2
 interface MappingBranchRecord {
   branch?: string;
   display_name?: string;
-  sheet_tabs?: string[];
   sheet_scope?: { spreadsheet_id?: string; sheet_name?: string };
   ota_profiles?: Record<string, { business_id?: string; branch_id?: string; status?: string }>;
   wings_profiles?: Array<{
@@ -36,7 +35,10 @@ export interface BranchRuntimeProfile {
     readAllowed: boolean;
     actionAllowed: boolean;
   };
-  sheetTabs: string[];
+  sheetScope: {
+    spreadsheetId: string;
+    sheetName: string;
+  };
   providerBindings: BranchProviderBinding[];
 }
 
@@ -100,7 +102,6 @@ function buildProviderBindings(branch: AppBranch, mapping: MappingBranchRecord |
 export function getBranchRuntimeProfile(branch: AppBranch): BranchRuntimeProfile {
   const branchOption = getAppBranchOption(branch);
   const mapping = findMappingBranch(branch);
-  const sheetTabs = Array.isArray(mapping?.sheet_tabs) ? mapping?.sheet_tabs.filter(Boolean) : [];
   return {
     branch,
     canonicalBranch: appToCanonicalBranch[branch],
@@ -111,7 +112,10 @@ export function getBranchRuntimeProfile(branch: AppBranch): BranchRuntimeProfile
       readAllowed: branchOption.availability === "active",
       actionAllowed: branchOption.availability === "active",
     },
-    sheetTabs,
+    sheetScope: {
+      spreadsheetId: String(mapping?.sheet_scope?.spreadsheet_id || ""),
+      sheetName: String(mapping?.sheet_scope?.sheet_name || ""),
+    },
     providerBindings: buildProviderBindings(branch, mapping, branchOption),
   };
 }

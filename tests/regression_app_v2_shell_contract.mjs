@@ -21,7 +21,7 @@ function main() {
   assert.equal(pkg.scripts["app:dev:renderer"], "vite --config app_v2/vite.config.ts");
   assert.equal(pkg.scripts["app:build:renderer"], "vite build --config app_v2/vite.config.ts");
   assert.equal(pkg.scripts["app:preview"], "vite preview --config app_v2/vite.config.ts");
-  assert.equal(pkg.scripts["app:verify:artifacts"], "npm run app:build:main && node scripts/app_v2_artifact_check.mjs");
+  assert.equal(pkg.scripts["app:verify:artifacts"], "npm run app:build && node scripts/app_v2_artifact_check.mjs");
   assert.equal(pkg.scripts["app:verify:sheet-live"], "node scripts/app_v2_runtime_verify.mjs --focus sheet-live");
   assert.equal(pkg.scripts["app:verify:live-read"], "node scripts/app_v2_runtime_verify.mjs --focus live-read");
 

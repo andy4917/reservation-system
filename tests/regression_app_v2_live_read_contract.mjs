@@ -37,6 +37,15 @@ async function main() {
   assert.equal(samsung.availability, "inactive");
   assert.equal(samsung.gate.readAllowed, false);
   assert.equal(samsung.gate.actionAllowed, false);
+  assert.deepEqual(seolleung.sheetScope, {
+    spreadsheetId: "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
+    sheetName: "2026"
+  });
+  assert.deepEqual(samsung.sheetScope, {
+    spreadsheetId: "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
+    sheetName: "2026"
+  });
+  assert.equal("sheetTabs" in seolleung, false);
   assert.ok(Array.isArray(seolleung.providerBindings), "provider bindings should exist");
   assert.ok(seolleung.providerBindings.some((row) => row.provider === "wings-pms"), "SEOLLEUNG should expose PMS session binding");
   assert.ok(seolleung.providerBindings.some((row) => row.provider === "admin-station"), "SEOLLEUNG should expose Station session binding");

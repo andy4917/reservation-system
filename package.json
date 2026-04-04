@@ -12,11 +12,11 @@
     "app:preview": "vite preview --config app_v2/vite.config.ts",
     "app:electron": "npm run app:build && node scripts/run_electron_with_bridge_secret.mjs .",
     "app:verify:electron-smoke": "node scripts/app_v2_electron_smoke.mjs",
-    "app:verify:artifacts": "npm run app:build:main && node scripts/app_v2_artifact_check.mjs",
+    "app:verify:artifacts": "npm run app:build && node scripts/app_v2_artifact_check.mjs",
     "app:verify:live-read": "node scripts/app_v2_runtime_verify.mjs --focus live-read",
     "app:verify:sheet-live": "node scripts/app_v2_runtime_verify.mjs --focus sheet-live",
     "read-live": "node scripts/app_v2_read_live.mjs",
-    "app:hygiene:check": "python3 scripts/check_contract_hygiene.py --cwd .",
+    "app:hygiene:check": "python3 scripts/check_contract_hygiene.py --cwd . && node tests/regression_app_v2_operational_hardcoding_guard.mjs",
     "app:check": "tsc -p tsconfig.json --noEmit && npm run app:hygiene:check",
     "extension:contracts:check": "tsc -p tsconfig.extension-contracts.json --noEmit",
     "extension:package": "./tasks/build_extension_unpacked.sh"

@@ -7,7 +7,7 @@ import type {
   AppLiveReadSnapshot,
   AppProvider,
 } from "../../src/desktop/app-v2-contracts.js";
-import { getAppBranchOption } from "../../src/desktop/app-v2-contracts.js";
+import { DEFAULT_APP_REPORT_WINDOW_DAYS, getAppBranchOption, getAppProviderOption } from "../../src/desktop/app-v2-contracts.js";
 import { describeEmbeddingAvailability } from "./embeddingRuntime.js";
 import { getBranchRuntimeProfile, getProviderBinding } from "./branchRuntimeConfig.js";
 import { buildHybridCandidateDecisions, buildHybridCandidatePairs, type HybridSearchBundle } from "./hybridCandidateEngine.js";
@@ -130,20 +130,7 @@ function runPythonJson(args: string[], cwd: string) {
   });
 }
 
-function resolveSheetNames(branch: AppBranch, settings: Awaited<ReturnType<typeof loadSettingsSnapshot>>) {
-  const tabs = settings.config?.sheetTabs;
-  if (tabs) {
-    if (branch === "COEX") {
-      return [tabs.coexMain, tabs.coexAnnex].filter(Boolean);
-    }
-    if (branch === "GANGNAM") {
-      return [tabs.gangnam].filter(Boolean);
-    }
-    if (branch === "SEOLLEUNG") {
-      return [tabs.seolleung].filter(Boolean);
-    }
-    return [tabs.samsung].filter(Boolean);
-  }
+function resolveSheetNames(settings: Awaited<ReturnType<typeof loadSettingsSnapshot>>) {
   return settings.config?.sheetName ? [settings.config.sheetName] : [];
 }
 
@@ -152,8 +139,7 @@ async function buildSettingsEvidence() {
   return [
     `spreadsheet:${settings.config?.spreadsheet ? "set" : "missing"}`,
     `sheetName:${settings.config?.sheetName ? "set" : "missing"}`,
-    `sheetTabs:${settings.config?.sheetTabs ? "set" : "missing"}`,
-    `windowDays:${settings.config?.reportWindowDays ?? 5}`,
+    `windowDays:${settings.config?.reportWindowDays ?? DEFAULT_APP_REPORT_WINDOW_DAYS}`,
     `bgeM3:${settings.config?.bgeM3?.enabled ? "on" : "off"}`,
     `bgeModelPath:${settings.config?.bgeM3?.modelPath ? "set" : "missing"}`,
     `bgeRuntime:${settings.config?.bgeM3?.runtime ?? "local-path"}`,
@@ -163,7 +149,7 @@ async function buildSettingsEvidence() {
 async function runLiveSheetBridge(input: AppLiveReadInput): Promise<LiveSheetBridgePayload> {
   const settings = await loadSettingsSnapshot();
   const spreadsheet = settings.config?.spreadsheet?.trim() ?? "";
-  const sheetNames = resolveSheetNames(input.branch, settings);
+  const sheetNames = resolveSheetNames(settings);
   if (!spreadsheet || sheetNames.length === 0) {
     throw new Error("예약 시트 설정이 비어 있습니다.");
   }
@@ -233,7 +219,7 @@ async function scoreSheetReviewCandidates(payload: LiveSheetBridgePayload) {
     const reviewCount = decisions.filter((item) => item.state === "review").length;
     const abstainCount = decisions.filter((item) => item.state === "abstain").length;
     return {
-      items: [...payload.items, ...reviewItems].slice(0, 8),
+      items: payload.items,
       evidence: [
         ...payload.evidence,
         `embedding:${availability.reason}`,
@@ -242,7 +228,7 @@ async function scoreSheetReviewCandidates(payload: LiveSheetBridgePayload) {
         `review:${reviewCount}`,
         `abstain:${abstainCount}`,
       ],
-      summary: reviewItems.length > 0 ? `${payload.summary} 판단 후보 ${reviewItems.length}건을 정리했습니다.` : payload.summary,
+      summary: reviewItems.length > 0 ? `${payload.summary} 판단 후보 ${reviewItems.length}건을 계산했습니다.` : payload.summary,
     };
   } catch (error) {
     return {
@@ -273,6 +259,7 @@ function buildPmsSessionScript(input: AppLiveReadInput) {
 
 function buildStationSessionScript(input: AppLiveReadInput) {
   const binding = getProviderBinding(input.branch, "admin-station");
+  const stationApiOrigin = getAppProviderOption("admin-station").apiOrigin;
   const payload = {
     branch: input.branch,
     startDate: input.startDate,
@@ -287,7 +274,7 @@ function buildStationSessionScript(input: AppLiveReadInput) {
       if (!branchId) {
         throw new Error("Station branch id is missing");
       }
-      const url = new URL("/admin/branch/" + branchId + "/calendar", "https://api.admin-stationbyuhc.com");
+      const url = new URL("/admin/branch/" + branchId + "/calendar", ${JSON.stringify(stationApiOrigin)});
       url.searchParams.set("startDate", ctx.startDate);
       url.searchParams.set("endDate", ctx.endDate);
       const response = await fetch(url.toString(), {
@@ -344,6 +331,7 @@ function buildStationSessionScript(input: AppLiveReadInput) {
 
 function buildNaverSessionScript(input: AppLiveReadInput) {
   const binding = getProviderBinding(input.branch, "naver-partner");
+  const naverApiOrigin = getAppProviderOption("naver-partner").apiOrigin;
   const payload = {
     branch: input.branch,
     startDate: input.startDate,
@@ -361,7 +349,7 @@ function buildNaverSessionScript(input: AppLiveReadInput) {
       if (!businessId) {
         throw new Error("Naver business id is missing");
       }
-      const itemUrl = new URL("/v3.1/businesses/" + businessId + "/biz-items", "https://api-partner.booking.naver.com");
+      const itemUrl = new URL("/v3.1/businesses/" + businessId + "/biz-items", ${JSON.stringify(naverApiOrigin)});
       itemUrl.searchParams.set("projections", "resource,type-value,option-category,BIZ_ITEM_AMENITY,biz-item-detail,language-resource");
       itemUrl.searchParams.set("size", "300");
       itemUrl.searchParams.set("lang", "ko");
@@ -380,7 +368,7 @@ function buildNaverSessionScript(input: AppLiveReadInput) {
       for (const row of items.slice(0, 20)) {
         const itemId = normalize(row.bizItemId || row.id || "");
         if (!itemId) continue;
-        const scheduleUrl = new URL("/v3.0/businesses/" + businessId + "/biz-items/" + itemId + "/daily-schedules", "https://api-partner.booking.naver.com");
+        const scheduleUrl = new URL("/v3.0/businesses/" + businessId + "/biz-items/" + itemId + "/daily-schedules", ${JSON.stringify(naverApiOrigin)});
         scheduleUrl.searchParams.set("startDateTime", ctx.startDate + "T00:00:00");
         scheduleUrl.searchParams.set("endDateTime", ctx.endDate + "T00:00:00");
         const scheduleResponse = await fetch(scheduleUrl.toString(), {
@@ -533,7 +521,6 @@ export async function runSheetRead(input: AppLiveReadInput): Promise<AppLiveRead
     return buildError("sheet", input.branch, "예약 시트 설정을 먼저 저장해 주세요.", [
       `spreadsheet:${settings.config?.spreadsheet ? "set" : "missing"}`,
       `sheetName:${settings.config?.sheetName ? "set" : "missing"}`,
-      `sheetTabs:${settings.config?.sheetTabs ? "set" : "missing"}`,
     ]);
   }
   try {

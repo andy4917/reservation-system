@@ -20,7 +20,10 @@ function main() {
   assert.match(contracts, /export type AppReservationAction/);
   assert.match(contracts, /export type AppBranch/);
 
-  assert.match(appSource, /WINGS 계정으로 시작|WINGS 로그인/);
+  assert.match(appSource, /설정/);
+  assert.match(appSource, /직접 입력 필요/);
+  assert.match(appSource, /운영 선택값/);
+  assert.match(appSource, /창 열기/);
   assert.match(appSource, /PMS 조회/);
   assert.match(appSource, /OTA 조회/);
   assert.match(appSource, /예약 시트 조회/);
@@ -34,9 +37,11 @@ function main() {
   assert.match(appSource, /어라이벌/);
   assert.match(appSource, /BGE-M3/);
   assert.match(appSource, /COEX|GANGNAM/);
-  assert.doesNotMatch(appSource, /0000/);
   assert.doesNotMatch(appSource, /mockShellData/);
   assert.doesNotMatch(appSource, /setTimeout\(/);
+  assert.match(appSource, /WINGS 로그인 아이디/);
+  assert.match(appSource, /WINGS 로그인 비밀번호/);
+  assert.doesNotMatch(appSource, /로그인 화면으로/);
   assert.doesNotMatch(appSource, /로그인에 성공했습니다\. PMS 조회에 같은 자격을 사용합니다\./);
 
   assert.match(preload, /runPmsRead/);

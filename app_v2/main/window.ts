@@ -45,3 +45,7 @@ export function createMainWindow() {
 
   return mainWindow;
 }
+
+export function hasMainWindow() {
+  return Boolean(mainWindow && !mainWindow.isDestroyed());
+}

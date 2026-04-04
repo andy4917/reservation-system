@@ -1,56 +1,29 @@
 import electron from "electron";
 import type { BrowserWindow as ElectronBrowserWindow } from "electron";
-import type { AppProvider, AppProviderBrowserState } from "../../src/desktop/app-v2-contracts.js";
-import { APP_PROVIDERS } from "../../src/desktop/app-v2-contracts.js";
+import type { AppProvider, AppProviderBrowserState, AppProviderOption } from "../../src/desktop/app-v2-contracts.js";
+import type { AppWingsLoginAttemptSnapshot, AppWingsLoginSettings } from "../../src/desktop/app-v2-contracts.js";
+import { APP_PROVIDERS, getAppProviderOption } from "../../src/desktop/app-v2-contracts.js";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { loadSettingsSnapshot } from "./settingsStore.js";
 
-const { BrowserWindow } = electron;
-
-interface ProviderWorkspaceConfig {
-  provider: AppProvider;
-  label: string;
-  partition: string;
-  startUrl: string;
-  cookieScopeUrls: string[];
-}
+const { BrowserWindow, app } = electron;
 
 interface ProviderWorkspaceRecord {
   window: ElectronBrowserWindow | null;
   state: AppProviderBrowserState;
 }
 
-const PROVIDER_CONFIG: Record<AppProvider, ProviderWorkspaceConfig> = {
-  "wings-pms": {
-    provider: "wings-pms",
-    label: "Wings",
-    partition: "persist:app-v2-wings",
-    startUrl: "https://pms.sanhait.com/",
-    cookieScopeUrls: ["https://pms.sanhait.com/"]
-  },
-  "naver-partner": {
-    provider: "naver-partner",
-    label: "Naver",
-    partition: "persist:app-v2-naver",
-    startUrl: "https://partner.booking.naver.com/",
-    cookieScopeUrls: ["https://partner.booking.naver.com/", "https://new.smartplace.naver.com/"]
-  },
-  "admin-station": {
-    provider: "admin-station",
-    label: "Station",
-    partition: "persist:app-v2-station",
-    startUrl: "https://admin.admin-stationbyuhc.com/",
-    cookieScopeUrls: ["https://admin.admin-stationbyuhc.com/"]
-  }
-};
-
 const workspaceRecords = new Map<AppProvider, ProviderWorkspaceRecord>();
 const DEFAULT_PROVIDER_LOAD_TIMEOUT_MS = 15000;
+const WINGS_LOGIN_LOG_FILE_NAME = "app-v2-wings-login-log.jsonl";
 
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function getProviderConfig(provider: AppProvider) {
-  return PROVIDER_CONFIG[provider];
+function getProviderConfig(provider: AppProvider): AppProviderOption {
+  return getAppProviderOption(provider);
 }
 
 function readProviderLoadTimeoutMs() {
@@ -221,6 +194,19 @@ async function loadProviderStartUrl(windowRef: ElectronBrowserWindow, startUrl: 
   }
 }
 
+function getWingsLoginLogPath() {
+  return path.join(app.getPath("userData"), WINGS_LOGIN_LOG_FILE_NAME);
+}
+
+async function appendWingsLoginLog(entry: Record<string, string>) {
+  await fs.mkdir(path.dirname(getWingsLoginLogPath()), { recursive: true });
+  await fs.appendFile(getWingsLoginLogPath(), `${JSON.stringify(entry)}\n`, "utf8");
+}
+
+function hasWingsCredentials(settings: AppWingsLoginSettings | null | undefined) {
+  return Boolean(settings?.loginId && settings?.password);
+}
+
 export async function ensureProviderBrowser(provider: AppProvider): Promise<AppProviderBrowserState> {
   const record = getRecord(provider);
   if (record.window && !record.window.isDestroyed()) {
@@ -262,6 +248,89 @@ export async function ensureProviderBrowser(provider: AppProvider): Promise<AppP
   return refreshProviderState(provider);
 }
 
+export async function attemptWingsLogin(): Promise<AppWingsLoginAttemptSnapshot> {
+  const settings = await loadSettingsSnapshot();
+  const wingsLogin = settings.config?.wingsLogin ?? null;
+  if (!hasWingsCredentials(wingsLogin)) {
+    return {
+      attempted: false,
+      submitted: false,
+      summary: "저장된 WINGS 로그인 정보가 없습니다.",
+      loginId: wingsLogin?.loginId ?? "",
+      loggedAt: null,
+    };
+  }
+  const storedLogin = wingsLogin as AppWingsLoginSettings;
+
+  await ensureProviderBrowser("wings-pms");
+  const loggedAt = new Date().toISOString();
+  const result = await executeProviderReadScript<{ submitted: boolean; reason?: string }>(
+    "wings-pms",
+    `
+      (() => {
+        const loginId = ${JSON.stringify(storedLogin.loginId)};
+        const password = ${JSON.stringify(storedLogin.password)};
+        const textMatch = (value) => typeof value === "string" && /id|user|email|login/i.test(value);
+        const findIdInput = () => {
+          const inputs = Array.from(document.querySelectorAll("input"));
+          return inputs.find((input) => {
+            const element = input;
+            const type = String(element.getAttribute("type") || "").toLowerCase();
+            const name = String(element.getAttribute("name") || "");
+            const id = String(element.getAttribute("id") || "");
+            const placeholder = String(element.getAttribute("placeholder") || "");
+            return type !== "password" && [name, id, placeholder].some(textMatch);
+          }) || null;
+        };
+        const findPasswordInput = () =>
+          Array.from(document.querySelectorAll("input")).find((input) => String(input.getAttribute("type") || "").toLowerCase() === "password") || null;
+        const submitButton =
+          Array.from(document.querySelectorAll("button, input[type='submit']")).find((element) => {
+            const text = (element.textContent || element.getAttribute("value") || "").toLowerCase();
+            return /로그인|login|sign in|확인/.test(text);
+          }) || null;
+
+        const idInput = findIdInput();
+        const passwordInput = findPasswordInput();
+        if (!idInput || !passwordInput) {
+          return { submitted: false, reason: "login-fields-not-found" };
+        }
+        const setNativeValue = (element, value) => {
+          const prototype = Object.getPrototypeOf(element);
+          const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+          if (descriptor && typeof descriptor.set === "function") descriptor.set.call(element, value);
+          else element.value = value;
+          element.dispatchEvent(new Event("input", { bubbles: true }));
+          element.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+        setNativeValue(idInput, loginId);
+        setNativeValue(passwordInput, password);
+        if (submitButton instanceof HTMLElement) {
+          submitButton.click();
+          return { submitted: true };
+        }
+        passwordInput.form?.requestSubmit?.();
+        return { submitted: true };
+      })()
+    `,
+  );
+
+  await appendWingsLoginLog({
+    loggedAt,
+    loginId: storedLogin.loginId,
+    submitted: result.submitted ? "yes" : "no",
+    reason: result.reason || "",
+  });
+
+  return {
+    attempted: true,
+    submitted: result.submitted === true,
+    summary: result.submitted === true ? "저장된 WINGS 로그인 정보로 PMS 로그인을 시도했습니다." : `WINGS 로그인 시도 실패: ${result.reason || "unknown"}`,
+    loginId: storedLogin.loginId,
+    loggedAt,
+  };
+}
+
 export async function getProviderBrowserState(provider: AppProvider): Promise<AppProviderBrowserState> {
   return refreshProviderState(provider);
 }
@@ -276,6 +345,10 @@ export async function executeProviderReadScript<T>(provider: AppProvider, script
 
 export async function listProviderBrowsers(): Promise<AppProviderBrowserState[]> {
   return Promise.all(APP_PROVIDERS.map((provider) => refreshProviderState(provider)));
+}
+
+export async function primeProviderBrowsers(): Promise<AppProviderBrowserState[]> {
+  return Promise.all(APP_PROVIDERS.map((provider) => ensureProviderBrowser(provider)));
 }
 
 export async function openProviderBrowser(provider: AppProvider): Promise<AppProviderBrowserState> {

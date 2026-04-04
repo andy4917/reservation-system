@@ -2,16 +2,24 @@ import electron from "electron";
 import type {
   AppBranch,
   AppLiveReadInput,
+  AppOpsSheetApplyInput,
   AppProvider,
   AppReservationAction,
   AppReservationActionInput,
   AppRuntimeVerifyFocus,
   AppSettings
 } from "../../src/desktop/app-v2-contracts.js";
-import { APP_BRANCHES, isAppProvider } from "../../src/desktop/app-v2-contracts.js";
+import {
+  APP_BRANCHES,
+  DEFAULT_APP_BGE_SCORE_THRESHOLD,
+  DEFAULT_APP_BGE_TOP_K,
+  DEFAULT_APP_REPORT_WINDOW_DAYS,
+  isAppProvider
+} from "../../src/desktop/app-v2-contracts.js";
 import { listAuthRequirements } from "./authRequirements.js";
 import { installBgeM3Model } from "./bgeModelInstaller.js";
 import {
+  attemptWingsLogin,
   ensureProviderBrowser,
   getProviderBrowserState,
   hideProviderBrowser,
@@ -21,6 +29,7 @@ import {
 } from "./providerWorkspaceManager.js";
 import { runOtaRead, runPmsRead, runSheetRead } from "./liveReadActions.js";
 import { runPreflight } from "./preflight.js";
+import { applyOpsSheetOutput } from "./opsSheetApplyRunner.js";
 import { runReservationAction } from "./reservationActionRunner.js";
 import { evaluateRuntimeReadiness } from "./runtimeReadiness.js";
 import { loadSettingsSnapshot, saveSettings } from "./settingsStore.js";
@@ -40,31 +49,6 @@ function normalizeSettingsPayload(input: unknown): Partial<AppSettings> {
   return {
     spreadsheet: typeof payload.spreadsheet === "string" ? payload.spreadsheet : "",
     sheetName: typeof payload.sheetName === "string" ? payload.sheetName : "",
-    sheetTabs:
-      payload.sheetTabs && typeof payload.sheetTabs === "object"
-        ? {
-            coexMain:
-              typeof (payload.sheetTabs as Record<string, unknown>).coexMain === "string"
-                ? String((payload.sheetTabs as Record<string, unknown>).coexMain)
-                : "",
-            coexAnnex:
-              typeof (payload.sheetTabs as Record<string, unknown>).coexAnnex === "string"
-                ? String((payload.sheetTabs as Record<string, unknown>).coexAnnex)
-                : "",
-            gangnam:
-              typeof (payload.sheetTabs as Record<string, unknown>).gangnam === "string"
-                ? String((payload.sheetTabs as Record<string, unknown>).gangnam)
-                : "",
-            seolleung:
-              typeof (payload.sheetTabs as Record<string, unknown>).seolleung === "string"
-                ? String((payload.sheetTabs as Record<string, unknown>).seolleung)
-                : "",
-            samsung:
-              typeof (payload.sheetTabs as Record<string, unknown>).samsung === "string"
-                ? String((payload.sheetTabs as Record<string, unknown>).samsung)
-                : "",
-          }
-        : null,
     opsView:
       payload.opsView && typeof payload.opsView === "object"
         ? {
@@ -76,7 +60,6 @@ function normalizeSettingsPayload(input: unknown): Partial<AppSettings> {
       payload.bgeM3 && typeof payload.bgeM3 === "object"
         ? {
             enabled: (payload.bgeM3 as Record<string, unknown>).enabled === true,
-            modelId: typeof (payload.bgeM3 as Record<string, unknown>).modelId === "string" ? String((payload.bgeM3 as Record<string, unknown>).modelId) : "Xenova/bge-m3",
             runtime:
               (payload.bgeM3 as Record<string, unknown>).runtime === "download-if-missing"
                 ? "download-if-missing"
@@ -85,11 +68,24 @@ function normalizeSettingsPayload(input: unknown): Partial<AppSettings> {
               typeof (payload.bgeM3 as Record<string, unknown>).modelPath === "string"
                 ? String((payload.bgeM3 as Record<string, unknown>).modelPath)
                 : "",
-            topK: Number((payload.bgeM3 as Record<string, unknown>).topK ?? 5),
-            scoreThreshold: Number((payload.bgeM3 as Record<string, unknown>).scoreThreshold ?? 0.72)
+            topK: Number((payload.bgeM3 as Record<string, unknown>).topK ?? DEFAULT_APP_BGE_TOP_K),
+            scoreThreshold: Number((payload.bgeM3 as Record<string, unknown>).scoreThreshold ?? DEFAULT_APP_BGE_SCORE_THRESHOLD)
           }
         : null,
-    reportWindowDays: Number(payload.reportWindowDays ?? 5)
+    wingsLogin:
+      payload.wingsLogin && typeof payload.wingsLogin === "object"
+        ? {
+            loginId:
+              typeof (payload.wingsLogin as Record<string, unknown>).loginId === "string"
+                ? String((payload.wingsLogin as Record<string, unknown>).loginId)
+                : "",
+            password:
+              typeof (payload.wingsLogin as Record<string, unknown>).password === "string"
+                ? String((payload.wingsLogin as Record<string, unknown>).password)
+                : "",
+          }
+        : null,
+    reportWindowDays: Number(payload.reportWindowDays ?? DEFAULT_APP_REPORT_WINDOW_DAYS)
   };
 }
 
@@ -161,6 +157,26 @@ function parseReservationActionInput(input: unknown): AppReservationActionInput 
   };
 }
 
+function parseOpsSheetApplyInput(input: unknown): AppOpsSheetApplyInput {
+  if (!input || typeof input !== "object") {
+    throw new Error("Ops sheet apply input is required.");
+  }
+  const payload = input as Partial<Record<keyof AppOpsSheetApplyInput, unknown>>;
+  const action = parseReservationAction(payload.action);
+  if (action !== "order-list" && action !== "arrival") {
+    throw new Error(`Unsupported ops sheet apply action: ${String(payload.action)}`);
+  }
+  return {
+    action,
+    branch: parseBranch(payload.branch),
+    startDate: parseDateInput(payload.startDate, "startDate"),
+    endDate: parseDateInput(payload.endDate, "endDate"),
+    spreadsheet: typeof payload.spreadsheet === "string" ? String(payload.spreadsheet) : "",
+    sheetNames: Array.isArray(payload.sheetNames) ? payload.sheetNames.filter((item): item is string => typeof item === "string") : [],
+    reportDate: typeof payload.reportDate === "string" ? String(payload.reportDate) : "",
+  };
+}
+
 let ipcRegistered = false;
 
 export function registerDesktopAppIpc() {
@@ -186,5 +202,9 @@ export function registerDesktopAppIpc() {
   ipcMain.handle("desktop-app:run-sheet-read", async (_event, input: unknown) => runSheetRead(parseLiveReadInput(input)));
   ipcMain.handle("desktop-app:run-reservation-action", async (_event, input: unknown) =>
     runReservationAction(parseReservationActionInput(input))
+  );
+  ipcMain.handle("desktop-app:attempt-wings-login", async () => attemptWingsLogin());
+  ipcMain.handle("desktop-app:apply-ops-sheet-output", async (_event, input: unknown) =>
+    applyOpsSheetOutput(parseOpsSheetApplyInput(input))
   );
 }

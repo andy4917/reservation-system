@@ -6,7 +6,12 @@ import type {
   AppOpsViewSettings,
   AppSettings,
   AppSettingsSnapshot,
-  AppSheetTabSettings,
+  AppWingsLoginSettings,
+} from "../../src/desktop/app-v2-contracts.js";
+import {
+  DEFAULT_APP_BGE_SCORE_THRESHOLD,
+  DEFAULT_APP_BGE_TOP_K,
+  DEFAULT_APP_REPORT_WINDOW_DAYS,
 } from "../../src/desktop/app-v2-contracts.js";
 
 const { app } = electron;
@@ -26,22 +31,19 @@ function getSettingsPath() {
   return path.join(app.getPath("userData"), SETTINGS_FILE_NAME);
 }
 
-function normalizeSheetTabs(input: unknown): AppSheetTabSettings {
-  const tabs = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
-  return {
-    coexMain: normalizeText(tabs.coexMain),
-    coexAnnex: normalizeText(tabs.coexAnnex),
-    gangnam: normalizeText(tabs.gangnam),
-    seolleung: normalizeText(tabs.seolleung),
-    samsung: normalizeText(tabs.samsung),
-  };
-}
-
 function normalizeOpsView(input: unknown): AppOpsViewSettings {
   const opsView = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   return {
     excludeRoomMakeup: opsView.excludeRoomMakeup === true,
     flagContinuationCandidates: opsView.flagContinuationCandidates !== false,
+  };
+}
+
+function normalizeWingsLogin(input: unknown): AppWingsLoginSettings {
+  const wingsLogin = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  return {
+    loginId: normalizeText(wingsLogin.loginId),
+    password: normalizeText(wingsLogin.password),
   };
 }
 
@@ -51,36 +53,28 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
     bge && typeof bge === "object"
       ? {
           enabled: bge.enabled === true,
-          modelId: normalizeText(bge.modelId) || "Xenova/bge-m3",
           runtime: bge.runtime === "download-if-missing" ? "download-if-missing" : "local-path",
           modelPath: normalizeText(bge.modelPath),
-          topK: Number.isFinite(Number(bge.topK)) ? Number(bge.topK) : 5,
-          scoreThreshold: Number.isFinite(Number(bge.scoreThreshold)) ? Number(bge.scoreThreshold) : 0.72
+          topK: Number.isFinite(Number(bge.topK)) ? Number(bge.topK) : DEFAULT_APP_BGE_TOP_K,
+          scoreThreshold: Number.isFinite(Number(bge.scoreThreshold)) ? Number(bge.scoreThreshold) : DEFAULT_APP_BGE_SCORE_THRESHOLD
         }
       : null;
   return {
     spreadsheet: normalizeText(input.spreadsheet),
     sheetName: normalizeText(input.sheetName),
-    sheetTabs: normalizeSheetTabs(input.sheetTabs),
     opsView: normalizeOpsView(input.opsView),
     reportWindowDays: Number.isFinite(Number(input.reportWindowDays))
       ? Math.min(Math.max(Math.round(Number(input.reportWindowDays)), 1), 14)
-      : 5,
-    bgeM3: normalizedBgeM3
+      : DEFAULT_APP_REPORT_WINDOW_DAYS,
+    bgeM3: normalizedBgeM3,
+    wingsLogin: normalizeWingsLogin(input.wingsLogin),
   };
 }
 
 function buildSnapshot(config: AppSettings | null, updatedAt: string | null): AppSettingsSnapshot {
   const missingRequired: Array<keyof AppSettings> = [];
-  const hasSheetTabs = Boolean(
-    config?.sheetTabs?.coexMain ||
-      config?.sheetTabs?.coexAnnex ||
-      config?.sheetTabs?.gangnam ||
-      config?.sheetTabs?.seolleung ||
-      config?.sheetTabs?.samsung
-  );
   if (!config?.spreadsheet) missingRequired.push("spreadsheet");
-  if (!config?.sheetName && !hasSheetTabs) missingRequired.push("sheetName");
+  if (!config?.sheetName) missingRequired.push("sheetName");
   return {
     config,
     isConfigured: missingRequired.length === 0,
@@ -120,8 +114,9 @@ export async function saveSettings(input: Partial<AppSettings>): Promise<AppSett
       normalized.sheetName ||
       normalized.reportWindowDays ||
       normalized.bgeM3 ||
-      normalized.sheetTabs ||
-      normalized.opsView
+      normalized.opsView ||
+      normalized.wingsLogin?.loginId ||
+      normalized.wingsLogin?.password
   );
   const nextConfig = hasAnySettings ? normalized : null;
   const updatedAt = new Date().toISOString();

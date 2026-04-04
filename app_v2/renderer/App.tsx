@@ -1,7 +1,10 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type {
   AppAuthRequirement,
+  AppOpsArrivalRow,
+  AppOpsOrderRow,
   AppBranch,
+  AppLiveReadPreviewItem,
   AppLiveReadSnapshot,
   AppPreflightSnapshot,
   AppProvider,
@@ -11,8 +14,15 @@ import type {
   AppRuntimeVerifySnapshot,
   AppSettingsSnapshot,
   AppShellModule,
+  AppWingsLoginAttemptSnapshot,
 } from "../../src/desktop/app-v2-contracts.js";
-import { getAppBranchOption } from "../../src/desktop/app-v2-contracts.js";
+import {
+  DEFAULT_APP_BGE_SCORE_THRESHOLD,
+  DEFAULT_APP_BGE_TOP_K,
+  DEFAULT_APP_REPORT_WINDOW_DAYS,
+  getAppBranchOption,
+  getAppProviderOption
+} from "../../src/desktop/app-v2-contracts.js";
 import {
   buildActionOutputRows,
   buildActionSteps,
@@ -24,6 +34,7 @@ import {
   deriveReservationActionAvailability,
   RESERVATION_ACTION_LABELS,
 } from "./shellState.js";
+import uhSuiteLogo from "./assets/uh-suite-logo.svg";
 
 const MODULE_LABELS: Record<Exclude<AppShellModule, "settings">, string> = {
   "pms-read": "PMS 조회",
@@ -33,6 +44,24 @@ const MODULE_LABELS: Record<Exclude<AppShellModule, "settings">, string> = {
 };
 
 type WorkspacePhase = "idle" | "working" | "result";
+type AppReadSource = "pms" | "ota" | "sheet";
+
+const channelColorMap: Record<string, { label: string; bg: string; fg: string; accent: string }> = {
+  AGODA: { label: "아고다", bg: "#EA9999", fg: "#1f1111", accent: "#c35f5f" },
+  BOOKING: { label: "부킹닷컴", bg: "#6D9EEB", fg: "#111827", accent: "#3f6eb6" },
+  TRIP: { label: "트립닷컴", bg: "#45818E", fg: "#ffffff", accent: "#2f5f69" },
+  EXPEDIA: { label: "익스피디아", bg: "#F6B26B", fg: "#24150a", accent: "#d18c45" },
+  AIRBNB: { label: "에어비앤비", bg: "#B6D7A8", fg: "#173019", accent: "#7ba765" },
+  TRAVELOKA: { label: "트리블로카", bg: "#C9DAF8", fg: "#17304f", accent: "#88aede" },
+  NAVER: { label: "네이버", bg: "#C6E0B4", fg: "#173019", accent: "#6AA84F" },
+  YANOLJA: { label: "야놀자", bg: "#FFFF00", fg: "#292400", accent: "#b6a600" },
+  HERE: { label: "여기어때", bg: "#EAD1DC", fg: "#3f1f2f", accent: "#c08ca7" },
+  COUPANG_TRAVEL: { label: "쿠팡트래블", bg: "#980000", fg: "#ffffff", accent: "#6d0000" },
+  STATION: { label: "스테이션", bg: "#00FFFF", fg: "#00393c", accent: "#00b8b8" },
+  DIDA_TRAVEL: { label: "디다트레블", bg: "#8E7CC3", fg: "#ffffff", accent: "#6f5ba6" },
+  ETC: { label: "현장 숙박 결제", bg: "#999999", fg: "#111111", accent: "#666666" },
+  UNKNOWN: { label: "기타 비용", bg: "#5B9BD5", fg: "#ffffff", accent: "#3c79b4" },
+};
 
 function toDateInputValue(value: Date) {
   return value.toISOString().slice(0, 10);
@@ -44,7 +73,7 @@ function addDays(value: string, days: number) {
   return toDateInputValue(parsed);
 }
 
-function buildDefaultWindow(days = 5) {
+function buildDefaultWindow(days = DEFAULT_APP_REPORT_WINDOW_DAYS) {
   const start = toDateInputValue(new Date());
   return {
     start,
@@ -60,9 +89,7 @@ function formatDateTime(value: string | null) {
 }
 
 function providerLabel(provider: AppProvider) {
-  if (provider === "wings-pms") return "WINGS";
-  if (provider === "naver-partner") return "OTA";
-  return "STATION";
+  return getAppProviderOption(provider).shortLabel;
 }
 
 function authModeLabel(mode: AppAuthRequirement["authMode"]) {
@@ -104,6 +131,119 @@ function buildManagementTitle(action: AppReservationAction) {
   return "어라이벌";
 }
 
+function parseIsoDate(value?: string) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function buildWindowDays(startDate: string, endDate: string) {
+  const start = parseIsoDate(startDate);
+  const end = parseIsoDate(endDate);
+  if (!start || !end || start > end) return [];
+  const days: Array<{ iso: string; label: string; weekday: string }> = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    days.push({
+      iso: toDateInputValue(cursor),
+      label: String(cursor.getDate()).padStart(2, "0"),
+      weekday: cursor.toLocaleDateString("ko-KR", { weekday: "short" }),
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+}
+
+function isReservationBlockItem(item: AppLiveReadPreviewItem) {
+  return item.kind === "reservation-block" && Boolean(item.roomNo && item.checkin && item.checkout);
+}
+
+function matchesStayDay(item: AppLiveReadPreviewItem, dayIso: string) {
+  const day = parseIsoDate(dayIso);
+  const checkin = parseIsoDate(item.checkin);
+  const checkout = parseIsoDate(item.checkout);
+  if (!day || !checkin || !checkout) return false;
+  return day >= checkin && day < checkout;
+}
+
+function formatStayRange(item: AppLiveReadPreviewItem) {
+  if (!item.checkin || !item.checkout) return "-";
+  return `${item.checkin} ~ ${item.checkout}`;
+}
+
+function summarizeReference(item: AppLiveReadPreviewItem | null, emptyLabel: string) {
+  if (!item) return emptyLabel;
+  return [item.title, item.subtitle].filter(Boolean).join(" · ");
+}
+
+function getChannelVisual(channel?: string) {
+  const normalized = String(channel || "").trim().toUpperCase();
+  return channelColorMap[normalized] ?? channelColorMap.UNKNOWN;
+}
+
+const opsTaskToneMap: Record<string, { bg: string; fg: string; accent: string }> = {
+  긴급클리닝: { bg: "#ffd9d4", fg: "#7f221f", accent: "#ce6e65" },
+  룸메이크업: { bg: "#dfe7fb", fg: "#314a7a", accent: "#90a7d7" },
+  룸클리닝: { bg: "#eef5cc", fg: "#5e651f", accent: "#b4bf57" },
+  TURNOVER: { bg: "#ffd9d4", fg: "#7f221f", accent: "#ce6e65" },
+  ARRIVAL: { bg: "#dff7f1", fg: "#136359", accent: "#69d3c3" },
+  DEPARTURE: { bg: "#fff3bf", fg: "#7a5a08", accent: "#e0c35a" },
+};
+
+function getOpsTaskTone(label: string) {
+  return opsTaskToneMap[label] ?? { bg: "#edf2f6", fg: "#415160", accent: "#8ca0af" };
+}
+
+function roomSortKey(value: string) {
+  return value.replace(/[^0-9A-Z]/gi, "").padStart(8, "0");
+}
+
+function formatDisplayDate(value: string) {
+  const parsed = parseIsoDate(value);
+  if (!parsed) return value;
+  return parsed.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" });
+}
+
+function buildOrderRowComment(row: AppOpsOrderRow) {
+  const parts = [
+    row.turnoverFlag ? "턴오버" : "",
+    row.noteHeads,
+    row.arrivalReservationNos,
+    row.departureReservationNos,
+    row.continuationCandidate ? row.continuationBasis || "연박 후보" : "",
+  ].filter(Boolean);
+  return parts.join(" · ") || "추가 메모 없음";
+}
+
+function inferArrivalDepartureText(row: AppOpsArrivalRow, linkedOrderRow?: AppOpsOrderRow | null) {
+  if (row.section === "TURNOVER") {
+    return {
+      departureText: linkedOrderRow?.taskLabel || "전체청소",
+      arrivalText: row.nationalityNights || row.noteHead || "전체청소",
+    };
+  }
+  if (row.section === "DEPARTURE") {
+    return {
+      departureText: linkedOrderRow?.taskLabel || row.noteHead || (row.turnoverFlag ? "전체청소" : "퇴실"),
+      arrivalText: "",
+    };
+  }
+  return {
+    departureText: linkedOrderRow?.taskLabel && !linkedOrderRow.taskLabel.includes("긴급") ? linkedOrderRow.taskLabel : "",
+    arrivalText: row.nationalityNights || row.noteHead || "입실",
+  };
+}
+
+function classifyArrivalCellTone(text: string) {
+  if (!text) return getOpsTaskTone("");
+  if (text.includes("전체청소")) return getOpsTaskTone("긴급클리닝");
+  if (text.includes("룸메이크업") || text.includes("재실")) return getOpsTaskTone("룸메이크업");
+  if (text.includes("룸클리닝")) return getOpsTaskTone("룸클리닝");
+  if (text.includes("퇴실예정")) return getOpsTaskTone("ARRIVAL");
+  if (text.includes("VIP") || text.includes("얼리") || text.includes("장기")) return getOpsTaskTone("DEPARTURE");
+  return getOpsTaskTone("ARRIVAL");
+}
+
 export default function App() {
   const [authRequirements, setAuthRequirements] = useState<AppAuthRequirement[]>([]);
   const [settingsSnapshot, setSettingsSnapshot] = useState<AppSettingsSnapshot | null>(null);
@@ -112,23 +252,19 @@ export default function App() {
   const [runtimeReadiness, setRuntimeReadiness] = useState<AppRuntimeVerifySnapshot | null>(null);
   const [spreadsheet, setSpreadsheet] = useState("");
   const [sheetName, setSheetName] = useState("");
-  const [sheetTabCoexMain, setSheetTabCoexMain] = useState("코엑스");
-  const [sheetTabCoexAnnex, setSheetTabCoexAnnex] = useState("코엑스2");
-  const [sheetTabGangnam, setSheetTabGangnam] = useState("강남");
-  const [sheetTabSeolleung, setSheetTabSeolleung] = useState("선릉");
-  const [sheetTabSamsung, setSheetTabSamsung] = useState("삼성");
-  const [reportWindowDays, setReportWindowDays] = useState("5");
+  const [reportWindowDays, setReportWindowDays] = useState(String(DEFAULT_APP_REPORT_WINDOW_DAYS));
   const [excludeRoomMakeup, setExcludeRoomMakeup] = useState(false);
   const [flagContinuationCandidates, setFlagContinuationCandidates] = useState(true);
   const [bgeEnabled, setBgeEnabled] = useState(true);
   const [bgeRuntime, setBgeRuntime] = useState<"local-path" | "download-if-missing">("local-path");
   const [bgeModelPath, setBgeModelPath] = useState("");
-  const [bgeTopK, setBgeTopK] = useState("5");
-  const [bgeScoreThreshold, setBgeScoreThreshold] = useState("0.72");
-  const [bgeInstallSummary, setBgeInstallSummary] = useState("BGE-M3 로컬 모델 설치가 필요합니다.");
+  const [bgeTopK, setBgeTopK] = useState(String(DEFAULT_APP_BGE_TOP_K));
+  const [bgeScoreThreshold, setBgeScoreThreshold] = useState(String(DEFAULT_APP_BGE_SCORE_THRESHOLD));
+  const [bgeInstallSummary, setBgeInstallSummary] = useState("BGE-M3 상태를 아직 확인하지 않았습니다.");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<AppBranch>("COEX");
-  const [activeModule, setActiveModule] = useState<AppShellModule>("pms-read");
+  const [activeModule, setActiveModule] = useState<AppShellModule>("reservation-management");
+  const [activeSource, setActiveSource] = useState<AppReadSource>("sheet");
   const [activeReservationAction, setActiveReservationAction] = useState<AppReservationAction>("validate");
   const [workspacePhase, setWorkspacePhase] = useState<WorkspacePhase>("idle");
   const [workspaceMessage, setWorkspaceMessage] = useState("준비됨");
@@ -137,36 +273,43 @@ export default function App() {
   const [reads, setReads] = useState(buildInitialReads("COEX"));
   const [reservationResult, setReservationResult] = useState<AppReservationActionSnapshot | null>(null);
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
+  const [selectedRoomDetailId, setSelectedRoomDetailId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const previousModuleRef = useRef<AppShellModule>("pms-read");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [opsBoardDate, setOpsBoardDate] = useState("");
+  const [opsApplySummary, setOpsApplySummary] = useState("");
+  const [wingsLoginId, setWingsLoginId] = useState("");
+  const [wingsPassword, setWingsPassword] = useState("");
+  const [wingsLoginSummary, setWingsLoginSummary] = useState("저장된 로그인 정보가 없습니다.");
+  const previousModuleRef = useRef<AppShellModule>("reservation-management");
   const previousActionRef = useRef<AppReservationAction>("validate");
   const autoOpenedProvidersRef = useRef<Set<AppProvider>>(new Set());
+  const autoWingsLoginAttemptedRef = useRef(false);
 
   const api = window.desktopApp;
+  const activeBranchSheetNames = useMemo(() => (sheetName ? [sheetName] : []), [sheetName]);
 
   async function refreshSettings() {
     if (!api?.loadSettings) return;
     const snapshot = await api.loadSettings();
-    const nextWindowDays = snapshot.config?.reportWindowDays ?? 5;
+    const nextWindowDays = snapshot.config?.reportWindowDays ?? DEFAULT_APP_REPORT_WINDOW_DAYS;
     const defaultWindow = buildDefaultWindow(nextWindowDays);
     startTransition(() => {
       setSettingsSnapshot(snapshot);
       setSpreadsheet(snapshot.config?.spreadsheet ?? "");
       setSheetName(snapshot.config?.sheetName ?? "");
-      setSheetTabCoexMain(snapshot.config?.sheetTabs?.coexMain ?? "코엑스");
-      setSheetTabCoexAnnex(snapshot.config?.sheetTabs?.coexAnnex ?? "코엑스2");
-      setSheetTabGangnam(snapshot.config?.sheetTabs?.gangnam ?? "강남");
-      setSheetTabSeolleung(snapshot.config?.sheetTabs?.seolleung ?? "선릉");
-      setSheetTabSamsung(snapshot.config?.sheetTabs?.samsung ?? "삼성");
       setReportWindowDays(String(nextWindowDays));
       setExcludeRoomMakeup(snapshot.config?.opsView?.excludeRoomMakeup ?? false);
       setFlagContinuationCandidates(snapshot.config?.opsView?.flagContinuationCandidates ?? true);
       setBgeEnabled(snapshot.config?.bgeM3?.enabled ?? true);
       setBgeRuntime(snapshot.config?.bgeM3?.runtime ?? "local-path");
       setBgeModelPath(snapshot.config?.bgeM3?.modelPath ?? "");
-      setBgeTopK(String(snapshot.config?.bgeM3?.topK ?? 5));
-      setBgeScoreThreshold(String(snapshot.config?.bgeM3?.scoreThreshold ?? 0.72));
-      setBgeInstallSummary(snapshot.config?.bgeM3?.modelPath ? "BGE-M3 로컬 모델 경로가 저장되어 있습니다." : "BGE-M3 로컬 모델 설치가 필요합니다.");
+      setBgeTopK(String(snapshot.config?.bgeM3?.topK ?? DEFAULT_APP_BGE_TOP_K));
+      setBgeScoreThreshold(String(snapshot.config?.bgeM3?.scoreThreshold ?? DEFAULT_APP_BGE_SCORE_THRESHOLD));
+      setBgeInstallSummary(snapshot.config?.bgeM3?.modelPath ? "BGE-M3 설정을 불러왔습니다." : "BGE-M3 상태를 아직 확인하지 않았습니다.");
+      setWingsLoginId(snapshot.config?.wingsLogin?.loginId ?? "");
+      setWingsPassword(snapshot.config?.wingsLogin?.password ?? "");
+      setWingsLoginSummary(snapshot.config?.wingsLogin?.loginId ? "저장된 WINGS 로그인 정보를 사용할 수 있습니다." : "저장된 로그인 정보가 없습니다.");
       setWindowStart(defaultWindow.start);
       setWindowEnd(defaultWindow.end);
     });
@@ -219,6 +362,10 @@ export default function App() {
     setWorkspaceMessage(`${selectedBranch} 작업을 준비했습니다.`);
     setReservationResult(null);
     setSelectedReviewId(null);
+    setSelectedRoomDetailId(null);
+    setActiveSource("sheet");
+    setOpsApplySummary("");
+    autoWingsLoginAttemptedRef.current = false;
   }, [selectedBranch]);
 
   async function saveSettings() {
@@ -228,13 +375,6 @@ export default function App() {
       const nextSnapshot = await api.saveSettings({
         spreadsheet,
         sheetName,
-        sheetTabs: {
-          coexMain: sheetTabCoexMain,
-          coexAnnex: sheetTabCoexAnnex,
-          gangnam: sheetTabGangnam,
-          seolleung: sheetTabSeolleung,
-          samsung: sheetTabSamsung,
-        },
         opsView: {
           excludeRoomMakeup,
           flagContinuationCandidates,
@@ -242,15 +382,19 @@ export default function App() {
         reportWindowDays: Number(reportWindowDays),
         bgeM3: {
           enabled: bgeEnabled,
-          modelId: "Xenova/bge-m3",
           runtime: bgeRuntime,
           modelPath: bgeModelPath,
           topK: Number(bgeTopK),
           scoreThreshold: Number(bgeScoreThreshold),
         },
+        wingsLogin: {
+          loginId: wingsLoginId,
+          password: wingsPassword,
+        },
       });
       startTransition(() => setSettingsSnapshot(nextSnapshot));
       setWorkspaceMessage("설정을 저장했습니다. 다음 조회부터 같은 기준을 사용합니다.");
+      setWingsLoginSummary(nextSnapshot.config?.wingsLogin?.loginId ? "WINGS 로그인 정보를 저장했습니다." : "저장된 로그인 정보가 없습니다.");
       const defaultWindow = buildDefaultWindow(Number(reportWindowDays));
       setWindowStart(defaultWindow.start);
       setWindowEnd(defaultWindow.end);
@@ -313,6 +457,40 @@ export default function App() {
     }
   }
 
+  async function runStoredWingsLogin() {
+    if (!api?.attemptWingsLogin) return;
+    setBusyKey("wings-login");
+    try {
+      const snapshot = (await api.attemptWingsLogin()) as AppWingsLoginAttemptSnapshot;
+      setWingsLoginSummary(snapshot.summary);
+      setWorkspaceMessage(snapshot.summary);
+      await Promise.all([refreshProviders(), refreshPreflight(), refreshAuthRequirements(), refreshRuntimeReadiness()]);
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function applyOpsSheetOutput(action: "order-list" | "arrival") {
+    if (!api?.applyOpsSheetOutput) return;
+    setBusyKey(`ops-sheet:${action}`);
+    setWorkspaceMessage("구글 스프레드시트에 결과를 적용하는 중입니다.");
+    try {
+      const snapshot = await api.applyOpsSheetOutput({
+        action,
+        branch: selectedBranch,
+        startDate: windowStart,
+        endDate: windowEnd,
+        spreadsheet,
+        sheetNames: activeBranchSheetNames,
+        reportDate: activeOpsDate || windowStart,
+      });
+      setOpsApplySummary(snapshot.summary);
+      setWorkspaceMessage(snapshot.summary);
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
   async function runRead(module: Extract<AppShellModule, "pms-read" | "ota-read" | "sheet-read">) {
     if (!api) return;
     const source = sourceFromModule(module);
@@ -330,6 +508,12 @@ export default function App() {
       startTransition(() => {
         setReads((current) => ({ ...current, [source]: result }));
         setSelectedReviewId(result.items[0]?.id ?? null);
+        if (source === "sheet") {
+          setSelectedRoomDetailId(result.items.find((item) => isReservationBlockItem(item))?.id ?? null);
+          setActiveSource("sheet");
+        } else {
+          setActiveSource(source);
+        }
         setWorkspacePhase("result");
         setWorkspaceMessage(result.summary);
       });
@@ -380,6 +564,7 @@ export default function App() {
     setWorkspacePhase("idle");
     setReservationResult(null);
     setSelectedReviewId(null);
+    setOpsApplySummary("");
   }
 
   function handleReservationAction(action: AppReservationAction, enabled: boolean) {
@@ -389,6 +574,7 @@ export default function App() {
     setWorkspacePhase("idle");
     setReservationResult(null);
     setWorkspaceMessage(`${RESERVATION_ACTION_LABELS[action]} 화면을 준비했습니다.`);
+    setOpsApplySummary("");
   }
 
   function closeSettings() {
@@ -400,7 +586,7 @@ export default function App() {
 
   const branchOption = useMemo(() => getAppBranchOption(selectedBranch), [selectedBranch]);
   const reservationAvailability = useMemo(() => deriveReservationActionAvailability(reads, selectedBranch), [reads, selectedBranch]);
-  const activeRead = sourceFromModule(activeModule) ? reads[sourceFromModule(activeModule)!] : null;
+  const activeRead = reads[activeSource];
   const reviewItems = useMemo(
     () => buildReviewQueue(selectedBranch, activeReservationAction, reads, reservationResult, windowStart, windowEnd),
     [activeReservationAction, reads, reservationResult, selectedBranch, windowEnd, windowStart],
@@ -416,6 +602,177 @@ export default function App() {
   const sessionAuthRequirements = authBlockingRequirements.filter((item) => item.authMode === "session-auth");
 
   const reservationSteps = buildActionSteps(activeReservationAction, selectedBranch);
+  const sheetReservationItems = useMemo(
+    () =>
+      reads.sheet.items.filter((item) => {
+        if (!isReservationBlockItem(item)) return false;
+        const haystack = [item.roomNo, item.roomType, item.guestName, item.reservationNo, item.channel, item.noteHead].join(" ").toLowerCase();
+        return haystack.includes(searchQuery.trim().toLowerCase());
+      }),
+    [reads.sheet.items, searchQuery],
+  );
+  const selectedRoomDetail =
+    sheetReservationItems.find((item) => item.id === selectedRoomDetailId) ?? sheetReservationItems[0] ?? null;
+  const windowDays = useMemo(() => buildWindowDays(windowStart, windowEnd), [windowStart, windowEnd]);
+  const opsView = reservationResult?.action === activeReservationAction ? reservationResult.opsView ?? null : null;
+  const opsAvailableDates = useMemo(() => {
+    if (!opsView) return [];
+    return Array.from(new Set([...opsView.orderListRows.map((row) => row.date), ...opsView.arrivalRows.map((row) => row.date)].filter(Boolean))).sort();
+  }, [opsView]);
+  const activeOpsDate = opsBoardDate && opsAvailableDates.includes(opsBoardDate) ? opsBoardDate : opsAvailableDates[0] ?? "";
+  const filteredOrderRows = useMemo(
+    () =>
+      (opsView?.orderListRows ?? []).filter((row) => {
+        if (activeOpsDate && row.date !== activeOpsDate) return false;
+        const haystack = [row.roomNo, row.opsRoomLabel, row.taskLabel, row.noteHeads, row.channels, row.arrivalReservationNos, row.departureReservationNos].join(" ").toLowerCase();
+        return haystack.includes(searchQuery.trim().toLowerCase());
+      }),
+    [activeOpsDate, opsView, searchQuery],
+  );
+  const filteredArrivalRows = useMemo(
+    () =>
+      (opsView?.arrivalRows ?? []).filter((row) => {
+        if (activeOpsDate && row.date !== activeOpsDate) return false;
+        const haystack = [row.roomNo, row.opsRoomLabel, row.section, row.noteHead, row.nationalityNights, row.reservationNo, row.channel].join(" ").toLowerCase();
+        return haystack.includes(searchQuery.trim().toLowerCase());
+      }),
+    [activeOpsDate, opsView, searchQuery],
+  );
+  const orderTaskCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of filteredOrderRows) {
+      counts.set(row.taskLabel, (counts.get(row.taskLabel) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [filteredOrderRows]);
+  const opsSpecialInstructions = useMemo(() => {
+    const items = [
+      ...filteredOrderRows
+        .filter((row) => row.noteHeads || row.continuationCandidate || row.turnoverFlag)
+        .map((row) => ({
+          id: `order:${row.date}:${row.roomNo}:${row.taskLabel}`,
+          roomLabel: row.opsRoomLabel || row.roomNo,
+          text: buildOrderRowComment(row),
+          tone: getOpsTaskTone(row.taskLabel),
+        })),
+      ...filteredArrivalRows
+        .filter((row) => row.noteHead || row.nationalityNights || row.continuationCandidate)
+        .map((row) => ({
+          id: `arrival:${row.date}:${row.roomNo}:${row.section}`,
+          roomLabel: row.opsRoomLabel || row.roomNo,
+          text: [row.nationalityNights, row.noteHead, row.continuationCandidate ? row.continuationBasis || "연박 후보" : ""].filter(Boolean).join(" · "),
+          tone: getOpsTaskTone(row.section),
+        })),
+    ];
+    return items.slice(0, 6);
+  }, [filteredArrivalRows, filteredOrderRows]);
+  const arrivalBoardRows = useMemo(() => {
+    const orderByRoom = new Map(filteredOrderRows.map((row) => [row.roomNo, row] as const));
+    const boardMap = new Map<string, {
+      id: string;
+      building: string;
+      roomLabel: string;
+      departureText: string;
+      arrivalText: string;
+      departureTone: { bg: string; fg: string; accent: string };
+      arrivalTone: { bg: string; fg: string; accent: string };
+    }>();
+
+    const ensureRow = (building: string, roomLabel: string, roomNo: string) => {
+      const key = `${building}:${roomNo}`;
+      if (!boardMap.has(key)) {
+        boardMap.set(key, {
+          id: key,
+          building,
+          roomLabel,
+          departureText: "",
+          arrivalText: "",
+          departureTone: getOpsTaskTone(""),
+          arrivalTone: getOpsTaskTone(""),
+        });
+      }
+      return boardMap.get(key)!;
+    };
+
+    for (const row of filteredOrderRows) {
+      const item = ensureRow(row.building || "-", row.opsRoomLabel || row.roomNo, row.roomNo);
+      if (!item.departureText) {
+        item.departureText = row.taskLabel;
+        item.departureTone = getOpsTaskTone(row.taskLabel);
+      }
+    }
+
+    for (const row of filteredArrivalRows) {
+      const linkedOrderRow = orderByRoom.get(row.roomNo) ?? null;
+      const item = ensureRow(row.building || "-", row.opsRoomLabel || row.roomNo, row.roomNo);
+      const inferred = inferArrivalDepartureText(row, linkedOrderRow);
+      if (inferred.departureText) {
+        item.departureText = inferred.departureText;
+        item.departureTone = classifyArrivalCellTone(inferred.departureText);
+      }
+      if (inferred.arrivalText) {
+        item.arrivalText = inferred.arrivalText;
+        item.arrivalTone = classifyArrivalCellTone(inferred.arrivalText);
+      }
+    }
+
+    return Array.from(boardMap.values()).sort((a, b) => {
+      if (a.building !== b.building) return a.building.localeCompare(b.building, "ko");
+      return roomSortKey(a.roomLabel).localeCompare(roomSortKey(b.roomLabel), "ko");
+    });
+  }, [filteredArrivalRows, filteredOrderRows]);
+  const arrivalBoardByBuilding = useMemo(() => {
+    const groups = new Map<string, typeof arrivalBoardRows>();
+    for (const row of arrivalBoardRows) {
+      groups.set(row.building, [...(groups.get(row.building) ?? []), row]);
+    }
+    return Array.from(groups.entries());
+  }, [arrivalBoardRows]);
+  const isSingleArrivalBoard = useMemo(() => {
+    const meaningfulBuildings = new Set(
+      arrivalBoardRows
+        .map((row) => row.building.trim())
+        .filter((building) => building && building !== "-"),
+    );
+    return meaningfulBuildings.size <= 1;
+  }, [arrivalBoardRows]);
+  const arrivalCounts = useMemo(() => {
+    const arrivals = filteredArrivalRows.filter((row) => row.section === "ARRIVAL" || row.section === "TURNOVER").length;
+    const departures = filteredArrivalRows.filter((row) => row.section === "DEPARTURE" || row.section === "TURNOVER").length;
+    const stayovers = filteredOrderRows.filter((row) => row.taskLabel === "룸메이크업" || row.taskLabel === "룸클리닝").length;
+    return { arrivals, departures, stayovers, totalOrders: filteredOrderRows.length };
+  }, [filteredArrivalRows, filteredOrderRows]);
+  const arrivalSpecialNotes = useMemo(() => {
+    const departureItems = filteredArrivalRows
+      .filter((row) => row.section === "DEPARTURE" || row.section === "TURNOVER")
+      .map((row) => ({
+        id: `departure-note:${row.date}:${row.roomNo}:${row.reservationNo}`,
+        roomLabel: row.opsRoomLabel || row.roomNo,
+        text: [row.noteHead, row.continuationCandidate ? row.continuationBasis || "연박 후보" : ""].filter(Boolean).join(" · "),
+      }))
+      .filter((item) => item.text);
+    const arrivalItems = filteredArrivalRows
+      .filter((row) => row.section === "ARRIVAL" || row.section === "TURNOVER")
+      .map((row) => ({
+        id: `arrival-note:${row.date}:${row.roomNo}:${row.reservationNo}`,
+        roomLabel: row.opsRoomLabel || row.roomNo,
+        text: [row.nationalityNights, row.noteHead, row.continuationCandidate ? row.continuationBasis || "연박 후보" : ""].filter(Boolean).join(" · "),
+      }))
+      .filter((item) => item.text);
+    return {
+      departure: departureItems.slice(0, 8),
+      arrival: arrivalItems.slice(0, 8),
+    };
+  }, [filteredArrivalRows]);
+  const pmsReference =
+    selectedRoomDetail
+      ? reads.pms.items.find((item) => [item.title, item.subtitle].join(" ").includes(selectedRoomDetail.roomNo ?? ""))
+      : null;
+  const otaReference =
+    selectedRoomDetail
+      ? reads.ota.items.find((item) => [item.title, item.subtitle].join(" ").includes(selectedRoomDetail.roomNo ?? ""))
+      : null;
+  const selectedChannelVisual = getChannelVisual(selectedRoomDetail?.channel);
 
   useEffect(() => {
     const nextProvider = sessionAuthRequirements.find(
@@ -428,231 +785,588 @@ export default function App() {
     void openProviderSession(nextProvider.target as AppProvider);
   }, [sessionAuthRequirements]);
 
+  useEffect(() => {
+    if (sheetReservationItems.length === 0) {
+      setSelectedRoomDetailId(null);
+      return;
+    }
+    if (!sheetReservationItems.some((item) => item.id === selectedRoomDetailId)) {
+      setSelectedRoomDetailId(sheetReservationItems[0]?.id ?? null);
+    }
+  }, [selectedRoomDetailId, sheetReservationItems]);
+
+  useEffect(() => {
+    if (opsAvailableDates.length === 0) {
+      setOpsBoardDate("");
+      return;
+    }
+    if (!opsAvailableDates.includes(opsBoardDate)) {
+      setOpsBoardDate(opsAvailableDates[0]);
+    }
+  }, [opsAvailableDates, opsBoardDate]);
+
+  useEffect(() => {
+    const needsWingsLogin = sessionAuthRequirements.some((item) => item.target === "wings-pms" && item.status === "needs-login");
+    if (!needsWingsLogin) {
+      autoWingsLoginAttemptedRef.current = false;
+      return;
+    }
+    if (!wingsLoginId || !wingsPassword) return;
+    if (busyKey === "wings-login") return;
+    if (autoWingsLoginAttemptedRef.current) return;
+    autoWingsLoginAttemptedRef.current = true;
+    void runStoredWingsLogin();
+  }, [busyKey, sessionAuthRequirements, wingsLoginId, wingsPassword]);
+
   return (
     <div className="end-user-shell">
       <div className="shell-frame">
-          <aside className="sidebar">
-            <div className="sidebar-block">
-              <p className="eyebrow">Branch</p>
-              <label className="branch-select">
-                <span>지점 선택</span>
-                <select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value as AppBranch)}>
-                  {BRANCH_OPTIONS.map((branch) => (
-                    <option key={branch.branch} value={branch.branch} disabled={branch.availability !== "active"}>
-                      {branch.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="detail-panel">{branchOption.reason}</div>
-              <div className="button-row compact-button-row">
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => void Promise.all([refreshAuthRequirements(), refreshRuntimeReadiness(), refreshPreflight()])}
-                >
-                  전체 상태 새로고침
-                </button>
-              </div>
+        <aside className="sidebar">
+          <div className="sidebar-brand">
+            <img src={uhSuiteLogo} alt="UH SUITE" className="sidebar-brand-logo" />
+            <div className="sidebar-brand-copy">
+              <strong>UH 작업관리자</strong>
             </div>
+          </div>
 
-            <div className="sidebar-block">
-              {(Object.keys(MODULE_LABELS) as Array<Exclude<AppShellModule, "settings">>).map((module) => (
-                <button
-                  key={module}
-                  type="button"
-                  className={`sidebar-button ${activeModule === module ? "active" : ""}`}
-                  onClick={() => handleModuleChange(module)}
-                >
-                  {MODULE_LABELS[module]}
-                </button>
-              ))}
-              <div className="submenu">
-                {(Object.keys(RESERVATION_ACTION_LABELS) as AppReservationAction[]).map((action) => {
-                  const state = reservationAvailability[action];
-                  return (
-                    <button
-                      key={action}
-                      type="button"
-                      className={`submenu-button ${activeReservationAction === action ? "active" : ""}`}
-                      onClick={() => handleReservationAction(action, state.enabled)}
-                      disabled={!state.enabled}
-                      title={state.reason}
-                    >
-                      {RESERVATION_ACTION_LABELS[action]}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="sidebar-block read-badges">
-              <span data-status={reads.pms.status}>PMS</span>
-              <span data-status={reads.ota.status}>OTA</span>
-              <span data-status={reads.sheet.status}>SHEET</span>
-            </div>
-
+          <div className="sidebar-block">
+            <p className="eyebrow">Branch</p>
+            <label className="branch-select">
+              <span>지점 선택</span>
+              <select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value as AppBranch)}>
+                {BRANCH_OPTIONS.map((branch) => (
+                  <option key={branch.branch} value={branch.branch} disabled={branch.availability !== "active"}>
+                    {branch.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="detail-panel">{branchOption.label} 예약 작업 화면</div>
             <button type="button" className="sidebar-button settings-button" onClick={() => handleModuleChange("settings")}>
               설정
             </button>
+          </div>
+
+          <div className="sidebar-block">
+            <p className="eyebrow">Start</p>
             <button
               type="button"
-              className="sidebar-button ghost-sidebar-button"
-              onClick={() => void Promise.all([refreshAuthRequirements(), refreshRuntimeReadiness(), refreshPreflight()])}
+              className={`sidebar-button ${activeModule === "reservation-management" ? "active" : ""}`}
+              onClick={() => handleModuleChange("reservation-management")}
             >
-              인증 상태 새로고침
+              예약 관리
             </button>
-          </aside>
+          </div>
 
-          <main className="workspace">
-            <header className="workspace-header">
+          <div className="sidebar-block">
+            <p className="eyebrow">클리닝</p>
+            <div className="submenu">
+              {([
+                ["order-list", "오더리스트"],
+                ["arrival", "어라이벌 리스트"],
+              ] as const).map(([action, label]) => {
+                const state = reservationAvailability[action];
+                return (
+                  <button
+                    key={action}
+                    type="button"
+                    className={`submenu-button ${activeReservationAction === action ? "active" : ""}`}
+                    onClick={() => handleReservationAction(action, state.enabled)}
+                    disabled={!state.enabled}
+                    title={state.reason}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="sidebar-block read-badges">
+            <span data-status={reads.sheet.status}>SHEET</span>
+            <span data-status={reads.pms.status}>PMS</span>
+            <span data-status={reads.ota.status}>OTA</span>
+          </div>
+
+          <div className="sidebar-login-card">
+            <p className="eyebrow">직접 입력 필요</p>
+            <label className="field compact-sidebar-field">
+              <span>WINGS 로그인 아이디</span>
+              <input value={wingsLoginId} onChange={(event) => setWingsLoginId(event.target.value)} placeholder="WINGS 로그인 아이디" />
+            </label>
+            <label className="field compact-sidebar-field">
+              <span>WINGS 로그인 비밀번호</span>
+              <input type="password" value={wingsPassword} onChange={(event) => setWingsPassword(event.target.value)} placeholder="WINGS 로그인 비밀번호" />
+            </label>
+            <div className="button-row compact-button-row">
+              <button type="button" onClick={() => void saveSettings()} disabled={busyKey !== null}>
+                저장
+              </button>
+              <button type="button" className="ghost-button" onClick={() => void runStoredWingsLogin()} disabled={busyKey !== null}>
+                WINGS 로그인
+              </button>
+            </div>
+            <div className="detail-panel">{wingsLoginSummary}</div>
+          </div>
+        </aside>
+
+        <main className="workspace">
+          <header className="workspace-header">
+            <div>
+              <h2>{branchOption.label}</h2>
+            </div>
+            <div className="workspace-header-tools">
+              {activeModule === "reservation-management" ? (
+                <label className="search-field">
+                  <span className="search-field-label">검색</span>
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="객실, 예약자, 예약번호 검색"
+                  />
+                </label>
+              ) : null}
+            </div>
+          </header>
+
+          <section className="auth-banner">
+            <div className="auth-banner-header">
               <div>
-                <p className="workspace-kicker">{branchOption.label}</p>
-                <h2>{activeModule === "reservation-management" ? buildManagementTitle(activeReservationAction) : MODULE_LABELS[activeModule as Exclude<AppShellModule, "settings">]}</h2>
+                <p className="eyebrow">연결 상태</p>
+                <h3>시트를 기준으로 보고, PMS와 OTA는 비교 참고값으로 사용합니다.</h3>
               </div>
-              <div className="workspace-header-tools">
-                <label className="compact-field">
-                  <span>조회 기간</span>
-                  <input type="date" value={windowStart} onChange={(event) => setWindowStart(event.target.value)} />
-                </label>
-                <label className="compact-field">
-                  <span>종료일</span>
-                  <input type="date" value={windowEnd} onChange={(event) => setWindowEnd(event.target.value)} />
-                </label>
-                <button type="button" className="ghost-button" onClick={() => {
-                  const next = buildDefaultWindow(5);
-                  setWindowStart(next.start);
-                  setWindowEnd(next.end);
-                }}>
-                  오늘부터 5일
-                </button>
-                <div className="workspace-status">{workspaceMessage}</div>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => void Promise.all([refreshAuthRequirements(), refreshRuntimeReadiness(), refreshPreflight()])}
+              >
+                연결 새로고침
+              </button>
+            </div>
+            <div className="source-toolbar">
+              {([
+                { key: "sheet", label: "시트 기준", module: "sheet-read" as const },
+                { key: "pms", label: "PMS 참고", module: "pms-read" as const },
+                { key: "ota", label: "OTA 참고", module: "ota-read" as const },
+              ] as const).map((source) => (
+                <article
+                  key={source.key}
+                  className={`source-card ${activeSource === source.key ? "active" : ""}`}
+                  onClick={() => setActiveSource(source.key)}
+                >
+                  <div>
+                    <p className="source-card-label">{source.label}</p>
+                    <strong>{reads[source.key].summary}</strong>
+                    <span>{reads[source.key].recordsImported}건</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void runRead(source.module);
+                    }}
+                    disabled={busyKey !== null || branchOption.availability !== "active"}
+                  >
+                    다시 읽기
+                  </button>
+                </article>
+              ))}
+            </div>
+            {authBlockingRequirements.length > 0 ? (
+              <div className="auth-card-grid inline-auth-card-grid">
+                {configAuthRequirements.map((requirement) => (
+                  <article key={requirement.target} className="auth-card compact-auth-card">
+                    <div className="auth-card-header">
+                      <strong>{requirement.label}</strong>
+                      <span>{authStatusLabel(requirement.status)}</span>
+                    </div>
+                    <p className="support-copy">{requirement.nextAction}</p>
+                  </article>
+                ))}
+                {sessionAuthRequirements.map((requirement) => (
+                  <article key={requirement.target} className="auth-card compact-auth-card">
+                    <div className="auth-card-header">
+                      <strong>{requirement.label}</strong>
+                      <span>{authStatusLabel(requirement.status)}</span>
+                    </div>
+                    <p className="support-copy">{requirement.nextAction}</p>
+                    <div className="button-row">
+                      <button
+                        type="button"
+                        onClick={() => void openProviderSession(requirement.target as AppProvider)}
+                        disabled={busyKey !== null}
+                      >
+                        창 열기
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => void reloadProviderSession(requirement.target as AppProvider)}
+                        disabled={busyKey !== null}
+                      >
+                        다시 확인
+                      </button>
+                    </div>
+                  </article>
+                ))}
               </div>
-            </header>
+            ) : null}
+          </section>
 
-            <section className="auth-banner">
-              <div className="auth-banner-header">
-                <div>
-                  <p className="eyebrow">인증 안내</p>
-                  <h3>앱은 바로 사용 가능하지만, live-read는 필요한 인증이 준비돼야 열립니다.</h3>
-                </div>
-                <div className="detail-panel">
-                  live-read: {runtimeReadiness?.supportLevel ?? "unknown"} / blocking: {runtimeReadiness?.blockingSources.join(", ") || "-"}
-                </div>
-              </div>
-              {authBlockingRequirements.length === 0 ? (
-                <div className="detail-panel">현재 필요한 추가 인증이 없습니다. 그대로 조회를 진행하면 됩니다.</div>
-              ) : (
-                <div className="auth-card-grid inline-auth-card-grid">
-                  {configAuthRequirements.length > 0 ? <p className="section-title">환경 인증</p> : null}
-                  {configAuthRequirements.map((requirement) => (
-                    <article key={requirement.target} className="auth-card compact-auth-card">
-                      <div className="auth-card-header">
-                        <strong>{requirement.label}</strong>
-                        <span>{authStatusLabel(requirement.status)}</span>
-                      </div>
-                      <div className="detail-panel">{authModeLabel(requirement.authMode)}</div>
-                      <p className="support-copy">{requirement.nextAction}</p>
-                      <div className="auth-chip-row">
-                        {requirement.hints.map((hint) => (
-                          <span key={hint} className="auth-chip">{hint}</span>
-                        ))}
-                      </div>
-                    </article>
-                  ))}
-                  {sessionAuthRequirements.length > 0 ? <p className="section-title">브라우저 세션 인증</p> : null}
-                  {sessionAuthRequirements.map((requirement) => (
-                    <article key={requirement.target} className="auth-card compact-auth-card">
-                      <div className="auth-card-header">
-                        <strong>{requirement.label}</strong>
-                        <span>{authStatusLabel(requirement.status)}</span>
-                      </div>
-                      <div className="detail-panel">{authModeLabel(requirement.authMode)}</div>
-                      <p className="support-copy">{requirement.nextAction}</p>
-                      <div className="auth-chip-row">
-                        {requirement.evidence.map((item) => (
-                          <span key={item} className="auth-chip">{item}</span>
-                        ))}
-                      </div>
-                      <div className="button-row">
+          <section className="reservation-workspace" data-phase={workspacePhase}>
+            {activeReservationAction === "order-list" ? (
+              <>
+                <article className="hero-card reservation-summary-card">
+                  <p className="eyebrow">오더리스트</p>
+                  <h3>오더리스트 작업 로그</h3>
+                  <p className="support-copy">{buildResultSummary(activeReservationAction, reservationResult)}</p>
+                  <div className="detail-panel">{branchOption.label} · {windowStart} ~ {windowEnd}</div>
+                  <div className="reservation-toolbar">
+                    <label className="compact-field">
+                      <span>시작일</span>
+                      <input type="date" value={windowStart} onChange={(event) => setWindowStart(event.target.value)} />
+                    </label>
+                    <label className="compact-field">
+                      <span>종료일</span>
+                      <input type="date" value={windowEnd} onChange={(event) => setWindowEnd(event.target.value)} />
+                    </label>
+                  </div>
+                  {opsAvailableDates.length > 0 ? (
+                    <div className="step-chip-row">
+                      {opsAvailableDates.map((date) => (
                         <button
+                          key={date}
                           type="button"
-                          onClick={() => void openProviderSession(requirement.target as AppProvider)}
-                          disabled={busyKey !== null}
+                          className={`step-chip-button ${activeOpsDate === date ? "active" : ""}`}
+                          onClick={() => setOpsBoardDate(date)}
                         >
-                          Provider 창 열기
+                          {date}
                         </button>
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => void reloadProviderSession(requirement.target as AppProvider)}
-                          disabled={busyKey !== null}
-                        >
-                          상태 새로고침
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {activeModule !== "reservation-management" && activeRead ? (
-              <section className="workspace-grid" data-phase={workspacePhase}>
-                <article className="hero-card">
-                  <p className="eyebrow">{MODULE_LABELS[activeModule as Extract<AppShellModule, "pms-read" | "ota-read" | "sheet-read">]}</p>
-                  <h3>{activeRead.summary}</h3>
-                  <p className="support-copy">
-                    {activeRead.status === "done"
-                      ? `${activeRead.recordsImported}건을 가져왔습니다. ${windowStart} ~ ${windowEnd}`
-                      : "먼저 읽기 작업을 시작해 주세요."}
-                  </p>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="availability-note">{workspaceMessage}</div>
                   <div className="button-row">
                     <button
                       type="button"
-                      onClick={() => void runRead(activeModule as Extract<AppShellModule, "pms-read" | "ota-read" | "sheet-read">)}
-                      disabled={busyKey !== null || branchOption.availability !== "active"}
+                      onClick={() => void executeReservationAction()}
+                      disabled={!reservationAvailability[activeReservationAction].enabled || busyKey !== null || branchOption.availability !== "active"}
                     >
-                      {MODULE_LABELS[activeModule as Extract<AppShellModule, "pms-read" | "ota-read" | "sheet-read">]} 시작
+                      오더리스트 실행
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => void applyOpsSheetOutput("order-list")}
+                      disabled={busyKey !== null || !reservationResult || reservationResult.action !== "order-list"}
+                    >
+                      시트 적용
                     </button>
                   </div>
+                  {opsApplySummary ? <div className="detail-panel">{opsApplySummary}</div> : null}
                 </article>
 
-                <article className="progress-card">
-                  <p className="section-title">진행</p>
-                  {buildActionSteps(
-                    activeModule === "pms-read" ? "validate" : activeModule === "ota-read" ? "compare" : "reconcile",
-                    selectedBranch,
-                  ).map((step, index) => (
-                    <div key={step} className={`step-row ${workspacePhase === "working" && index === 1 ? "current" : ""}`}>
-                      <span>{index + 1}</span>
-                      <strong>{step}</strong>
-                    </div>
-                  ))}
-                </article>
-
-                <article className="list-card">
-                  <p className="section-title">결과 미리보기</p>
-                  {buildPreviewItems(activeRead, selectedBranch).map((item) => (
-                    <div key={item.id} className="list-row">
-                      <div>
-                        <strong>{item.title}</strong>
-                        <span>{item.subtitle}</span>
+                <article className="review-card ops-order-shell">
+                  <div className="ops-order-layout">
+                    <div className="ops-order-table-card">
+                      <div className="ops-panel-header">
+                        <div>
+                          <p className="eyebrow">작업 로그</p>
+                          <h3>오더리스트 작업 로그</h3>
+                        </div>
+                        <div className="detail-panel">{filteredOrderRows.length}개 작업</div>
                       </div>
-                      <em>{item.statusLabel}</em>
+                      <div className="ops-order-table">
+                        <div className="ops-order-table-head">
+                          <span>요청일</span>
+                          <span>위치 / 객실</span>
+                          <span>업무형태</span>
+                          <span>코멘트</span>
+                        </div>
+                        <div className="ops-order-table-body">
+                          {filteredOrderRows.length > 0 ? filteredOrderRows.map((row) => {
+                            const taskTone = getOpsTaskTone(row.taskLabel);
+                            return (
+                              <div key={`${row.date}:${row.roomNo}:${row.taskLabel}`} className="ops-order-row">
+                                <div>
+                                  <strong>{row.date}</strong>
+                                  <small>{row.weekday}</small>
+                                </div>
+                                <div>
+                                  <strong>{row.building || branchOption.label}</strong>
+                                  <span>{row.opsRoomLabel || row.roomNo} · {row.roomType || "객실"}</span>
+                                </div>
+                                <div>
+                                  <span
+                                    className="ops-task-chip"
+                                    style={{ "--ops-chip-bg": taskTone.bg, "--ops-chip-fg": taskTone.fg, "--ops-chip-accent": taskTone.accent } as CSSProperties}
+                                  >
+                                    {row.taskLabel}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span>{buildOrderRowComment(row)}</span>
+                                </div>
+                              </div>
+                            );
+                          }) : <div className="detail-panel">오더리스트를 실행하면 실제 작업 로그가 여기에 표시됩니다.</div>}
+                        </div>
+                      </div>
                     </div>
-                  ))}
+
+                    <div className="ops-side-panels">
+                      <article className="ops-side-card">
+                        <p className="section-title">운영 카운트</p>
+                        <div className="ops-count-list">
+                          {orderTaskCounts.length > 0 ? orderTaskCounts.map(([label, count]) => (
+                            <div key={label} className="ops-count-row">
+                              <span>{label}</span>
+                              <strong>{count}개</strong>
+                            </div>
+                          )) : <div className="detail-panel">실행 후 실제 카운트가 표시됩니다.</div>}
+                        </div>
+                      </article>
+                      <article className="ops-side-card">
+                        <p className="section-title">특이 사항</p>
+                        <div className="ops-special-list">
+                          {opsSpecialInstructions.length > 0 ? opsSpecialInstructions.map((item) => (
+                            <div
+                              key={item.id}
+                              className="ops-special-item"
+                              style={{ "--ops-chip-bg": item.tone.bg, "--ops-chip-fg": item.tone.fg, "--ops-chip-accent": item.tone.accent } as CSSProperties}
+                            >
+                              <strong>{item.roomLabel}</strong>
+                              <span>{item.text}</span>
+                            </div>
+                          )) : <div className="detail-panel">특이 사항이 있으면 여기 모입니다.</div>}
+                        </div>
+                      </article>
+                    </div>
+                  </div>
                 </article>
-              </section>
+              </>
+            ) : activeReservationAction === "arrival" ? (
+              <>
+                <article className="hero-card reservation-summary-card">
+                  <p className="eyebrow">어라이벌</p>
+                  <h3>어라이벌 일정판</h3>
+                  <p className="support-copy">{buildResultSummary(activeReservationAction, reservationResult)}</p>
+                  <div className="detail-panel">{branchOption.label} · {windowStart} ~ {windowEnd}</div>
+                  <div className="reservation-toolbar">
+                    <label className="compact-field">
+                      <span>시작일</span>
+                      <input type="date" value={windowStart} onChange={(event) => setWindowStart(event.target.value)} />
+                    </label>
+                    <label className="compact-field">
+                      <span>종료일</span>
+                      <input type="date" value={windowEnd} onChange={(event) => setWindowEnd(event.target.value)} />
+                    </label>
+                  </div>
+                  {opsAvailableDates.length > 0 ? (
+                    <div className="step-chip-row">
+                      {opsAvailableDates.map((date) => (
+                        <button
+                          key={date}
+                          type="button"
+                          className={`step-chip-button ${activeOpsDate === date ? "active" : ""}`}
+                          onClick={() => setOpsBoardDate(date)}
+                        >
+                          {date}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="availability-note">{workspaceMessage}</div>
+                  <div className="button-row">
+                    <button
+                      type="button"
+                      onClick={() => void executeReservationAction()}
+                      disabled={!reservationAvailability[activeReservationAction].enabled || busyKey !== null || branchOption.availability !== "active"}
+                    >
+                      어라이벌 실행
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => void applyOpsSheetOutput("arrival")}
+                      disabled={busyKey !== null || !reservationResult || reservationResult.action !== "arrival"}
+                    >
+                      시트 적용
+                    </button>
+                  </div>
+                  {opsApplySummary ? <div className="detail-panel">{opsApplySummary}</div> : null}
+                </article>
+
+                <article className="review-card ops-arrival-shell">
+                  <div className="ops-panel-header">
+                    <div>
+                      <p className="eyebrow">일정판</p>
+                      <h3>어라이벌 일정판</h3>
+                      <p className="support-copy">{activeOpsDate ? formatDisplayDate(activeOpsDate) : "실행 후 날짜별 일정판이 표시됩니다."}</p>
+                    </div>
+                    <div className="detail-panel">{arrivalBoardRows.length}개 객실</div>
+                  </div>
+
+                  {arrivalBoardRows.length > 0 ? (
+                    isSingleArrivalBoard ? (
+                      <div className="single-arrival-board">
+                        <div className="single-arrival-date-head">
+                          <strong>{activeOpsDate ? formatDisplayDate(activeOpsDate) : branchOption.label}</strong>
+                        </div>
+                        <div className="single-arrival-grid">
+                          <div className="single-arrival-grid-header room">객실</div>
+                          <div className="single-arrival-grid-header">체크아웃</div>
+                          <div className="single-arrival-grid-header">체크인</div>
+                          {arrivalBoardRows.map((row) => (
+                            <div key={row.id} className="single-arrival-grid-row">
+                              <div className="arrival-room-label single">{row.roomLabel}</div>
+                              <div className="arrival-cell single">
+                                {row.departureText ? (
+                                  <div
+                                    className="arrival-cell-block"
+                                    style={{ "--ops-chip-bg": row.departureTone.bg, "--ops-chip-fg": row.departureTone.fg, "--ops-chip-accent": row.departureTone.accent } as CSSProperties}
+                                  >
+                                    {row.departureText}
+                                  </div>
+                                ) : null}
+                              </div>
+                              <div className="arrival-cell single">
+                                {row.arrivalText ? (
+                                  <div
+                                    className="arrival-cell-block"
+                                    style={{ "--ops-chip-bg": row.arrivalTone.bg, "--ops-chip-fg": row.arrivalTone.fg, "--ops-chip-accent": row.arrivalTone.accent } as CSSProperties}
+                                  >
+                                    {row.arrivalText}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="arrival-summary-strip">
+                          <div><span>Check-out</span><strong>{arrivalCounts.departures}</strong></div>
+                          <div><span>Check-In</span><strong>{arrivalCounts.arrivals}</strong></div>
+                          <div><span>재실</span><strong>{arrivalCounts.stayovers}</strong></div>
+                          <div><span>총 작업</span><strong>{arrivalCounts.totalOrders}</strong></div>
+                        </div>
+                        <div className="arrival-notes-grid">
+                          <article className="ops-side-card arrival-note-card">
+                            <p className="section-title">특이사항 (C.O)</p>
+                            <div className="ops-special-list compact">
+                              {arrivalSpecialNotes.departure.length > 0 ? arrivalSpecialNotes.departure.map((item) => (
+                                <div key={item.id} className="arrival-note-line">
+                                  <strong>{item.roomLabel}</strong>
+                                  <span>{item.text}</span>
+                                </div>
+                              )) : <div className="detail-panel">특이사항이 없습니다.</div>}
+                            </div>
+                          </article>
+                          <article className="ops-side-card arrival-note-card">
+                            <p className="section-title">특이사항 (C.I)</p>
+                            <div className="ops-special-list compact">
+                              {arrivalSpecialNotes.arrival.length > 0 ? arrivalSpecialNotes.arrival.map((item) => (
+                                <div key={item.id} className="arrival-note-line">
+                                  <strong>{item.roomLabel}</strong>
+                                  <span>{item.text}</span>
+                                </div>
+                              )) : <div className="detail-panel">특이사항이 없습니다.</div>}
+                            </div>
+                          </article>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="ops-arrival-board">
+                          {arrivalBoardByBuilding.map(([building, rows]) => (
+                            <section key={building} className="arrival-building-panel">
+                              <div className="arrival-building-head">
+                                <span>BUILDING</span>
+                                <strong>{building || "-"}</strong>
+                              </div>
+                              <div className="arrival-building-grid">
+                                <div className="arrival-grid-header">ROOM</div>
+                                <div className="arrival-grid-header">DEPARTURE (C.O)</div>
+                                <div className="arrival-grid-header">ARRIVAL (C.I)</div>
+                                {rows.map((row) => (
+                                  <div key={row.id} className="arrival-grid-row">
+                                    <div className="arrival-room-label">{row.roomLabel}</div>
+                                    <div className="arrival-cell">
+                                      {row.departureText ? (
+                                        <div
+                                          className="arrival-cell-block"
+                                          style={{ "--ops-chip-bg": row.departureTone.bg, "--ops-chip-fg": row.departureTone.fg, "--ops-chip-accent": row.departureTone.accent } as CSSProperties}
+                                        >
+                                          {row.departureText}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                    <div className="arrival-cell">
+                                      {row.arrivalText ? (
+                                        <div
+                                          className="arrival-cell-block"
+                                          style={{ "--ops-chip-bg": row.arrivalTone.bg, "--ops-chip-fg": row.arrivalTone.fg, "--ops-chip-accent": row.arrivalTone.accent } as CSSProperties}
+                                        >
+                                          {row.arrivalText}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </section>
+                          ))}
+                        </div>
+
+                        <div className="ops-arrival-footer">
+                          <article className="ops-side-card">
+                            <p className="section-title">운영 카운트</p>
+                            <div className="ops-count-list">
+                              <div className="ops-count-row"><span>체크인</span><strong>{arrivalCounts.arrivals}개</strong></div>
+                              <div className="ops-count-row"><span>체크아웃</span><strong>{arrivalCounts.departures}개</strong></div>
+                              <div className="ops-count-row"><span>재실 작업</span><strong>{arrivalCounts.stayovers}개</strong></div>
+                              <div className="ops-count-row"><span>총 작업</span><strong>{arrivalCounts.totalOrders}개</strong></div>
+                            </div>
+                          </article>
+                          <article className="ops-side-card">
+                            <p className="section-title">특이 사항</p>
+                            <div className="ops-special-list">
+                              {opsSpecialInstructions.length > 0 ? opsSpecialInstructions.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="ops-special-item"
+                                  style={{ "--ops-chip-bg": item.tone.bg, "--ops-chip-fg": item.tone.fg, "--ops-chip-accent": item.tone.accent } as CSSProperties}
+                                >
+                                  <strong>{item.roomLabel}</strong>
+                                  <span>{item.text}</span>
+                                </div>
+                              )) : <div className="detail-panel">특이 사항이 있으면 여기 모입니다.</div>}
+                            </div>
+                          </article>
+                        </div>
+                      </>
+                    )
+                  ) : <div className="detail-panel">어라이벌을 실행하면 실제 일정판이 여기에 표시됩니다.</div>}
+                </article>
+              </>
             ) : (
-              <section className="workspace-grid" data-phase={workspacePhase}>
-                <article className="hero-card">
-                  <p className="eyebrow">예약 관리</p>
+              <>
+                <article className="hero-card reservation-summary-card">
+                  <p className="eyebrow">작업</p>
                   <h3>{buildManagementTitle(activeReservationAction)}</h3>
-                  <p className="support-copy">
-                    {buildResultSummary(activeReservationAction, reservationResult)}
-                  </p>
-                  <div className="detail-panel">{windowStart} ~ {windowEnd} / {branchOption.label}</div>
+                  <p className="support-copy">{buildResultSummary(activeReservationAction, reservationResult)}</p>
+                  <div className="detail-panel">{branchOption.label} · {windowStart} ~ {windowEnd}</div>
+                  <div className="reservation-toolbar">
+                    <label className="compact-field">
+                      <span>시작일</span>
+                      <input type="date" value={windowStart} onChange={(event) => setWindowStart(event.target.value)} />
+                    </label>
+                    <label className="compact-field">
+                      <span>종료일</span>
+                      <input type="date" value={windowEnd} onChange={(event) => setWindowEnd(event.target.value)} />
+                    </label>
+                  </div>
+                  <div className="availability-note">{workspaceMessage}</div>
                   <div className="step-chip-row">
                     {(Object.keys(RESERVATION_ACTION_LABELS) as AppReservationAction[]).map((action) => (
                       <span
@@ -669,256 +1383,275 @@ export default function App() {
                       onClick={() => void executeReservationAction()}
                       disabled={!reservationAvailability[activeReservationAction].enabled || busyKey !== null || branchOption.availability !== "active"}
                     >
-                      {activeReservationAction === "order-list" || activeReservationAction === "arrival"
-                        ? `${RESERVATION_ACTION_LABELS[activeReservationAction]} 생성`
-                        : `${RESERVATION_ACTION_LABELS[activeReservationAction]} 시작`}
+                      {RESERVATION_ACTION_LABELS[activeReservationAction]} 실행
                     </button>
                   </div>
-                  {activeReservationAction === "order-list" ||
-                  activeReservationAction === "arrival" ||
-                  activeReservationAction === "validate" ||
-                  activeReservationAction === "edit" ? (
-                    <div className="toggle-stack">
-                      <label className="toggle-row">
-                        <input
-                          type="checkbox"
-                          checked={excludeRoomMakeup}
-                          onChange={(event) => setExcludeRoomMakeup(event.target.checked)}
-                        />
-                        <span>룸메이크업 제외</span>
-                      </label>
-                      <label className="toggle-row">
-                        <input
-                          type="checkbox"
-                          checked={flagContinuationCandidates}
-                          onChange={(event) => setFlagContinuationCandidates(event.target.checked)}
-                        />
-                        <span>연박 후보 표시</span>
-                      </label>
+                </article>
+
+                <article className="review-card room-detail">
+                  <div className="room-detail-header">
+                    <div>
+                      <p className="eyebrow">시트 기준</p>
+                      <h3>Room Detail</h3>
                     </div>
-                  ) : null}
+                    <div className="detail-panel">{sheetReservationItems.length}개 객실 예약</div>
+                  </div>
+
+                  <div className="room-detail-layout">
+                    <div className="room-detail-list">
+                      {sheetReservationItems.length > 0 ? (
+                        sheetReservationItems.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={`room-detail-item ${selectedRoomDetail?.id === item.id ? "active" : ""}`}
+                            onClick={() => setSelectedRoomDetailId(item.id)}
+                          >
+                            <strong>{item.roomNo} / {item.roomType || "객실"}</strong>
+                            <span>{item.guestName || item.reservationNo || item.title}</span>
+                            <small>{formatStayRange(item)}</small>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="detail-panel">시트 데이터를 먼저 읽어 오면 실제 지점과 룸타입이 여기 표시됩니다.</div>
+                      )}
+                    </div>
+
+                    <div className="room-detail-main">
+                      {selectedRoomDetail ? (
+                        <>
+                          <div className="room-detail-hero">
+                            <div>
+                              <p className="eyebrow">{selectedRoomDetail.branchLabel || branchOption.label}</p>
+                              <h3>{selectedRoomDetail.roomNo} / {selectedRoomDetail.roomType || "객실"}</h3>
+                              <p className="support-copy">
+                                {selectedRoomDetail.guestName || "예약자 미기입"} · {selectedRoomDetail.reservationNo || "예약번호 미기입"} · {selectedRoomDetail.channel || "채널 미기입"}
+                              </p>
+                            </div>
+                            <div className="stay-summary-card">
+                              <strong>{selectedRoomDetail.nightCount || 0}박</strong>
+                              <span>{formatStayRange(selectedRoomDetail)}</span>
+                            </div>
+                          </div>
+
+                          <div
+                            className="room-detail-grid"
+                            style={{ gridTemplateColumns: `220px repeat(${Math.max(windowDays.length, 1)}, minmax(92px, 1fr))` }}
+                          >
+                            <div className="room-detail-grid-label">room-detail</div>
+                            {windowDays.map((day) => (
+                              <div key={day.iso} className="room-day">
+                                <span>{day.weekday}</span>
+                                <strong>{day.label}</strong>
+                              </div>
+                            ))}
+                            <div
+                              className="room-detail-grid-row"
+                              style={{ gridTemplateColumns: `220px repeat(${Math.max(windowDays.length, 1)}, minmax(92px, 1fr))` }}
+                            >
+                              <div className="room-detail-grid-meta">
+                                <strong>{selectedRoomDetail.roomNo}</strong>
+                                <span>{selectedRoomDetail.roomType || "객실"}</span>
+                              </div>
+                              {windowDays.map((day) => (
+                                <div key={day.iso} className="room-block-cell">
+                                  {matchesStayDay(selectedRoomDetail, day.iso) ? (
+                                    <div
+                                      className="room-block"
+                                      data-channel={String(selectedRoomDetail.channel || "UNKNOWN").toUpperCase()}
+                                      style={
+                                        {
+                                          "--room-block-bg": selectedChannelVisual.bg,
+                                          "--room-block-fg": selectedChannelVisual.fg,
+                                          "--room-block-accent": selectedChannelVisual.accent,
+                                        } as CSSProperties
+                                      }
+                                    >
+                                      <strong>{selectedRoomDetail.guestName || selectedRoomDetail.reservationNo || "예약"}</strong>
+                                      <span>{selectedChannelVisual.label}</span>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="detail-compare-grid">
+                            <article className="detail-compare-card">
+                              <p className="eyebrow">시트</p>
+                              <strong>{selectedRoomDetail.title}</strong>
+                              <span>{selectedRoomDetail.subtitle}</span>
+                            </article>
+                            <article className="detail-compare-card">
+                              <p className="eyebrow">PMS</p>
+                              <strong>{summarizeReference(pmsReference ?? null, "같은 객실 참고값 없음")}</strong>
+                            </article>
+                            <article className="detail-compare-card">
+                              <p className="eyebrow">OTA</p>
+                              <strong>{summarizeReference(otaReference ?? null, "같은 객실 참고값 없음")}</strong>
+                            </article>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="detail-panel">선택된 객실이 없습니다.</div>
+                      )}
+                    </div>
+                  </div>
                 </article>
 
                 <article className="progress-card">
-                  <p className="section-title">작업 단계</p>
-                  {reservationSteps.map((step, index) => (
-                    <div key={step} className={`step-row ${workspacePhase === "working" && index === 1 ? "current" : ""}`}>
-                      <span>{index + 1}</span>
-                      <strong>{step}</strong>
-                    </div>
-                  ))}
-                  <div className="availability-note">{reservationAvailability[activeReservationAction].reason}</div>
-                </article>
-
-                <article className="review-card">
-                  <p className="section-title">검토 목록</p>
-                  <div className="review-grid">
-                    <div className="review-list">
-                      {reviewItems.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`review-item ${selectedReview?.id === item.id ? "active" : ""}`}
-                          onClick={() => setSelectedReviewId(item.id)}
-                        >
-                          <strong>{item.title}</strong>
-                          <span>{item.subtitle}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="review-detail">
-                      <h4>{selectedReview?.title ?? "-"}</h4>
-                      <p>{selectedReview?.subtitle ?? "검토할 항목을 선택해 주세요."}</p>
-                      <div className="detail-panel">
-                        {selectedReview?.status === "warning" ? "즉시 확인 필요" : selectedReview?.status === "ready" ? "반영 가능" : "비교용 정보"}
+                  <p className="section-title">실행 결과</p>
+                  <div className="action-output-list">
+                    {actionOutputRows.map((row) => (
+                      <div key={row.id} className="list-row">
+                        <div>
+                          <strong>{row.primary}</strong>
+                          <span>{row.secondary}</span>
+                          {row.detail ? <small>{row.detail}</small> : null}
+                        </div>
+                        <em>{row.statusLabel}</em>
                       </div>
-                      <div className="action-output-list">
-                        {actionOutputRows.map((row) => (
-                          <div key={row.id} className="list-row">
-                            <div>
-                              <strong>{row.primary}</strong>
-                              <span>{row.secondary}</span>
-                              {row.detail ? <small>{row.detail}</small> : null}
-                            </div>
-                            <em>{row.statusLabel}</em>
-                          </div>
-                        ))}
-                      </div>
-                      {reservationResult?.outputPath ? (
-                        <div className="detail-panel">output: {reservationResult.outputPath}</div>
-                      ) : null}
-                      {reservationResult?.engineStatus === "pending-source" ? (
-                        <div className="detail-panel">source bundle 필요: compare/reconcile/apply 엔진은 준비되었고 PMS/OTA raw source records 연결만 남았습니다.</div>
-                      ) : null}
-                      {reservationResult?.planToken ? (
-                        <div className="detail-panel">승인 토큰이 생성되었습니다. raw 값은 UI에 노출하지 않습니다.</div>
-                      ) : null}
-                    </div>
+                    ))}
                   </div>
                 </article>
-              </section>
+              </>
             )}
-          </main>
+          </section>
+        </main>
         </div>
 
       {settingsOpen ? (
         <div className="overlay overlay-settings">
-          <section className="settings-panel">
-            <div className="settings-header">
-              <div>
-                <p className="eyebrow">Settings</p>
-                <h3>설정</h3>
+          <section className="settings-panel settings-shell">
+            <aside className="settings-side-nav">
+              <div className="settings-side-brand">
+                <div className="settings-side-icon">⚙</div>
+                <div>
+                  <strong>Settings</strong>
+                  <span>Global Configuration</span>
+                </div>
               </div>
-              <button type="button" className="ghost-button" onClick={closeSettings}>
-                닫기
-              </button>
-            </div>
+              <nav className="settings-side-links">
+                <button type="button" className="settings-side-link active">직접 입력</button>
+                <button type="button" className="settings-side-link">운영 선택값</button>
+              </nav>
+              <div className="settings-side-links settings-side-footer">
+                <button type="button" className="settings-side-link" onClick={closeSettings}>닫기</button>
+              </div>
+            </aside>
 
-            <div className="settings-grid">
-              <article className="settings-section">
-                <h4>라이브 조회 설정</h4>
-                <label className="field">
-                  <span>Spreadsheet ID / URL</span>
-                  <input value={spreadsheet} onChange={(event) => setSpreadsheet(event.target.value)} />
-                </label>
-                <label className="field">
-                  <span>Sheet Name</span>
-                  <input value={sheetName} onChange={(event) => setSheetName(event.target.value)} />
-                </label>
-                <label className="field">
-                  <span>코엑스(B동)</span>
-                  <input value={sheetTabCoexMain} onChange={(event) => setSheetTabCoexMain(event.target.value)} />
-                </label>
-                <label className="field">
-                  <span>코엑스2(A동)</span>
-                  <input value={sheetTabCoexAnnex} onChange={(event) => setSheetTabCoexAnnex(event.target.value)} />
-                </label>
-                <label className="field">
-                  <span>강남</span>
-                  <input value={sheetTabGangnam} onChange={(event) => setSheetTabGangnam(event.target.value)} />
-                </label>
-                <label className="field">
-                  <span>선릉</span>
-                  <input value={sheetTabSeolleung} onChange={(event) => setSheetTabSeolleung(event.target.value)} />
-                </label>
-                <label className="field">
-                  <span>삼성</span>
-                  <input value={sheetTabSamsung} onChange={(event) => setSheetTabSamsung(event.target.value)} />
-                </label>
-                <label className="field">
-                  <span>기본 조회 기간(일)</span>
-                  <input value={reportWindowDays} onChange={(event) => setReportWindowDays(event.target.value)} />
-                </label>
-                <div className="detail-panel">사용자 기본값은 오늘부터 {reportWindowDays || "5"}일 범위로 열립니다.</div>
-                <div className="detail-panel">COEX는 {sheetTabCoexMain} + {sheetTabCoexAnnex}, 강남은 {sheetTabGangnam}, 선릉은 {sheetTabSeolleung} 탭을 읽습니다.</div>
-                <div className="detail-panel">삼성은 preopen 상태로 유지되며 truth mapping 대상만 유지합니다.</div>
-                <div className="button-row">
-                  <button type="button" onClick={() => void saveSettings()} disabled={busyKey !== null}>
-                    저장
-                  </button>
+            <div className="settings-main">
+              <div className="settings-topbar">
+                <div>
+                  <p className="eyebrow">Settings</p>
+                  <h3>Global Configuration</h3>
+                  <p className="support-copy">직접 입력이 필요한 값과 운영 선택값만 한 화면에서 정리합니다.</p>
                 </div>
-              </article>
+                <label className="settings-search">
+                  <span>검색</span>
+                  <input type="search" placeholder="설정 항목 검색" />
+                </label>
+              </div>
 
-              <article className="settings-section">
-                <h4>오더리스트 / 어라이벌 옵션</h4>
-                <label className="toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={excludeRoomMakeup}
-                    onChange={(event) => setExcludeRoomMakeup(event.target.checked)}
-                  />
-                  <span>룸메이크업 제외</span>
-                </label>
-                <label className="toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={flagContinuationCandidates}
-                    onChange={(event) => setFlagContinuationCandidates(event.target.checked)}
-                  />
-                  <span>연박 후보 표시</span>
-                </label>
-                <div className="detail-panel">하이브리드 검색이 예약번호, 예약키, 이름, 연락처, 채널, 노트 겹침, 날짜 인접성을 함께 사용해 연박 후보를 찾습니다.</div>
-                <div className="detail-panel">결과 단계는 확정 / 수정 추천 / 검토 / 보류이며, 근거 충돌 시 보류로 남깁니다.</div>
-                <div className="button-row">
-                  <button type="button" onClick={() => void saveSettings()} disabled={busyKey !== null}>
-                    옵션 저장
-                  </button>
-                </div>
-              </article>
-
-              <article className="settings-section">
-                <h4>BGE-M3 보조 설정</h4>
-                <p className="support-copy">매핑/추천 보조 모델은 BGE-M3를 기본값으로 사용합니다.</p>
-                <div className="detail-panel">시트 조회, 검증, 오더리스트, 어라이벌에서 하이브리드 검색이 후보를 만들고 BGE-M3가 규칙 근거가 정리된 후보만 보조 정렬합니다.</div>
-                <div className="detail-panel">BGE-M3는 충돌 근거를 무시하지 않으며, 약한 근거는 보류로 남깁니다.</div>
-                <label className="field">
-                  <span>사용 여부</span>
-                  <select value={bgeEnabled ? "on" : "off"} onChange={(event) => setBgeEnabled(event.target.value === "on")}>
-                    <option value="on">활성화</option>
-                    <option value="off">비활성화</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>실행 모드</span>
-                  <select value={bgeRuntime} onChange={(event) => setBgeRuntime(event.target.value as "local-path" | "download-if-missing")}>
-                    <option value="local-path">로컬 경로</option>
-                    <option value="download-if-missing">없으면 내려받기</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>모델 경로</span>
-                  <input
-                    value={bgeModelPath}
-                    onChange={(event) => setBgeModelPath(event.target.value)}
-                  />
-                </label>
-                <div className="detail-panel">{bgeInstallSummary}</div>
-                <label className="field">
-                  <span>Top K</span>
-                  <input value={bgeTopK} onChange={(event) => setBgeTopK(event.target.value)} />
-                </label>
-                <label className="field">
-                  <span>Score Threshold</span>
-                  <input value={bgeScoreThreshold} onChange={(event) => setBgeScoreThreshold(event.target.value)} />
-                </label>
-                <div className="detail-panel">로컬 모델 준비: 1. 경로 입력 2. 활성화 3. 저장 4. 하이브리드 검색 결과에서 수정 추천/검토/보류 상태 확인</div>
-                <div className="detail-panel">Xenova/bge-m3 / {bgeRuntime} / {bgeModelPath ? "path-set" : "path-missing"}</div>
-                <div className="button-row">
-                  <button type="button" onClick={() => void installBgeM3Model()} disabled={busyKey !== null}>
-                    BGE-M3 설치
-                  </button>
-                  <button type="button" onClick={() => void saveSettings()} disabled={busyKey !== null}>
-                    BGE-M3 저장
-                  </button>
-                </div>
-              </article>
-
-              <article className="settings-section">
-                <h4>고급 / 진단</h4>
-                <div className="provider-diagnostics">
-                  {orderedProviders.map((provider) => (
-                    <div key={provider.provider} className="diagnostic-card">
-                      <strong>{providerLabel(provider.provider)}</strong>
-                      <span>{provider.pageState}</span>
-                      <span>{provider.currentHost ?? "-"}</span>
-                      <span>{provider.providerCookieCount} cookies</span>
+              <div className="settings-reference-grid">
+                <section className="settings-section settings-manual-card">
+                  <div className="settings-section-head">
+                    <div className="settings-section-icon">입력</div>
+                    <div>
+                      <h4>직접 입력 필요</h4>
+                      <p>실제 주소, 계정, 모델 경로처럼 사용자가 직접 넣는 값입니다.</p>
                     </div>
-                  ))}
-                </div>
-                <div className="detail-panel">
-                  preflight: {preflight?.overallStatus ?? "idle"} / checked: {formatDateTime(preflight?.checkedAt ?? null)}
-                </div>
-                <div className="detail-panel">
-                  previousWorkspace: {previousModuleRef.current} / action: {previousActionRef.current}
-                </div>
-              </article>
+                  </div>
+                  <div className="settings-stack">
+                    <label className="field">
+                      <span>예약 시트 주소</span>
+                      <input value={spreadsheet} onChange={(event) => setSpreadsheet(event.target.value)} />
+                    </label>
+                    <label className="field">
+                      <span>예약 시트 탭 이름</span>
+                      <input value={sheetName} onChange={(event) => setSheetName(event.target.value)} />
+                    </label>
+                    <div className="settings-inline-grid">
+                      <label className="field">
+                        <span>WINGS 로그인 아이디</span>
+                        <input value={wingsLoginId} onChange={(event) => setWingsLoginId(event.target.value)} placeholder="WINGS 로그인 아이디" />
+                      </label>
+                      <label className="field">
+                        <span>WINGS 로그인 비밀번호</span>
+                        <input type="password" value={wingsPassword} onChange={(event) => setWingsPassword(event.target.value)} placeholder="WINGS 로그인 비밀번호" />
+                      </label>
+                    </div>
+                    <label className="field">
+                      <span>BGE-M3 로컬 모델 폴더 경로</span>
+                      <input value={bgeModelPath} onChange={(event) => setBgeModelPath(event.target.value)} placeholder="local-path일 때만 필요" />
+                    </label>
+                    <div className="settings-note-card">{wingsLoginSummary}</div>
+                  </div>
+                </section>
 
-              <article className="settings-section">
-                <h4>현재 저장 상태</h4>
-                <div className="detail-panel">
-                  configured: {settingsSnapshot?.isConfigured ? "yes" : "no"} / updated: {formatDateTime(settingsSnapshot?.updatedAt ?? null)}
-                </div>
-              </article>
+                <section className="settings-section settings-selection-card">
+                  <div className="settings-section-head">
+                    <div className="settings-section-icon accent">선택</div>
+                    <div>
+                      <h4>운영 선택값</h4>
+                      <p>조회 기간, 오더리스트 옵션, BGE-M3 사용 조건을 정리합니다.</p>
+                    </div>
+                  </div>
+                  <div className="settings-two-column">
+                    <div className="settings-stack">
+                      <label className="field">
+                        <span>기본 조회 기간(일)</span>
+                        <input value={reportWindowDays} onChange={(event) => setReportWindowDays(event.target.value)} />
+                      </label>
+                      <div className="settings-range-pill">{reportWindowDays || String(DEFAULT_APP_REPORT_WINDOW_DAYS)} Days</div>
+                      <label className="toggle-row settings-toggle-card">
+                        <input type="checkbox" checked={excludeRoomMakeup} onChange={(event) => setExcludeRoomMakeup(event.target.checked)} />
+                        <span>룸메이크업 제외</span>
+                      </label>
+                      <label className="toggle-row settings-toggle-card">
+                        <input type="checkbox" checked={flagContinuationCandidates} onChange={(event) => setFlagContinuationCandidates(event.target.checked)} />
+                        <span>연박 후보 표시</span>
+                      </label>
+                      <label className="toggle-row settings-toggle-card">
+                        <input type="checkbox" checked={bgeEnabled} onChange={(event) => setBgeEnabled(event.target.checked)} />
+                        <span>BGE-M3 사용 여부</span>
+                      </label>
+                    </div>
+                    <div className="settings-stack">
+                      <label className="field">
+                        <span>BGE-M3 실행 모드</span>
+                        <select value={bgeRuntime} onChange={(event) => setBgeRuntime(event.target.value as "local-path" | "download-if-missing")}>
+                          <option value="local-path">로컬 경로</option>
+                          <option value="download-if-missing">없으면 내려받기</option>
+                        </select>
+                      </label>
+                      <div className="settings-inline-grid">
+                        <label className="field">
+                          <span>Top K</span>
+                          <input value={bgeTopK} onChange={(event) => setBgeTopK(event.target.value)} />
+                        </label>
+                        <label className="field">
+                          <span>Score Threshold</span>
+                          <input value={bgeScoreThreshold} onChange={(event) => setBgeScoreThreshold(event.target.value)} />
+                        </label>
+                      </div>
+                      <div className="settings-note-card">{bgeInstallSummary}</div>
+                      <div className="settings-info-card">
+                        하이브리드 검색이 예약번호, 예약키, 이름, 연락처, 채널, 노트 겹침, 날짜 인접성을 함께 사용해 연박 후보를 찾습니다.
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div className="settings-floating-bar">
+                <button type="button" className="ghost-button" onClick={closeSettings}>
+                  변경 취소
+                </button>
+                <button type="button" onClick={() => void saveSettings()} disabled={busyKey !== null}>
+                  설정 적용
+                </button>
+              </div>
             </div>
           </section>
         </div>

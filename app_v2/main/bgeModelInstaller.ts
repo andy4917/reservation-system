@@ -2,19 +2,17 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import electron from "electron";
 import type { AppBgeInstallSnapshot, AppSettingsSnapshot } from "../../src/desktop/app-v2-contracts.js";
+import {
+  DEFAULT_APP_BGE_MODEL_ID,
+  DEFAULT_APP_BGE_SCORE_THRESHOLD,
+  DEFAULT_APP_BGE_TOP_K
+} from "../../src/desktop/app-v2-contracts.js";
 import { loadSettingsSnapshot, saveSettings } from "./settingsStore.js";
 
 const { app } = electron;
 
-const DEFAULT_BGE_MODEL_ID = "Xenova/bge-m3";
-
 function nowIso() {
   return new Date().toISOString();
-}
-
-function normalizeModelId(value: string | null | undefined) {
-  const text = String(value || "").trim();
-  return text || DEFAULT_BGE_MODEL_ID;
 }
 
 function getInstallRoot() {
@@ -51,7 +49,7 @@ async function listInstalledFiles(modelPath: string) {
 }
 
 async function buildSnapshotFromSettings(settingsSnapshot: AppSettingsSnapshot): Promise<AppBgeInstallSnapshot> {
-  const modelId = normalizeModelId(settingsSnapshot.config?.bgeM3?.modelId);
+  const modelId = DEFAULT_APP_BGE_MODEL_ID;
   const installRoot = getInstallRoot();
   const configuredPath = settingsSnapshot.config?.bgeM3?.modelPath?.trim() || resolveModelPathFromRoot(installRoot, modelId);
   const files = await listInstalledFiles(configuredPath);
@@ -75,7 +73,7 @@ export async function getBgeInstallSnapshot() {
 
 export async function installBgeM3Model(): Promise<AppBgeInstallSnapshot> {
   const settingsSnapshot = await loadSettingsSnapshot();
-  const modelId = normalizeModelId(settingsSnapshot.config?.bgeM3?.modelId);
+  const modelId = DEFAULT_APP_BGE_MODEL_ID;
   const installRoot = getInstallRoot();
   const modelPath = resolveModelPathFromRoot(installRoot, modelId);
   await fs.mkdir(installRoot, { recursive: true });
@@ -98,11 +96,10 @@ export async function installBgeM3Model(): Promise<AppBgeInstallSnapshot> {
     ...(settingsSnapshot.config ?? {}),
     bgeM3: {
       enabled: true,
-      modelId,
       runtime: "local-path",
       modelPath,
-      topK: settingsSnapshot.config?.bgeM3?.topK ?? 5,
-      scoreThreshold: settingsSnapshot.config?.bgeM3?.scoreThreshold ?? 0.72,
+      topK: settingsSnapshot.config?.bgeM3?.topK ?? DEFAULT_APP_BGE_TOP_K,
+      scoreThreshold: settingsSnapshot.config?.bgeM3?.scoreThreshold ?? DEFAULT_APP_BGE_SCORE_THRESHOLD,
     },
   });
   return buildSnapshotFromSettings(updatedSettings);

@@ -1,4 +1,5 @@
 import type { AppBranch } from "../../src/desktop/app-v2-contracts.js";
+import { getAppProviderOption } from "../../src/desktop/app-v2-contracts.js";
 
 interface WingsSessionContractInput {
   branch: AppBranch;
@@ -97,11 +98,12 @@ export function buildWingsReadonlyRequestContract(input: WingsSessionContractInp
 
 export function buildWingsSessionReadScript(input: WingsSessionContractInput) {
   const contract = buildWingsReadonlyRequestContract(input);
+  const wingsOrigin = getAppProviderOption("wings-pms").sessionOrigin;
   return `
     (async () => {
       const ctx = ${JSON.stringify(contract)};
       const normalize = (value) => typeof value === "string" ? value.trim() : "";
-      const origin = location.origin || "https://pms.sanhait.com";
+      const origin = location.origin || ${JSON.stringify(wingsOrigin)};
       const url = new URL(ctx.request.urlPath, origin);
       const response = await fetch(url.toString(), {
         method: ctx.request.method,

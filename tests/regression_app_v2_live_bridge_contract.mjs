@@ -23,7 +23,9 @@ function main() {
   assert.match(bridgeScript, /window_blocks = \[block for block in payload\["blocks"\] if overlaps_window\(block, start_date, end_date\)\]/);
   assert.match(bridgeScript, /"searchBundles": build_search_bundles\(window_blocks\)/);
 
-  assert.match(liveRead, /sheetTabs/);
+  assert.doesNotMatch(liveRead, /sheetTabs/);
+  assert.doesNotMatch(runner, /sheetTabs/);
+  assert.match(bridgeScript, /normalize_text\(getattr\(block, "branch", ""\)\) == normalize_text\(args.branch\)/);
   assert.match(liveRead, /runLiveSheetBridge/);
   assert.match(runner, /runLiveOpsPreview/);
 

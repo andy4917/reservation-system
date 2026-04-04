@@ -17,6 +17,10 @@ Verification and smoke paths are not product runtime. `verify-only` flows, `UHS_
 ## Product Path Rules
 
 - Do not promote probe, smoke, placeholder, or fallback logic into the default runtime path.
+- Reservation sheet runtime uses one configured spreadsheet plus one configured sheet tab.
+- Branch separation inside the reservation sheet must come from in-sheet branch sections and explicit branch filtering, not branch-specific tab routing.
+- Interactive startup must prime app-owned provider BrowserWindow partitions in hidden state from Electron main.
+- Main-window lifecycle must not depend on the total BrowserWindow count once hidden provider windows exist.
 - Renderer must not unlock downstream actions from readiness-only checks that did not execute the real product path.
 - Demo, fixture, or replay-only inputs must stay outside the default runtime path.
 - preflight summary must describe actual configuration truth and provider state, not guessed readiness.

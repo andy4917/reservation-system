@@ -56,6 +56,7 @@ The legacy reservation-list path is kept only so older HAR bundles still parse. 
 - HAR remains a structure source, not the long-term auth source.
 - If the official browser session is live, runtime uses the browser-assisted auth path and does not enter managed recovery mode.
 - The default session owner is the app-managed persistent BrowserWindow partition for `wings-pms`, not an external browser handoff.
+- Interactive app startup primes the hidden `wings-pms` BrowserWindow so the session partition is available before the operator asks for a live read.
 - `.env` is not an allowed replacement for Wings PMS login because the live read path depends on the browser session owned by Electron main.
 - Managed recovery runs only when the browser session is offline or unavailable.
 - UI surfaces keep this silent and expose only generic live availability, not recovery logs or session state strings.

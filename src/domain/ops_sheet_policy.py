@@ -14,6 +14,8 @@ class OpsSheetTabPolicy:
     branch: str
     building: str
     property_label: str
+    sheet_gid: str = ""
+    sheet_url: str = ""
 
 
 DEFAULT_OPS_SHEET_TABS: Tuple[OpsSheetTabPolicy, ...] = (
@@ -22,18 +24,32 @@ DEFAULT_OPS_SHEET_TABS: Tuple[OpsSheetTabPolicy, ...] = (
         branch="COEX",
         building="B동",
         property_label="UH suite 더 코엑스",
+        sheet_gid="1932864543",
+        sheet_url="https://docs.google.com/spreadsheets/d/1MfvPh2msnoXbG8Q2Mjpk5KVelh3Rv3HQ-SKt9P6xqjE/edit?gid=1932864543#gid=1932864543",
     ),
     OpsSheetTabPolicy(
         tab_name="코엑스2",
         branch="COEX",
         building="A동",
         property_label="UH suite 더 코엑스2",
+        sheet_gid="1165686679",
+        sheet_url="https://docs.google.com/spreadsheets/d/1MfvPh2msnoXbG8Q2Mjpk5KVelh3Rv3HQ-SKt9P6xqjE/edit?gid=1165686679#gid=1165686679",
+    ),
+    OpsSheetTabPolicy(
+        tab_name="선릉1",
+        branch="SEOLLEUNG",
+        building="",
+        property_label="UH Suite 선릉",
+        sheet_gid="627997160",
+        sheet_url="https://docs.google.com/spreadsheets/d/1MfvPh2msnoXbG8Q2Mjpk5KVelh3Rv3HQ-SKt9P6xqjE/edit?gid=627997160#gid=627997160",
     ),
     OpsSheetTabPolicy(
         tab_name="강남",
         branch="GANGNAM",
         building="",
         property_label="UH Suite 강남",
+        sheet_gid="1493215200",
+        sheet_url="https://docs.google.com/spreadsheets/d/1MfvPh2msnoXbG8Q2Mjpk5KVelh3Rv3HQ-SKt9P6xqjE/edit?gid=1493215200#gid=1493215200",
     ),
 )
 

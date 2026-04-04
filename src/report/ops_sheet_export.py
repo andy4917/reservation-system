@@ -12,7 +12,7 @@ from src.domain.ops_sheet_policy import (
     resolve_ops_sheet_tab,
 )
 from src.domain.sheet_domain import normalize_room_no_key, normalize_text
-from src.io.sheets_api import GoogleSheetsReadonlyClient
+from src.io.sheets_api import GoogleSheetsClient, GoogleSheetsReadonlyClient
 
 ORDERLIST_PACKET_FIELDNAMES = [
     "No.",
@@ -453,3 +453,57 @@ def write_packet_text_files(
         tab_name = normalize_text(packet.get("tab_name", "")).replace(" ", "_")
         (out_dir / f"{prefix}_{tab_name}.tsv").write_text(packet.get("tsv", ""), encoding="utf-8-sig")
         (out_dir / f"{prefix}_{tab_name}.csv").write_text(packet.get("csv", ""), encoding="utf-8-sig")
+
+
+def apply_orderlist_packets(
+    *,
+    client: GoogleSheetsClient,
+    spreadsheet_id: str,
+    packets: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    results: List[Dict[str, Any]] = []
+    for packet in packets:
+      tab_name = normalize_text(packet.get("tab_name", ""))
+      if not tab_name:
+          continue
+      start_row = int(packet.get("suggested_paste_start_row", 4) or 4)
+      rows = packet.get("rows", [])
+      fieldnames = packet.get("fieldnames", ORDERLIST_PACKET_FIELDNAMES)
+      values = [[row.get(field, "") for field in fieldnames] for row in rows]
+      clear_range = f"'{tab_name}'!A{start_row}:I200"
+      client.clear_values(spreadsheet_id, clear_range)
+      if values:
+          client.update_values(spreadsheet_id, f"'{tab_name}'!A{start_row}", values)
+      results.append(
+          {
+              "tab_name": tab_name,
+              "start_row": start_row,
+              "row_count": len(values),
+          }
+      )
+    return results
+
+
+def apply_arrival_packet(
+    *,
+    client: GoogleSheetsClient,
+    packet: Dict[str, Any],
+) -> Dict[str, Any]:
+    spreadsheet_id = normalize_text(packet.get("spreadsheet_id", "")) or ARRIVAL_TEMPLATE_SPREADSHEET_ID
+    sheet_name = normalize_text(packet.get("sheet_name", "")) or ARRIVAL_TEMPLATE_SHEET_NAME
+    data = [
+        {
+            "range": f"'{sheet_name}'!{item['range']}",
+            "majorDimension": "ROWS",
+            "values": [[item.get("value", "")]],
+        }
+        for item in packet.get("cell_updates", [])
+        if normalize_text(item.get("range", ""))
+    ]
+    if data:
+        client.batch_update_values(spreadsheet_id, data)
+    return {
+        "sheet_name": sheet_name,
+        "spreadsheet_id": spreadsheet_id,
+        "cell_update_count": len(data),
+    }

@@ -314,6 +314,7 @@ def build_search_bundles(blocks: List[Any]) -> List[Dict[str, Any]]:
                 "id": f"{normalize_text(getattr(block, 'room_no', ''))}:{iso_or_empty(getattr(block, 'checkin', None))}:{reservation_no or normalize_text(getattr(block, 'reservation_key', ''))}",
                 "branch": normalize_text(getattr(block, "branch", "")),
                 "roomNo": normalize_text(getattr(block, "room_no", "")),
+                "roomType": normalize_text(getattr(block, "room_type", "")),
                 "reservationNo": reservation_no,
                 "reservationKey": normalize_text(getattr(block, "reservation_key", "")),
                 "guestName": guest_name,
@@ -333,6 +334,54 @@ def build_search_bundles(blocks: List[Any]) -> List[Dict[str, Any]]:
             }
         )
     return attach_fuzzy_candidate_ids(bundles)
+
+
+def build_block_preview_items(blocks: List[Any]) -> List[Dict[str, Any]]:
+    preview_rows: List[Dict[str, Any]] = []
+    for block in sorted(
+        blocks,
+        key=lambda item: (
+            iso_or_empty(getattr(item, "checkin", None)),
+            normalize_text(getattr(item, "room_no", "")),
+            normalize_text(getattr(item, "reservation_no", "")),
+        ),
+    ):
+        note_head = normalize_text(build_note_head(block))
+        reservation_no = normalize_text(getattr(block, "reservation_no", "")) or extract_reservation_no_from_text(note_head)
+        guest_name = normalize_text(getattr(block, "guest_name", "")) or extract_guest_name(note_head)
+        room_no = normalize_text(getattr(block, "room_no", ""))
+        room_type = normalize_text(getattr(block, "room_type", ""))
+        branch_label = normalize_text(getattr(block, "branch", ""))
+        checkin = iso_or_empty(getattr(block, "checkin", None))
+        checkout = iso_or_empty(getattr(block, "checkout", None))
+        night_count = int(getattr(block, "nights", 0) or 0)
+        channel = normalize_text(getattr(block, "channel", "")) or extract_channel_marker(note_head)
+        preview_rows.append(
+            {
+                "id": f"{room_no}:{checkin}:{reservation_no or normalize_text(getattr(block, 'reservation_key', ''))}",
+                "kind": "reservation-block",
+                "title": f"{room_no or '-'} / {room_type or '객실'}",
+                "subtitle": " · ".join(
+                    [
+                        guest_name or reservation_no or "예약 정보",
+                        checkin,
+                        f"{night_count}박" if night_count > 0 else "",
+                    ]
+                ),
+                "statusLabel": channel or "SHEET",
+                "branchLabel": branch_label,
+                "roomNo": room_no,
+                "roomType": room_type,
+                "guestName": guest_name,
+                "reservationNo": reservation_no,
+                "checkin": checkin,
+                "checkout": checkout,
+                "nightCount": night_count,
+                "channel": channel,
+                "noteHead": note_head,
+            }
+        )
+    return preview_rows[:24]
 
 
 def build_review_candidates(blocks: List[Any]) -> List[Dict[str, str]]:
@@ -429,7 +478,7 @@ def command_sheet_read(args: argparse.Namespace) -> int:
                 "checkedAt": dt.datetime.now().isoformat(),
                 "recordsImported": len(window_blocks),
                 "summary": f"{args.branch} 예약 시트 라이브 데이터를 읽었습니다.",
-                "items": payload["items"][:8],
+                "items": build_block_preview_items(window_blocks),
                 "reviewCandidates": review_candidates,
                 "searchBundles": search_bundles,
                 "candidateFeatures": FEATURE_KEYS,
