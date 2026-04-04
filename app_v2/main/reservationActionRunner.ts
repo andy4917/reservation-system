@@ -18,6 +18,7 @@ import {
   DEFAULT_APP_REPORT_WINDOW_DAYS,
   getAppBranchOption
 } from "../../src/desktop/app-v2-contracts.js";
+import { getProviderBinding } from "./branchRuntimeConfig.js";
 import { describeEmbeddingAvailability } from "./embeddingRuntime.js";
 import {
   buildHybridCandidateDecisions,
@@ -25,6 +26,7 @@ import {
   type HybridDecision,
   type HybridSearchBundle,
 } from "./hybridCandidateEngine.js";
+import { exportProviderSessionBridgeBundle } from "./providerWorkspaceManager.js";
 import { loadSettingsSnapshot } from "./settingsStore.js";
 
 const PYTHON_COMMAND = process.env.PYTHON_BIN || "python3";
@@ -334,6 +336,61 @@ async function runManagementBridge(
   return payload;
 }
 
+async function runOtaApplyBridge(
+  input: AppReservationActionInput,
+  settingsSnapshot: AppSettingsSnapshot,
+): Promise<ManagementBridgePayload> {
+  const spreadsheet = settingsSnapshot.config?.spreadsheet?.trim() ?? "";
+  const sheetName = settingsSnapshot.config?.sheetName?.trim() ?? "";
+  if (!spreadsheet || !sheetName) {
+    throw new Error("예약 시트 설정이 비어 있습니다.");
+  }
+  const cwd = process.cwd();
+  const scriptPath = path.join(cwd, "scripts", "app_v2_ota_apply_bridge.py");
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "uhs-app-v2-ota-apply-"));
+  const authBundleFile = path.join(outDir, "provider-session-bundle.json");
+  const naverBinding = getProviderBinding(input.branch, "naver-partner");
+  const stationBinding = getProviderBinding(input.branch, "admin-station");
+  const authBundlePayload = {
+    authBundles: {
+      "naver-partner": await exportProviderSessionBridgeBundle("naver-partner"),
+      "admin-station": await exportProviderSessionBridgeBundle("admin-station"),
+    },
+  };
+  await fs.writeFile(authBundleFile, `${JSON.stringify(authBundlePayload, null, 2)}\n`, "utf8");
+  const args = [
+    scriptPath,
+    "--branch",
+    input.branch,
+    "--spreadsheet",
+    spreadsheet,
+    "--sheet-name",
+    sheetName,
+    "--start-date",
+    input.startDate,
+    "--end-date",
+    input.endDate,
+    "--out-dir",
+    outDir,
+    "--auth-bundle-file",
+    authBundleFile,
+    "--naver-business-id",
+    String(naverBinding.metadata.businessId || ""),
+    "--station-branch-id",
+    String(stationBinding.metadata.branchId || ""),
+  ];
+  if (input.approvePlanToken?.trim()) {
+    args.push("--approve-plan-token", input.approvePlanToken.trim());
+  }
+  if (input.executeApply === true) {
+    args.push("--execute-apply");
+  }
+  const { stdout } = await runPythonScript(args, cwd);
+  const payload = JSON.parse(stdout) as ManagementBridgePayload;
+  if (payload.error) throw new Error(payload.error);
+  return payload;
+}
+
 async function runLiveOpsPreview(
   input: AppReservationActionInput,
   settingsSnapshot: AppSettingsSnapshot,
@@ -494,7 +551,10 @@ export async function runReservationAction(input: AppReservationActionInput): Pr
 
   if (input.action === "compare" || input.action === "reconcile" || input.action === "apply") {
     try {
-      const payload = await runManagementBridge(input, settingsSnapshot);
+      const payload =
+        input.action === "apply"
+          ? await runOtaApplyBridge(input, settingsSnapshot)
+          : await runManagementBridge(input, settingsSnapshot);
       return {
         action: input.action,
         branch: input.branch,

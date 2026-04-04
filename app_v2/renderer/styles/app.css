@@ -416,6 +416,73 @@ select {
   padding: 0.95rem;
 }
 
+.live-read-proof {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(19, 32, 49, 0.08);
+}
+
+.live-read-proof-header {
+  display: flex;
+  gap: 1rem;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.live-read-proof-header h4 {
+  margin: 0.45rem 0 0;
+  font-size: 1.02rem;
+  line-height: 1.4;
+}
+
+.live-read-proof-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.95rem;
+}
+
+.live-read-proof-card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.76);
+  padding: 0.95rem;
+}
+
+.live-read-proof-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.live-read-proof-card-header span {
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.live-read-proof-meta {
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.live-read-proof-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.live-read-proof-chip {
+  border-radius: 999px;
+  background: #edf2f6;
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+}
+
 .hero-card,
 .progress-card,
 .list-card,
@@ -531,6 +598,92 @@ select {
   opacity: 0.48;
 }
 
+.ia-group-stack {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.ia-group-card {
+  border-radius: 20px;
+  border: 1px solid rgba(19, 32, 49, 0.08);
+  background: rgba(245, 248, 251, 0.9);
+  padding: 0.95rem;
+}
+
+.ia-group-card.active {
+  background: #ffffff;
+  box-shadow: 0 14px 28px rgba(17, 28, 40, 0.08);
+}
+
+.ia-group-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+}
+
+.ia-group-card-head strong,
+.ia-group-card-head span,
+.ia-group-card-head em {
+  display: block;
+}
+
+.ia-group-card-head strong {
+  margin-top: 0.15rem;
+}
+
+.ia-group-card-head span {
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.ia-group-card-head em {
+  color: var(--accent-strong);
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ia-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.ia-action-button {
+  width: 100%;
+  text-align: left;
+  border-radius: 18px;
+  padding: 0.9rem 0.95rem;
+  background: #eef3f6;
+  color: var(--text);
+}
+
+.ia-action-button strong,
+.ia-action-button span {
+  display: block;
+}
+
+.ia-action-button span {
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.ia-action-button.active {
+  background: linear-gradient(180deg, #7390a5 0%, #5f788a 100%);
+  color: #f6fbff;
+}
+
+.ia-action-button.active span {
+  color: rgba(246, 251, 255, 0.82);
+}
+
 .toggle-stack {
   display: grid;
   gap: 0.65rem;
@@ -638,6 +791,27 @@ select {
 .ops-order-shell,
 .ops-arrival-shell {
   grid-area: detail;
+}
+
+.apply-contract-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.apply-contract-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.apply-contract-banner {
+  margin-top: 0.9rem;
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  background: #fff7e8;
+  border: 1px solid rgba(193, 132, 38, 0.18);
+  color: #6d4d11;
+  font-weight: 600;
 }
 
 .ops-order-layout {
@@ -1183,7 +1357,8 @@ select {
   }
 
   .source-toolbar,
-  .detail-compare-grid {
+  .detail-compare-grid,
+  .ia-action-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1194,7 +1369,8 @@ select {
   }
 
   .ops-order-layout,
-  .ops-arrival-footer {
+  .ops-arrival-footer,
+  .apply-contract-grid {
     grid-template-columns: 1fr;
   }
 

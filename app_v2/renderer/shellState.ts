@@ -39,7 +39,7 @@ export const RESERVATION_ACTION_LABELS: Record<AppReservationAction, string> = {
   validate: "검증",
   reconcile: "대조",
   edit: "수정",
-  apply: "반영",
+  apply: "적용 가능 확인",
   "order-list": "오더리스트",
   arrival: "어라이벌",
 };
@@ -176,7 +176,7 @@ export function buildActionSteps(action: AppReservationAction, branch: AppBranch
   if (action === "validate") return ["기준 소스 확인", "예약 묶음 검증", "이상 후보 정리"];
   if (action === "reconcile") return ["대조 소스 선택", "불일치 검토", "대조 결과 저장"];
   if (action === "edit") return ["수정 대상 선택", "권장값 확인", "수정 내용 정리"];
-  if (action === "apply") return ["반영 대상 확정", "최종 확인", "승인 경계 확인"];
+  if (action === "apply") return ["적용 대상 확정", "최종 확인", "승인 경계 확인"];
   if (action === "order-list") return ["오늘 대상 추출", "배정/메모 반영", "오더리스트 정리"];
   return ["도착 대상 추출", "입실 준비 확인", "어라이벌 결과 정리"];
 }

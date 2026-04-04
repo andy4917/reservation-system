@@ -14,6 +14,18 @@ interface ProviderWorkspaceRecord {
   state: AppProviderBrowserState;
 }
 
+interface SessionCookieShape {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+  secure: boolean;
+  httpOnly: boolean;
+  sameSite: string;
+  session: boolean;
+  expirationDate?: number;
+}
+
 const workspaceRecords = new Map<AppProvider, ProviderWorkspaceRecord>();
 const DEFAULT_PROVIDER_LOAD_TIMEOUT_MS = 15000;
 const WINGS_LOGIN_LOG_FILE_NAME = "app-v2-wings-login-log.jsonl";
@@ -207,6 +219,105 @@ function hasWingsCredentials(settings: AppWingsLoginSettings | null | undefined)
   return Boolean(settings?.loginId && settings?.password);
 }
 
+function buildCookieHeader(cookies: SessionCookieShape[]) {
+  return cookies
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join("; ");
+}
+
+function inferCsrfToken(cookies: SessionCookieShape[]) {
+  const preferred = ["x-csrf-token", "xsrf-token", "csrf-token", "csrf_token", "csrftoken", "xsrftoken"];
+  for (const key of preferred) {
+    const found = cookies.find((cookie) => cookie.name.toLowerCase() === key);
+    if (found?.value) return found.value;
+  }
+  return "";
+}
+
+function normalizeBearerToken(value: unknown) {
+  return normalizeText(value).replace(/^Bearer\s+/i, "").trim();
+}
+
+function looksLikeJwt(value: string) {
+  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value.trim());
+}
+
+async function exportProviderCookies(provider: AppProvider): Promise<SessionCookieShape[]> {
+  const record = getRecord(provider);
+  if (!record.window || record.window.isDestroyed()) return [];
+  const config = getProviderConfig(provider);
+  const seen = new Map<string, SessionCookieShape>();
+  for (const scopeUrl of config.cookieScopeUrls) {
+    const cookies = await record.window.webContents.session.cookies.get({ url: scopeUrl });
+    for (const cookie of cookies) {
+      const key = `${cookie.name};${cookie.domain};${cookie.path}`;
+      seen.set(key, {
+        name: cookie.name,
+        value: cookie.value ?? "",
+        domain: cookie.domain ?? "",
+        path: cookie.path ?? "/",
+        secure: cookie.secure === true,
+        httpOnly: cookie.httpOnly === true,
+        sameSite: String(cookie.sameSite || "unspecified"),
+        session: cookie.session === true,
+        expirationDate: typeof cookie.expirationDate === "number" ? cookie.expirationDate : undefined,
+      });
+    }
+  }
+  return Array.from(seen.values());
+}
+
+async function readStorageSnapshot(provider: AppProvider) {
+  return executeProviderReadScript<Record<string, string>>(provider, `
+    (() => {
+      const out = {};
+      const pull = (storage, prefix) => {
+        if (!storage) return;
+        for (let index = 0; index < storage.length; index += 1) {
+          const key = storage.key(index);
+          if (!key) continue;
+          try {
+            out[prefix + key] = String(storage.getItem(key) || "");
+          } catch {
+            continue;
+          }
+        }
+      };
+      pull(window.localStorage, "local:");
+      pull(window.sessionStorage, "session:");
+      return out;
+    })()
+  `);
+}
+
+function inferStationAuthorization(storageSnapshot: Record<string, string>) {
+  for (const value of Object.values(storageSnapshot)) {
+    const trimmed = normalizeText(value);
+    if (!trimmed) continue;
+    if (looksLikeJwt(trimmed)) return `Bearer ${trimmed}`;
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      const candidate = normalizeBearerToken(
+        parsed.accessToken ?? parsed.authorization ?? parsed.token ?? parsed.bearer ?? "",
+      );
+      if (candidate) return `Bearer ${candidate}`;
+    } catch {
+      continue;
+    }
+  }
+  return "";
+}
+
+function inferNaverRole(storageSnapshot: Record<string, string>) {
+  for (const [key, value] of Object.entries(storageSnapshot)) {
+    const keyText = key.toLowerCase();
+    if (!keyText.includes("role")) continue;
+    const parsed = normalizeText(value);
+    if (parsed) return parsed;
+  }
+  return "";
+}
+
 export async function ensureProviderBrowser(provider: AppProvider): Promise<AppProviderBrowserState> {
   const record = getRecord(provider);
   if (record.window && !record.window.isDestroyed()) {
@@ -341,6 +452,47 @@ export async function executeProviderReadScript<T>(provider: AppProvider, script
     throw new Error(`${provider} provider window is not available`);
   }
   return record.window.webContents.executeJavaScript(script, true) as Promise<T>;
+}
+
+export async function exportProviderSessionBridgeBundle(provider: AppProvider): Promise<Record<string, unknown>> {
+  await ensureProviderBrowser(provider);
+  const cookies = await exportProviderCookies(provider);
+  const cookieHeader = buildCookieHeader(cookies);
+  const storageSnapshot = await readStorageSnapshot(provider).catch(() => ({}));
+
+  if (provider === "admin-station") {
+    const authorization = inferStationAuthorization(storageSnapshot);
+    if (!authorization) {
+      throw new Error("station session token could not be derived from current browser session");
+    }
+    return {
+      providerType: provider,
+      cookies,
+      cookieHeader,
+      authorization,
+    };
+  }
+
+  if (provider === "naver-partner") {
+    if (!cookieHeader) {
+      throw new Error("naver session cookies are missing");
+    }
+    const csrfToken = inferCsrfToken(cookies);
+    const role = inferNaverRole(storageSnapshot);
+    return {
+      providerType: provider,
+      cookies,
+      cookieHeader,
+      csrfToken,
+      role,
+    };
+  }
+
+  return {
+    providerType: provider,
+    cookies,
+    cookieHeader,
+  };
 }
 
 export async function listProviderBrowsers(): Promise<AppProviderBrowserState[]> {

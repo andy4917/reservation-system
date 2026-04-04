@@ -1,6 +1,6 @@
 # App Single Source Blueprint
 
-Last updated: 2026-03-29
+Last updated: 2026-04-04
 Status: canonical
 Applies to: `app_v2`, Electron main/renderer, provider bridges, live-read runtime, mapping/audit core, export/handoff
 
@@ -348,6 +348,7 @@ Current weakness:
 Final rule:
 
 - UI must converge on the canonical screen structure in this document
+- reservation-management IA should visibly separate `read proof`, `review`, `edit preparation`, `apply-possible`, and `operations output`
 
 ### 10.5 Live-read completeness gap
 
@@ -358,12 +359,14 @@ Problem:
 Current weakness:
 
 - real session-auth read paths now exist for PMS, Naver OTA, and Station in Electron main
+- renderer now exposes per-source live-read proof cards from actual read evidence and readiness state
 - live operator proof for the full external environment is still pending in this checkout state
 
 Final rule:
 
 - fixture or readiness success must never be presented as operating success
 - runtime proof depends on actual source reads and visible operator outputs
+- live-read proof UI must be driven by actual evidence (`sessionReadiness`, `runtimeHost`, `sourceLineage`, provider/session state), not synthetic copy
 
 ### 10.6 Apply-scope gap
 
@@ -375,6 +378,9 @@ Final rule:
 
 - read-only truth, review, and export remain the primary v1 goal
 - apply stays gated until auth, audit, and operator boundary documentation are explicit
+- current app_v2 `apply` surface is limited to `apply-possible` calculation only
+- current apply scope is restricted to sheet-derived NAVER + STATION inventory actions against OTA management surfaces
+- real OTA write execution remains disabled in the product runtime until a later contract change explicitly promotes it
 
 ## 11. Fill-in Requirements
 
@@ -398,8 +404,8 @@ Current implementation baseline:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Google Sheets | configured API integration | config-auth | config layer + Electron main readiness check | spreadsheet configured, sheet name present, Google token valid | yes | no | fail explicitly when settings or env auth are missing |
 | Wings PMS | browser session surface | session-auth | Electron main provider workspace | expected host/path, provider cookies, non-login route | yes | no | do not replace with `.env`; operator must log in through the app-owned browser window |
-| Naver Partner | browser session surface | session-auth | Electron main provider workspace | expected host/path, non-login route, provider cookies or recognized surface | yes | no | do not replace with `.env`; operator must log in through the app-owned browser window |
-| Station Admin | browser session surface | session-auth | Electron main provider workspace | expected host/path, non-login route | yes | no | do not replace with `.env`; operator must log in through the app-owned browser window |
+| Naver Partner | browser session surface | session-auth | Electron main provider workspace | expected host/path, non-login route, provider cookies or recognized surface | yes | apply-possible calculation only; real write disabled | do not replace with `.env`; operator must log in through the app-owned browser window |
+| Station Admin | browser session surface | session-auth | Electron main provider workspace | expected host/path, non-login route | yes | apply-possible calculation only; real write disabled | do not replace with `.env`; operator must log in through the app-owned browser window |
 
 ### 11.2 Core engine contract
 

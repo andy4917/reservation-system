@@ -5,7 +5,7 @@ Canonical design authority:
 - Top-level design source has moved to [`APP_SINGLE_SOURCE_BLUEPRINT.md`](./APP_SINGLE_SOURCE_BLUEPRINT.md).
 - This document remains valid as product rationale and operating-model background, but it is no longer the single top-level design authority.
 
-Last updated: 2026-03-18
+Last updated: 2026-04-04
 
 ## 1. 왜 이 앱을 만드는가
 
@@ -19,6 +19,7 @@ Last updated: 2026-03-18
 - 실제 apply보다 먼저 `무엇이 현재 사실인지`, `어디가 불일치인지`, `사람이 무엇을 확인해야 하는지`를 안정적으로 보여주는 표면이 없다.
 
 이 앱은 쓰기 자동화 앱이 아니라, 먼저 `운영 truth 확인 앱`이어야 한다.
+현재 기준에서 apply는 `실제 재고 변경`이 아니라 `OTA 관리 페이지 기준 적용 가능 상태 계산`까지만 제품 범위에 포함한다.
 
 ## 2. 이 앱이 하지 말아야 하는 것
 
@@ -42,7 +43,9 @@ v1은 다음 하나를 완성해야 한다.
 
 - `read-only live bundle` 경로와 `truth-aligned mapping core v1`은 코드 기준으로 구현 완료
 - operator export / search / handoff / 기본 운영 셸 UI도 v1 범위에 포함되어 닫힘
-- 아직 남은 것은 실제 운영 세션 기준 `read-live` 실증과 write/apply 범위 결정이다
+- 실제 운영 세션 기준 `read-live` 실증은 운영 환경 재검증으로 남아 있다
+- 앱 표면에는 runtime readiness와 source evidence 기반 `실조회 준비 상태` 카드가 올라와 있다
+- write/apply 범위는 현재 `NAVER/STATION inventory apply-possible 계산`으로 한정되었고 실제 write는 비활성이다
 
 ## 4. 사용자와 사용 장면
 
@@ -75,6 +78,7 @@ v1은 다음 하나를 완성해야 한다.
 - 확장 = 브리지
 - HAR = 구조 학습 자산
 - truth dataset = 기준 데이터
+- 예약 관리 내부 IA = `실조회 준비 상태` / `검토 작업` / `수정 정리` / `적용 전 확인` / `운영 출력`
 
 ## 6. 필수 기능과 넣는 이유
 

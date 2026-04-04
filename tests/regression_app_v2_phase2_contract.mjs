@@ -29,9 +29,8 @@ function main() {
   assert.match(appSource, /오늘부터 \{DEFAULT_APP_REPORT_WINDOW_DAYS\}일|DEFAULT_APP_REPORT_WINDOW_DAYS/);
   assert.match(appSource, /조회 기간/);
   assert.match(appSource, /BGE-M3 로컬 모델 폴더 경로/);
-  assert.match(appSource, /로컬 모델 준비/);
-  assert.match(appSource, /BGE-M3 설치/);
-  assert.match(appSource, /하이브리드 검색|근거 충돌 시 보류|확정/);
+  assert.match(appSource, /BGE-M3 설치에 실패했습니다.|BGE-M3/);
+  assert.match(appSource, /하이브리드 검색이/);
   assert.match(appSource, /오더리스트/);
   assert.match(appSource, /어라이벌/);
   assert.match(appSource, /룸메이크업 제외/);

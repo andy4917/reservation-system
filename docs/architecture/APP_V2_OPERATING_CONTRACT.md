@@ -19,6 +19,11 @@ Verification and smoke paths are not product runtime. `verify-only` flows, `UHS_
 - Do not promote probe, smoke, placeholder, or fallback logic into the default runtime path.
 - Reservation sheet runtime uses one configured spreadsheet plus one configured sheet tab.
 - Branch separation inside the reservation sheet must come from in-sheet branch sections and explicit branch filtering, not branch-specific tab routing.
+- The app_v2 `apply` action is currently an `apply-possible` contract, not a real write contract.
+- Current apply scope is limited to sheet-derived NAVER and STATION inventory actions for OTA management pages.
+- The renderer may show apply scope, approval boundary, and apply-possible status, but Electron main must not execute real OTA writes in the default product path.
+- The renderer must expose live-read proof from actual runtime evidence and explicit readiness state, not from assumed success labels.
+- Session-auth proof and config-auth proof must remain visibly separate in the product surface.
 - Interactive startup must prime app-owned provider BrowserWindow partitions in hidden state from Electron main.
 - Main-window lifecycle must not depend on the total BrowserWindow count once hidden provider windows exist.
 - Renderer must not unlock downstream actions from readiness-only checks that did not execute the real product path.

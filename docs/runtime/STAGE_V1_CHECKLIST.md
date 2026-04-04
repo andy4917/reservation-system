@@ -1,6 +1,6 @@
 # Stage / V1 Checklist
 
-- updated_at: 2026-03-31T22:30:00+09:00
+- updated_at: 2026-04-04T11:07:18+09:00
 - branch: `work/runtime-update`
 - commit: `9c4d61a`
 - scope: active branch runtime expansion (`COEX`/`GANGNAM`/`SEOLLEUNG`), Samsung inactive gating, and Electron main session-auth live-read path closure for the local Codex checkout
@@ -18,6 +18,7 @@
 - [x] branch/date scope를 main 기준으로 정리
 - [x] `SEOLLEUNG` 활성 / `SAMSUNG` inactive branch contract 반영
 - [x] PMS / Naver OTA / Station session-auth read path를 Electron main에 연결
+- [x] runtime readiness + 실제 read evidence를 `실조회 준비 상태` 카드로 앱 화면에 노출
 - [ ] 실제 운영 세션으로 `read-live` smoke 확인
 메모: live environment proof is still pending.
 

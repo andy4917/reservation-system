@@ -1,15 +1,16 @@
 # TASK STATE
 
-- updated_at: 2026-03-31T22:30:00+09:00
+- updated_at: 2026-04-04T11:07:18+09:00
 - status: verified
 - goal: Keep the local runtime handoff set aligned to the actual repository state and Codex workspace root used for implementation.
 - current_milestone: Stage 1/2 read-only product path remains complete, `SEOLLEUNG` is promoted into the active branch contract, and Electron main now owns PMS/OTA/Station session-auth read attempts for active branches.
-- next_step: when a live operator session is available, rerun the live-read runtime verify path to move beyond `offline-preview`.
+- next_step: when a live operator session is available, rerun the live-read runtime verify path against the new in-app proof surface to move beyond `offline-preview`.
 
 ## Completed
 - Stage 1 minimal live-read path remains implemented as the main-owned read-only bundle.
 - App branch contract now includes `COEX`, `GANGNAM`, `SEOLLEUNG`, and `SAMSUNG`, with `SAMSUNG` exposed as an inactive/preopen branch.
 - Electron main `liveReadActions` now runs session-auth fetch attempts for `wings-pms`, `naver-partner`, and `admin-station` instead of placeholder-only PMS/OTA responses.
+- Renderer now exposes `실조회 준비 상태` cards from runtime readiness plus actual read evidence for Sheets, Wings PMS, Naver OTA, and Station OTA.
 - Stage 2 truth-aligned mapping core remains implemented with exact room/reservation auto binding, soft-triage retention, and precision metrics.
 - Operator export, search, handoff, and UI shell surfaces remain wired to the current product path.
 - Added the workspace-alignment check/repair path for this repo:
@@ -32,6 +33,7 @@
 - The active Codex workspace root is currently rebound to the canonical WSL path for this repo.
 - The runtime handoff docs that previously pointed at the old 2026-03-18 snapshot were stale relative to current HEAD and have now been refreshed.
 - Product status is still read-only by contract; no write/apply path was added.
+- Live-read auth/session proof is now visible in the default app shell instead of being implicit in main-only state.
 - Truth mapping now retains `SEOLLEUNG` and `SAMSUNG` regardless of runtime gate, while the app shell only opens active read/action flows for `COEX`, `GANGNAM`, and `SEOLLEUNG`.
 
 ## Risks

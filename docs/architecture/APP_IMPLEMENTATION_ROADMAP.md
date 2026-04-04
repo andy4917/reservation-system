@@ -44,7 +44,8 @@
 
 - main-owned `LiveReadRunContext`와 `coverage` bundle까지는 구현 완료
 - 현재 환경에서는 `sheet-unconfigured / provider unavailable / wings unavailable`로 `offline-preview`
-- 즉 코드 경로는 닫혔고, 남은 것은 운영 환경 smoke다
+- renderer에는 runtime readiness와 source evidence 기반 `실조회 준비 상태` 표면이 올라와 있다
+- 즉 제품 계약은 닫혔고, 남은 것은 운영 환경 smoke 재실행이다
 
 ## Stage 2. Truth-Aligned Mapping Core
 
@@ -145,8 +146,10 @@
 
 현재 상태:
 
-- 아직 결정 전
-- read-only 운영 가치 검증이 우선이다
+- v1 기본 제품 경로는 여전히 read-first / review-first다
+- app_v2 `apply`는 현재 `OTA 적용 가능 확인`으로 한정되어 있다
+- 현재 범위는 시트 기반 NAVER/STATION inventory action scope 계산 + approval boundary 확인까지다
+- 실제 OTA write 실행은 비활성 상태이며 후속 계약 변경 없이는 제품 경로로 승격하지 않는다
 
 ## 검증 원칙
 

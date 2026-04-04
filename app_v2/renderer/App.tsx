@@ -45,6 +45,37 @@ const MODULE_LABELS: Record<Exclude<AppShellModule, "settings">, string> = {
 
 type WorkspacePhase = "idle" | "working" | "result";
 type AppReadSource = "pms" | "ota" | "sheet";
+type ManagementActionGroupKey = "review" | "edit" | "apply";
+
+const MANAGEMENT_ACTION_GROUPS: Array<{
+  key: ManagementActionGroupKey;
+  eyebrow: string;
+  title: string;
+  description: string;
+  actions: AppReservationAction[];
+}> = [
+  {
+    key: "review",
+    eyebrow: "검토 작업",
+    title: "읽은 데이터를 비교하고 확인합니다.",
+    description: "시트, PMS, OTA를 기준으로 차이와 검증 결과를 먼저 정리합니다.",
+    actions: ["compare", "validate", "reconcile"],
+  },
+  {
+    key: "edit",
+    eyebrow: "수정 정리",
+    title: "수정 전 판단 기준을 모읍니다.",
+    description: "수정 후보를 한 번 더 모아서 무엇을 바꿔야 하는지 정리합니다.",
+    actions: ["edit"],
+  },
+  {
+    key: "apply",
+    eyebrow: "적용 전 확인",
+    title: "실제 쓰기 없이 적용 가능 상태만 확인합니다.",
+    description: "네이버와 스테이션 대상만 계산하고 실제 재고 변경은 하지 않습니다.",
+    actions: ["apply"],
+  },
+];
 
 const channelColorMap: Record<string, { label: string; bg: string; fg: string; accent: string }> = {
   AGODA: { label: "아고다", bg: "#EA9999", fg: "#1f1111", accent: "#c35f5f" },
@@ -106,6 +137,79 @@ function authStatusLabel(status: AppAuthRequirement["status"]) {
   return "오류";
 }
 
+function findEvidenceValue(evidence: string[], prefix: string) {
+  const matched = evidence.find((entry) => entry.startsWith(prefix));
+  return matched ? matched.slice(prefix.length) : "";
+}
+
+function formatEvidenceChip(entry: string) {
+  if (entry.startsWith("sessionReadiness:")) return "세션 준비";
+  if (entry.startsWith("runtimeHost:")) {
+    const host = findEvidenceValue([entry], "runtimeHost:");
+    return `호스트 ${host || "-"}`;
+  }
+  if (entry.startsWith("sourceLineage:")) {
+    const lineage = findEvidenceValue([entry], "sourceLineage:");
+    return `읽기 경로 ${lineage || "-"}`;
+  }
+  if (entry.startsWith("window:")) {
+    const value = findEvidenceValue([entry], "window:");
+    return `조회 기간 ${value.replace("..", " ~ ")}`;
+  }
+  if (entry.startsWith("accessMode:")) {
+    const accessMode = findEvidenceValue([entry], "accessMode:");
+    return `시트 인증 ${accessMode || "-"}`;
+  }
+  if (entry.startsWith("pageState:")) {
+    const pageState = findEvidenceValue([entry], "pageState:");
+    return `페이지 ${pageState || "-"}`;
+  }
+  if (entry.startsWith("providerCookies:")) {
+    const count = findEvidenceValue([entry], "providerCookies:");
+    return `쿠키 ${count || "0"}개`;
+  }
+  if (entry.startsWith("naverBusinessId:")) {
+    const businessId = findEvidenceValue([entry], "naverBusinessId:");
+    return `네이버 사업장 ${businessId || "-"}`;
+  }
+  if (entry.startsWith("stationBranchId:")) {
+    const branchId = findEvidenceValue([entry], "stationBranchId:");
+    return `스테이션 지점 ${branchId || "-"}`;
+  }
+  return entry;
+}
+
+function pickEvidenceChips(evidence: string[]) {
+  const preferredPrefixes = [
+    "sessionReadiness:",
+    "runtimeHost:",
+    "sourceLineage:",
+    "accessMode:",
+    "pageState:",
+    "window:",
+    "providerCookies:",
+    "naverBusinessId:",
+    "stationBranchId:",
+  ];
+  const selected = preferredPrefixes
+    .map((prefix) => evidence.find((entry) => entry.startsWith(prefix)))
+    .filter(Boolean) as string[];
+  return Array.from(new Set(selected.map((entry) => formatEvidenceChip(entry)))).slice(0, 4);
+}
+
+function buildLiveReadStatus(
+  requirement: AppAuthRequirement | undefined,
+  read: AppLiveReadSnapshot,
+  proofDetected = read.status === "done",
+) {
+  if (proofDetected) return "실조회 확인";
+  if (requirement?.ready) return requirement.authMode === "session-auth" ? "세션 준비" : "읽기 가능";
+  if (requirement) return authStatusLabel(requirement.status);
+  if (read.status === "error") return "실패";
+  if (read.status === "loading") return "조회 중";
+  return "대기";
+}
+
 function sourceFromModule(module: AppShellModule) {
   if (module === "pms-read") return "pms" as const;
   if (module === "ota-read") return "ota" as const;
@@ -126,7 +230,15 @@ function buildManagementTitle(action: AppReservationAction) {
   if (action === "validate") return "기준 검증";
   if (action === "reconcile") return "대조 결과 정리";
   if (action === "edit") return "수정 작업";
-  if (action === "apply") return "반영 실행";
+  if (action === "apply") return "OTA 적용 가능 확인";
+  if (action === "order-list") return "오더리스트";
+  return "어라이벌";
+}
+
+function buildActionSurfaceEyebrow(action: AppReservationAction) {
+  if (action === "compare" || action === "validate" || action === "reconcile") return "검토 기준";
+  if (action === "edit") return "수정 기준";
+  if (action === "apply") return "적용 범위";
   if (action === "order-list") return "오더리스트";
   return "어라이벌";
 }
@@ -600,6 +712,118 @@ export default function App() {
   const authBlockingRequirements = authRequirements.filter((item) => !item.ready);
   const configAuthRequirements = authBlockingRequirements.filter((item) => item.authMode === "config-auth");
   const sessionAuthRequirements = authBlockingRequirements.filter((item) => item.authMode === "session-auth");
+  const authRequirementMap = useMemo(() => new Map(authRequirements.map((item) => [item.target, item] as const)), [authRequirements]);
+  const liveReadProofCards = useMemo(() => {
+    const sheetRequirement = authRequirementMap.get("google-sheets");
+    const pmsRequirement = authRequirementMap.get("wings-pms");
+    const naverRequirement = authRequirementMap.get("naver-partner");
+    const stationRequirement = authRequirementMap.get("admin-station");
+    const otaEvidence = reads.ota.evidence;
+    const hasNaverProof = reads.ota.status === "done" && otaEvidence.some((entry) => entry === "provider:naver-partner");
+    const hasStationProof = reads.ota.status === "done" && otaEvidence.some((entry) => entry === "provider:admin-station");
+
+    return [
+      {
+        key: "sheet",
+        title: "시트 기준",
+        status: buildLiveReadStatus(sheetRequirement, reads.sheet, reads.sheet.status === "done"),
+        summary:
+          reads.sheet.status === "done"
+            ? reads.sheet.summary
+            : (sheetRequirement?.nextAction ?? "예약 시트 설정을 저장하면 실제 읽기를 준비할 수 있습니다."),
+        checkedAt: formatDateTime(reads.sheet.status === "done" ? reads.sheet.checkedAt : runtimeReadiness?.sheet.checkedAt ?? null),
+        evidence: pickEvidenceChips([
+          ...(reads.sheet.status === "done" ? reads.sheet.evidence : []),
+          ...(sheetRequirement?.evidence ?? []),
+        ]),
+      },
+      {
+        key: "pms",
+        title: "WINGS PMS",
+        status: buildLiveReadStatus(pmsRequirement, reads.pms, reads.pms.status === "done"),
+        summary:
+          reads.pms.status === "done"
+            ? reads.pms.summary
+            : (pmsRequirement?.nextAction ?? "WINGS 창을 열고 로그인하면 PMS 실조회를 준비할 수 있습니다."),
+        checkedAt: formatDateTime(reads.pms.status === "done" ? reads.pms.checkedAt : runtimeReadiness?.preflight?.checkedAt ?? null),
+        evidence: pickEvidenceChips([
+          ...(reads.pms.status === "done" ? reads.pms.evidence : []),
+          ...(pmsRequirement?.evidence ?? []),
+        ]),
+      },
+      {
+        key: "naver",
+        title: "네이버 OTA",
+        status: buildLiveReadStatus(naverRequirement, reads.ota, hasNaverProof),
+        summary:
+          hasNaverProof
+            ? "최근 네이버 OTA 실조회 근거가 있습니다."
+            : (naverRequirement?.nextAction ?? "네이버 파트너 창을 열어 세션을 준비해야 합니다."),
+        checkedAt: formatDateTime(hasNaverProof ? reads.ota.checkedAt : runtimeReadiness?.preflight?.checkedAt ?? null),
+        evidence: pickEvidenceChips([
+          ...otaEvidence.filter(
+            (entry) =>
+              entry === "provider:naver-partner" ||
+              entry.startsWith("runtimeHost:") ||
+              entry.startsWith("sessionReadiness:") ||
+              entry.startsWith("sourceLineage:") ||
+              entry.startsWith("naverBusinessId:") ||
+              entry.startsWith("window:"),
+          ),
+          ...(naverRequirement?.evidence ?? []),
+        ]),
+      },
+      {
+        key: "station",
+        title: "Station OTA",
+        status: buildLiveReadStatus(stationRequirement, reads.ota, hasStationProof),
+        summary:
+          hasStationProof
+            ? "최근 Station OTA 실조회 근거가 있습니다."
+            : (stationRequirement?.nextAction ?? "Station 창을 열어 세션을 준비해야 합니다."),
+        checkedAt: formatDateTime(hasStationProof ? reads.ota.checkedAt : runtimeReadiness?.preflight?.checkedAt ?? null),
+        evidence: pickEvidenceChips([
+          ...otaEvidence.filter(
+            (entry) =>
+              entry === "provider:admin-station" ||
+              entry.startsWith("runtimeHost:") ||
+              entry.startsWith("sessionReadiness:") ||
+              entry.startsWith("sourceLineage:") ||
+              entry.startsWith("stationBranchId:") ||
+              entry.startsWith("window:"),
+          ),
+          ...(stationRequirement?.evidence ?? []),
+        ]),
+      },
+    ];
+  }, [authRequirementMap, reads.ota, reads.pms, reads.sheet, runtimeReadiness]);
+  const liveReadProofSummary = useMemo(() => {
+    if (!runtimeReadiness) return "실조회 기준을 불러오는 중입니다.";
+    if (runtimeReadiness.overallReady) return "현재 세션으로 실조회가 가능합니다.";
+    if (runtimeReadiness.blockingSources.length === 0) return "실조회 준비 상태를 다시 확인해 주세요.";
+    return `현재 실조회 전에 ${runtimeReadiness.blockingSources.length}개 항목을 먼저 준비해야 합니다.`;
+  }, [runtimeReadiness]);
+  const managementActionGroups = useMemo(
+    () =>
+      MANAGEMENT_ACTION_GROUPS.map((group) => ({
+        ...group,
+        enabledCount: group.actions.filter((action) => reservationAvailability[action].enabled).length,
+        actions: group.actions.map((action) => ({
+          key: action,
+          label: RESERVATION_ACTION_LABELS[action],
+          enabled: reservationAvailability[action].enabled,
+          reason: reservationAvailability[action].reason,
+          active: activeReservationAction === action,
+        })),
+      })),
+    [activeReservationAction, reservationAvailability],
+  );
+  const activeManagementGroup = useMemo(
+    () =>
+      managementActionGroups.find((group) => group.actions.some((action) => action.active)) ??
+      managementActionGroups[0],
+    [managementActionGroups],
+  );
 
   const reservationSteps = buildActionSteps(activeReservationAction, selectedBranch);
   const sheetReservationItems = useMemo(
@@ -615,6 +839,18 @@ export default function App() {
     sheetReservationItems.find((item) => item.id === selectedRoomDetailId) ?? sheetReservationItems[0] ?? null;
   const windowDays = useMemo(() => buildWindowDays(windowStart, windowEnd), [windowStart, windowEnd]);
   const opsView = reservationResult?.action === activeReservationAction ? reservationResult.opsView ?? null : null;
+  const applyContractSummary = useMemo(() => {
+    if (reservationResult?.action !== "apply") {
+      return { stationCount: 0, naverCount: 0, requiresApproval: false, applyAllowed: false, planReady: false };
+    }
+    return {
+      stationCount: reservationResult.rows.filter((row) => row.statusLabel.includes("STATION")).length,
+      naverCount: reservationResult.rows.filter((row) => row.statusLabel.includes("NAVER")).length,
+      requiresApproval: reservationResult.requiresApproval === true,
+      applyAllowed: reservationResult.applyAllowed === true,
+      planReady: Boolean(reservationResult.planToken),
+    };
+  }, [reservationResult]);
   const opsAvailableDates = useMemo(() => {
     if (!opsView) return [];
     return Array.from(new Set([...opsView.orderListRows.map((row) => row.date), ...opsView.arrivalRows.map((row) => row.date)].filter(Boolean))).sort();
@@ -1012,6 +1248,39 @@ export default function App() {
                 ))}
               </div>
             ) : null}
+            <div className="live-read-proof">
+              <div className="live-read-proof-header">
+                <div>
+                  <p className="eyebrow">실조회 준비 상태</p>
+                  <h4>현재 세션으로 어디까지 실제 읽기가 가능한지 바로 확인합니다.</h4>
+                  <p className="support-copy">{liveReadProofSummary}</p>
+                </div>
+                <div className="detail-panel">
+                  {runtimeReadiness?.overallReady ? "실조회 가능" : "준비 필요"} · {runtimeReadiness?.supportLevel === "read-live" ? "운영 실조회" : "오프라인 미리보기"}
+                </div>
+              </div>
+              <div className="live-read-proof-grid">
+                {liveReadProofCards.map((card) => (
+                  <article key={card.key} className="live-read-proof-card">
+                    <div className="live-read-proof-card-header">
+                      <strong>{card.title}</strong>
+                      <span>{card.status}</span>
+                    </div>
+                    <p className="support-copy">{card.summary}</p>
+                    <div className="live-read-proof-meta">
+                      <span>최근 확인 {card.checkedAt}</span>
+                    </div>
+                    <div className="live-read-proof-chip-row">
+                      {(card.evidence.length > 0 ? card.evidence : ["최근 실조회 근거 없음"]).map((entry) => (
+                        <span key={`${card.key}:${entry}`} className="live-read-proof-chip">
+                          {entry}
+                        </span>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
           </section>
 
           <section className="reservation-workspace" data-phase={workspacePhase}>
@@ -1352,7 +1621,7 @@ export default function App() {
             ) : (
               <>
                 <article className="hero-card reservation-summary-card">
-                  <p className="eyebrow">작업</p>
+                  <p className="eyebrow">{activeManagementGroup?.eyebrow ?? "작업"}</p>
                   <h3>{buildManagementTitle(activeReservationAction)}</h3>
                   <p className="support-copy">{buildResultSummary(activeReservationAction, reservationResult)}</p>
                   <div className="detail-panel">{branchOption.label} · {windowStart} ~ {windowEnd}</div>
@@ -1367,14 +1636,32 @@ export default function App() {
                     </label>
                   </div>
                   <div className="availability-note">{workspaceMessage}</div>
-                  <div className="step-chip-row">
-                    {(Object.keys(RESERVATION_ACTION_LABELS) as AppReservationAction[]).map((action) => (
-                      <span
-                        key={action}
-                        className={`step-chip ${activeReservationAction === action ? "active" : ""} ${reservationAvailability[action].enabled ? "" : "locked"}`}
-                      >
-                        {RESERVATION_ACTION_LABELS[action]}
-                      </span>
+                  <div className="ia-group-stack">
+                    {managementActionGroups.map((group) => (
+                      <article key={group.key} className={`ia-group-card ${activeManagementGroup?.key === group.key ? "active" : ""}`}>
+                        <div className="ia-group-card-head">
+                          <div>
+                            <p className="section-title">{group.eyebrow}</p>
+                            <strong>{group.title}</strong>
+                            <span>{group.description}</span>
+                          </div>
+                          <em>{group.enabledCount}/{group.actions.length}</em>
+                        </div>
+                        <div className="ia-action-grid">
+                          {group.actions.map((action) => (
+                            <button
+                              key={action.key}
+                              type="button"
+                              className={`ia-action-button ${action.active ? "active" : ""}`}
+                              onClick={() => handleReservationAction(action.key, true)}
+                              disabled={!action.enabled || busyKey !== null || branchOption.availability !== "active"}
+                            >
+                              <strong>{action.label}</strong>
+                              <span>{action.reason}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </article>
                     ))}
                   </div>
                   <div className="button-row">
@@ -1386,13 +1673,65 @@ export default function App() {
                       {RESERVATION_ACTION_LABELS[activeReservationAction]} 실행
                     </button>
                   </div>
+                  {activeReservationAction === "apply" ? (
+                    <div className="apply-contract-banner">
+                      실제 OTA 재고 반영은 비활성입니다. 현재는 네이버·스테이션 대상의 적용 가능 상태만 계산합니다.
+                    </div>
+                  ) : null}
                 </article>
 
+                {activeReservationAction === "apply" ? (
+                  <article className="review-card apply-contract-card">
+                    <div className="ops-panel-header">
+                      <div>
+                        <p className="eyebrow">적용 범위</p>
+                        <h3>OTA 적용 가능 상태</h3>
+                        <p className="support-copy">시트 기준 재고값을 네이버와 스테이션 OTA 관리 페이지 기준으로 적용 후보 계산합니다.</p>
+                      </div>
+                      <div className="detail-panel">{actionOutputRows.length}개 action</div>
+                    </div>
+                    <div className="apply-contract-grid">
+                      <article className="ops-side-card">
+                        <p className="section-title">Provider 범위</p>
+                        <div className="ops-count-list">
+                          <div className="ops-count-row"><span>Station</span><strong>{applyContractSummary.stationCount}건</strong></div>
+                          <div className="ops-count-row"><span>Naver</span><strong>{applyContractSummary.naverCount}건</strong></div>
+                        </div>
+                      </article>
+                      <article className="ops-side-card">
+                        <p className="section-title">승인 경계</p>
+                        <div className="ops-count-list">
+                          <div className="ops-count-row"><span>승인 필요</span><strong>{applyContractSummary.requiresApproval ? "예" : "아니오"}</strong></div>
+                          <div className="ops-count-row"><span>토큰 준비</span><strong>{applyContractSummary.planReady ? "준비됨" : "미생성"}</strong></div>
+                          <div className="ops-count-row"><span>적용 가능</span><strong>{applyContractSummary.applyAllowed ? "가능" : "대기"}</strong></div>
+                        </div>
+                      </article>
+                      <article className="ops-side-card">
+                        <p className="section-title">실행 정책</p>
+                        <div className="ops-special-list compact">
+                          <div className="arrival-note-line">
+                            <strong>실제 write 비활성</strong>
+                            <span>OTA 페이지에 값을 쓰지 않고 적용 가능 상태만 계산합니다.</span>
+                          </div>
+                          <div className="arrival-note-line">
+                            <strong>대상 한정</strong>
+                            <span>시트의 네이버, 스테이션 재고 대상만 계산 범위에 포함합니다.</span>
+                          </div>
+                        </div>
+                      </article>
+                    </div>
+                  </article>
+                ) : (
                 <article className="review-card room-detail">
                   <div className="room-detail-header">
                     <div>
-                      <p className="eyebrow">시트 기준</p>
+                      <p className="eyebrow">{buildActionSurfaceEyebrow(activeReservationAction)}</p>
                       <h3>Room Detail</h3>
+                      <p className="support-copy">
+                        {activeReservationAction === "edit"
+                          ? "실제 수정에 들어가기 전에 시트 기준 객실 정보와 참고값을 함께 확인합니다."
+                          : "시트 기준 객실 정보에 PMS와 OTA 참고값을 붙여서 검토합니다."}
+                      </p>
                     </div>
                     <div className="detail-panel">{sheetReservationItems.length}개 객실 예약</div>
                   </div>
@@ -1498,6 +1837,7 @@ export default function App() {
                     </div>
                   </div>
                 </article>
+                )}
 
                 <article className="progress-card">
                   <p className="section-title">실행 결과</p>
