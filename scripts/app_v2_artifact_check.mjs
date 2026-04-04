@@ -31,8 +31,22 @@ async function main() {
     "dist-app/app_v2/main/settingsStore.js",
     "dist-app/app_v2/renderer/index.html"
   ];
+  const removedLegacyEntries = [
+    "dist-app/contracts",
+    "dist-app/fixtures",
+    "dist-app/main",
+    "dist-app/renderer",
+    "dist-app/services",
+    "dist-app/src",
+    "dist-app/vite.config",
+    "dist-app/vite.config.js"
+  ];
 
   const fileChecks = builtFiles.map((relativePath) => ({
+    path: relativePath,
+    exists: fs.existsSync(path.join(root, relativePath))
+  }));
+  const legacyChecks = removedLegacyEntries.map((relativePath) => ({
     path: relativePath,
     exists: fs.existsSync(path.join(root, relativePath))
   }));
@@ -42,6 +56,7 @@ async function main() {
   const rendererAssetFiles = fs.existsSync(assetDir) ? fs.readdirSync(assetDir).sort() : [];
   const orphanedAssetFiles = rendererAssetFiles.filter((fileName) => !referencedAssetFiles.includes(fileName));
   const allPresent = fileChecks.every((entry) => entry.exists) &&
+    legacyChecks.every((entry) => entry.exists === false) &&
     referencedAssetFiles.length > 0 &&
     orphanedAssetFiles.length === 0 &&
     referencedAssetFiles.every((fileName) => fs.existsSync(path.join(assetDir, fileName)));
@@ -52,8 +67,8 @@ async function main() {
         ok: allPresent,
         focus: options.focus,
         summary: allPresent ? "app_v2 build artifacts are clean." : "app_v2 build artifacts are missing or stale.",
-        files: fileChecks
-        ,
+        files: fileChecks,
+        removedLegacyEntries: legacyChecks,
         referencedAssetFiles,
         rendererAssetFiles,
         orphanedAssetFiles

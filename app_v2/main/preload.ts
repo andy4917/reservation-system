@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer } = electron;
 contextBridge.exposeInMainWorld("desktopApp", {
   loadSettings: () => ipcRenderer.invoke("desktop-app:load-settings"),
   saveSettings: (input: unknown) => ipcRenderer.invoke("desktop-app:save-settings", input),
+  importWingsSharedCredentials: () => ipcRenderer.invoke("desktop-app:import-wings-shared-credentials"),
   installBgeM3Model: () => ipcRenderer.invoke("desktop-app:install-bge-m3-model"),
   listAuthRequirements: () => ipcRenderer.invoke("desktop-app:list-auth-requirements"),
   getRuntimeReadiness: (focus: unknown) => ipcRenderer.invoke("desktop-app:get-runtime-readiness", focus),
@@ -19,6 +20,6 @@ contextBridge.exposeInMainWorld("desktopApp", {
   runOtaRead: (input: unknown) => ipcRenderer.invoke("desktop-app:run-ota-read", input),
   runSheetRead: (input: unknown) => ipcRenderer.invoke("desktop-app:run-sheet-read", input),
   runReservationAction: (input: unknown) => ipcRenderer.invoke("desktop-app:run-reservation-action", input),
-  attemptWingsLogin: () => ipcRenderer.invoke("desktop-app:attempt-wings-login"),
+  attemptWingsLogin: (branch: unknown) => ipcRenderer.invoke("desktop-app:attempt-wings-login", branch),
   applyOpsSheetOutput: (input: unknown) => ipcRenderer.invoke("desktop-app:apply-ops-sheet-output", input),
 });

@@ -42,8 +42,10 @@ function main() {
   assert.match(appSource, /예약 시트 탭 이름/);
   assert.doesNotMatch(appSource, /지점별 예약 시트 탭 이름/);
   assert.match(appSource, /BGE-M3 로컬 모델 폴더 경로/);
-  assert.match(appSource, /WINGS 로그인 아이디/);
-  assert.match(appSource, /WINGS 로그인 비밀번호/);
+  assert.match(appSource, /WINGS 공용 계정 가져오기/);
+  assert.match(appSource, /Company ID는/);
+  assert.doesNotMatch(appSource, /WINGS 로그인 아이디/);
+  assert.doesNotMatch(appSource, /WINGS 로그인 비밀번호/);
   assert.doesNotMatch(appSource, /사용자명/);
   assert.doesNotMatch(appSource, /운영 세션 준비/);
   assert.doesNotMatch(appSource, /셸로 이동/);

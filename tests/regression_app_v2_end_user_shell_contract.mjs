@@ -39,8 +39,10 @@ function main() {
   assert.match(appSource, /COEX|GANGNAM/);
   assert.doesNotMatch(appSource, /mockShellData/);
   assert.doesNotMatch(appSource, /setTimeout\(/);
-  assert.match(appSource, /WINGS 로그인 아이디/);
-  assert.match(appSource, /WINGS 로그인 비밀번호/);
+  assert.match(appSource, /WINGS 공용 계정 가져오기/);
+  assert.match(appSource, /가져온 지점 공용 계정을 사용합니다/);
+  assert.doesNotMatch(appSource, /WINGS 로그인 아이디/);
+  assert.doesNotMatch(appSource, /WINGS 로그인 비밀번호/);
   assert.doesNotMatch(appSource, /로그인 화면으로/);
   assert.doesNotMatch(appSource, /로그인에 성공했습니다\. PMS 조회에 같은 자격을 사용합니다\./);
 
@@ -48,10 +50,12 @@ function main() {
   assert.match(preload, /runOtaRead/);
   assert.match(preload, /runSheetRead/);
   assert.match(preload, /installBgeM3Model/);
+  assert.match(preload, /importWingsSharedCredentials/);
   assert.match(ipc, /desktop-app:run-pms-read/);
   assert.match(ipc, /desktop-app:run-ota-read/);
   assert.match(ipc, /desktop-app:run-sheet-read/);
   assert.match(ipc, /desktop-app:install-bge-m3-model/);
+  assert.match(ipc, /desktop-app:import-wings-shared-credentials/);
 
   console.log("regression_app_v2_end_user_shell_contract: OK");
 }

@@ -129,13 +129,23 @@ export interface AppWingsLoginSettings {
   password: string;
 }
 
+export interface AppWingsBranchCredential {
+  loginId: string;
+  password: string;
+}
+
+export interface AppWingsSharedCredentials {
+  companyId: string;
+  branches: Record<AppBranch, AppWingsBranchCredential | null>;
+}
+
 export interface AppSettings {
   spreadsheet: string;
   sheetName: string;
   opsView?: AppOpsViewSettings | null;
   reportWindowDays?: number;
   bgeM3?: AppBgeM3Settings | null;
-  wingsLogin?: AppWingsLoginSettings | null;
+  wingsSharedCredentials?: AppWingsSharedCredentials | null;
 }
 
 export interface AppSettingsSnapshot {
@@ -379,9 +389,11 @@ export interface AppReservationActionSnapshot {
 }
 
 export interface AppWingsLoginAttemptSnapshot {
+  branch: AppBranch;
   attempted: boolean;
   submitted: boolean;
   summary: string;
+  companyId: string;
   loginId: string;
   loggedAt: string | null;
 }
@@ -389,6 +401,7 @@ export interface AppWingsLoginAttemptSnapshot {
 export interface DesktopAppApi {
   loadSettings: () => Promise<AppSettingsSnapshot>;
   saveSettings: (input: Partial<AppSettings>) => Promise<AppSettingsSnapshot>;
+  importWingsSharedCredentials: () => Promise<AppSettingsSnapshot>;
   installBgeM3Model: () => Promise<AppBgeInstallSnapshot>;
   listAuthRequirements: () => Promise<AppAuthRequirement[]>;
   getRuntimeReadiness: (focus: AppRuntimeVerifyFocus) => Promise<AppRuntimeVerifySnapshot>;
@@ -403,7 +416,7 @@ export interface DesktopAppApi {
   runOtaRead: (input: AppLiveReadInput) => Promise<AppLiveReadSnapshot>;
   runSheetRead: (input: AppLiveReadInput) => Promise<AppLiveReadSnapshot>;
   runReservationAction: (input: AppReservationActionInput) => Promise<AppReservationActionSnapshot>;
-  attemptWingsLogin: () => Promise<AppWingsLoginAttemptSnapshot>;
+  attemptWingsLogin: (branch: AppBranch) => Promise<AppWingsLoginAttemptSnapshot>;
   applyOpsSheetOutput: (input: AppOpsSheetApplyInput) => Promise<AppOpsSheetApplySnapshot>;
 }
 

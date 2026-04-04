@@ -32,7 +32,7 @@ import { runPreflight } from "./preflight.js";
 import { applyOpsSheetOutput } from "./opsSheetApplyRunner.js";
 import { runReservationAction } from "./reservationActionRunner.js";
 import { evaluateRuntimeReadiness } from "./runtimeReadiness.js";
-import { loadSettingsSnapshot, saveSettings } from "./settingsStore.js";
+import { importWingsSharedCredentials, loadSettingsSnapshot, saveSettings } from "./settingsStore.js";
 
 const { ipcMain } = electron;
 
@@ -72,17 +72,35 @@ function normalizeSettingsPayload(input: unknown): Partial<AppSettings> {
             scoreThreshold: Number((payload.bgeM3 as Record<string, unknown>).scoreThreshold ?? DEFAULT_APP_BGE_SCORE_THRESHOLD)
           }
         : null,
-    wingsLogin:
-      payload.wingsLogin && typeof payload.wingsLogin === "object"
+    wingsSharedCredentials:
+      payload.wingsSharedCredentials && typeof payload.wingsSharedCredentials === "object"
         ? {
-            loginId:
-              typeof (payload.wingsLogin as Record<string, unknown>).loginId === "string"
-                ? String((payload.wingsLogin as Record<string, unknown>).loginId)
+            companyId:
+              typeof (payload.wingsSharedCredentials as Record<string, unknown>).companyId === "string"
+                ? String((payload.wingsSharedCredentials as Record<string, unknown>).companyId)
                 : "",
-            password:
-              typeof (payload.wingsLogin as Record<string, unknown>).password === "string"
-                ? String((payload.wingsLogin as Record<string, unknown>).password)
-                : "",
+            branches: APP_BRANCHES.reduce((acc, branch) => {
+              const rawBranches =
+                (payload.wingsSharedCredentials as Record<string, unknown>).branches &&
+                typeof (payload.wingsSharedCredentials as Record<string, unknown>).branches === "object"
+                  ? ((payload.wingsSharedCredentials as Record<string, unknown>).branches as Record<string, unknown>)
+                  : {};
+              const rawCredential = rawBranches[branch];
+              acc[branch] =
+                rawCredential && typeof rawCredential === "object"
+                  ? {
+                      loginId:
+                        typeof (rawCredential as Record<string, unknown>).loginId === "string"
+                          ? String((rawCredential as Record<string, unknown>).loginId)
+                          : "",
+                      password:
+                        typeof (rawCredential as Record<string, unknown>).password === "string"
+                          ? String((rawCredential as Record<string, unknown>).password)
+                          : "",
+                    }
+                  : null;
+              return acc;
+            }, {} as Record<AppBranch, { loginId: string; password: string } | null>),
           }
         : null,
     reportWindowDays: Number(payload.reportWindowDays ?? DEFAULT_APP_REPORT_WINDOW_DAYS)
@@ -185,6 +203,7 @@ export function registerDesktopAppIpc() {
 
   ipcMain.handle("desktop-app:load-settings", async () => loadSettingsSnapshot());
   ipcMain.handle("desktop-app:save-settings", async (_event, input: unknown) => saveSettings(normalizeSettingsPayload(input)));
+  ipcMain.handle("desktop-app:import-wings-shared-credentials", async () => importWingsSharedCredentials());
   ipcMain.handle("desktop-app:install-bge-m3-model", async () => installBgeM3Model());
   ipcMain.handle("desktop-app:list-auth-requirements", async () => listAuthRequirements());
   ipcMain.handle("desktop-app:get-runtime-readiness", async (_event, focus: unknown) =>
@@ -203,7 +222,7 @@ export function registerDesktopAppIpc() {
   ipcMain.handle("desktop-app:run-reservation-action", async (_event, input: unknown) =>
     runReservationAction(parseReservationActionInput(input))
   );
-  ipcMain.handle("desktop-app:attempt-wings-login", async () => attemptWingsLogin());
+  ipcMain.handle("desktop-app:attempt-wings-login", async (_event, branch: unknown) => attemptWingsLogin(parseBranch(branch)));
   ipcMain.handle("desktop-app:apply-ops-sheet-output", async (_event, input: unknown) =>
     applyOpsSheetOutput(parseOpsSheetApplyInput(input))
   );

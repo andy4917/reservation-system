@@ -390,9 +390,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [opsBoardDate, setOpsBoardDate] = useState("");
   const [opsApplySummary, setOpsApplySummary] = useState("");
-  const [wingsLoginId, setWingsLoginId] = useState("");
-  const [wingsPassword, setWingsPassword] = useState("");
-  const [wingsLoginSummary, setWingsLoginSummary] = useState("저장된 로그인 정보가 없습니다.");
+  const [wingsLoginSummary, setWingsLoginSummary] = useState("WINGS 공용 계정을 아직 가져오지 않았습니다.");
   const previousModuleRef = useRef<AppShellModule>("reservation-management");
   const previousActionRef = useRef<AppReservationAction>("validate");
   const autoOpenedProvidersRef = useRef<Set<AppProvider>>(new Set());
@@ -400,6 +398,8 @@ export default function App() {
 
   const api = window.desktopApp;
   const activeBranchSheetNames = useMemo(() => (sheetName ? [sheetName] : []), [sheetName]);
+  const importedWingsCredential = settingsSnapshot?.config?.wingsSharedCredentials?.branches?.[selectedBranch] ?? null;
+  const wingsCompanyId = settingsSnapshot?.config?.wingsSharedCredentials?.companyId ?? "UHSUITE";
 
   async function refreshSettings() {
     if (!api?.loadSettings) return;
@@ -419,9 +419,12 @@ export default function App() {
       setBgeTopK(String(snapshot.config?.bgeM3?.topK ?? DEFAULT_APP_BGE_TOP_K));
       setBgeScoreThreshold(String(snapshot.config?.bgeM3?.scoreThreshold ?? DEFAULT_APP_BGE_SCORE_THRESHOLD));
       setBgeInstallSummary(snapshot.config?.bgeM3?.modelPath ? "BGE-M3 설정을 불러왔습니다." : "BGE-M3 상태를 아직 확인하지 않았습니다.");
-      setWingsLoginId(snapshot.config?.wingsLogin?.loginId ?? "");
-      setWingsPassword(snapshot.config?.wingsLogin?.password ?? "");
-      setWingsLoginSummary(snapshot.config?.wingsLogin?.loginId ? "저장된 WINGS 로그인 정보를 사용할 수 있습니다." : "저장된 로그인 정보가 없습니다.");
+      const importedCredential = snapshot.config?.wingsSharedCredentials?.branches?.[selectedBranch] ?? null;
+      setWingsLoginSummary(
+        importedCredential
+          ? `${selectedBranch} 지점 공용 계정을 사용합니다.`
+          : "WINGS 공용 계정을 아직 가져오지 않았습니다."
+      );
       setWindowStart(defaultWindow.start);
       setWindowEnd(defaultWindow.end);
     });
@@ -499,14 +502,12 @@ export default function App() {
           topK: Number(bgeTopK),
           scoreThreshold: Number(bgeScoreThreshold),
         },
-        wingsLogin: {
-          loginId: wingsLoginId,
-          password: wingsPassword,
-        },
+        wingsSharedCredentials: settingsSnapshot?.config?.wingsSharedCredentials ?? null,
       });
       startTransition(() => setSettingsSnapshot(nextSnapshot));
       setWorkspaceMessage("설정을 저장했습니다. 다음 조회부터 같은 기준을 사용합니다.");
-      setWingsLoginSummary(nextSnapshot.config?.wingsLogin?.loginId ? "WINGS 로그인 정보를 저장했습니다." : "저장된 로그인 정보가 없습니다.");
+      const importedCredential = nextSnapshot.config?.wingsSharedCredentials?.branches?.[selectedBranch] ?? null;
+      setWingsLoginSummary(importedCredential ? `${selectedBranch} 지점 공용 계정을 유지합니다.` : "WINGS 공용 계정을 아직 가져오지 않았습니다.");
       const defaultWindow = buildDefaultWindow(Number(reportWindowDays));
       setWindowStart(defaultWindow.start);
       setWindowEnd(defaultWindow.end);
@@ -573,10 +574,29 @@ export default function App() {
     if (!api?.attemptWingsLogin) return;
     setBusyKey("wings-login");
     try {
-      const snapshot = (await api.attemptWingsLogin()) as AppWingsLoginAttemptSnapshot;
+      const snapshot = (await api.attemptWingsLogin(selectedBranch)) as AppWingsLoginAttemptSnapshot;
       setWingsLoginSummary(snapshot.summary);
       setWorkspaceMessage(snapshot.summary);
       await Promise.all([refreshProviders(), refreshPreflight(), refreshAuthRequirements(), refreshRuntimeReadiness()]);
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function importWingsSharedCredentials() {
+    if (!api?.importWingsSharedCredentials) return;
+    setBusyKey("wings-import");
+    try {
+      const snapshot = await api.importWingsSharedCredentials();
+      startTransition(() => setSettingsSnapshot(snapshot));
+      const importedCredential = snapshot.config?.wingsSharedCredentials?.branches?.[selectedBranch] ?? null;
+      setWingsLoginSummary(
+        importedCredential
+          ? `${selectedBranch} 지점 공용 계정을 가져왔습니다.`
+          : "지점 공용 계정을 가져왔지만 현재 지점 계정은 비어 있습니다."
+      );
+      setWorkspaceMessage("WINGS 공용 계정 가져오기를 완료했습니다.");
+      await Promise.all([refreshPreflight(), refreshAuthRequirements(), refreshRuntimeReadiness()]);
     } finally {
       setBusyKey(null);
     }
@@ -1047,12 +1067,12 @@ export default function App() {
       autoWingsLoginAttemptedRef.current = false;
       return;
     }
-    if (!wingsLoginId || !wingsPassword) return;
+    if (!importedWingsCredential?.loginId || !importedWingsCredential.password) return;
     if (busyKey === "wings-login") return;
     if (autoWingsLoginAttemptedRef.current) return;
     autoWingsLoginAttemptedRef.current = true;
     void runStoredWingsLogin();
-  }, [busyKey, sessionAuthRequirements, wingsLoginId, wingsPassword]);
+  }, [busyKey, importedWingsCredential, sessionAuthRequirements]);
 
   return (
     <div className="end-user-shell">
@@ -1125,18 +1145,11 @@ export default function App() {
           </div>
 
           <div className="sidebar-login-card">
-            <p className="eyebrow">직접 입력 필요</p>
-            <label className="field compact-sidebar-field">
-              <span>WINGS 로그인 아이디</span>
-              <input value={wingsLoginId} onChange={(event) => setWingsLoginId(event.target.value)} placeholder="WINGS 로그인 아이디" />
-            </label>
-            <label className="field compact-sidebar-field">
-              <span>WINGS 로그인 비밀번호</span>
-              <input type="password" value={wingsPassword} onChange={(event) => setWingsPassword(event.target.value)} placeholder="WINGS 로그인 비밀번호" />
-            </label>
+            <p className="eyebrow">Wings 연결</p>
+            <div className="detail-panel">가져온 지점 공용 계정을 사용합니다. Company ID는 {wingsCompanyId}로 고정됩니다.</div>
             <div className="button-row compact-button-row">
-              <button type="button" onClick={() => void saveSettings()} disabled={busyKey !== null}>
-                저장
+              <button type="button" onClick={() => void importWingsSharedCredentials()} disabled={busyKey !== null}>
+                WINGS 공용 계정 가져오기
               </button>
               <button type="button" className="ghost-button" onClick={() => void runStoredWingsLogin()} disabled={busyKey !== null}>
                 WINGS 로그인
@@ -1911,15 +1924,16 @@ export default function App() {
                       <span>예약 시트 탭 이름</span>
                       <input value={sheetName} onChange={(event) => setSheetName(event.target.value)} />
                     </label>
-                    <div className="settings-inline-grid">
-                      <label className="field">
-                        <span>WINGS 로그인 아이디</span>
-                        <input value={wingsLoginId} onChange={(event) => setWingsLoginId(event.target.value)} placeholder="WINGS 로그인 아이디" />
-                      </label>
-                      <label className="field">
-                        <span>WINGS 로그인 비밀번호</span>
-                        <input type="password" value={wingsPassword} onChange={(event) => setWingsPassword(event.target.value)} placeholder="WINGS 로그인 비밀번호" />
-                      </label>
+                    <div className="settings-note-card">
+                      WINGS 공용 계정 가져오기를 실행하면 등록된 지점 계정을 앱 내부 설정으로 변환합니다. Company ID는 {wingsCompanyId}로 고정됩니다.
+                    </div>
+                    <div className="button-row">
+                      <button type="button" onClick={() => void importWingsSharedCredentials()} disabled={busyKey !== null}>
+                        WINGS 공용 계정 가져오기
+                      </button>
+                      <button type="button" className="ghost-button" onClick={() => void runStoredWingsLogin()} disabled={busyKey !== null}>
+                        현재 지점 Wings 로그인
+                      </button>
                     </div>
                     <label className="field">
                       <span>BGE-M3 로컬 모델 폴더 경로</span>

@@ -6,6 +6,16 @@ const rootDir = process.cwd();
 const distDir = path.join(rootDir, "dist-app");
 const packageJsonPath = path.join(distDir, "package.json");
 const truthDatasetFiles = ["branch_provider_mapping_v1.json"];
+const legacyDistEntries = [
+  "contracts",
+  "fixtures",
+  "main",
+  "renderer",
+  "services",
+  "src",
+  "vite.config",
+  "vite.config.js"
+];
 
 async function pruneExtensionlessDuplicates(targetDir) {
   const entries = await fs.readdir(targetDir, { withFileTypes: true });
@@ -39,7 +49,16 @@ async function syncTruthDatasetFiles() {
   );
 }
 
+async function pruneLegacyDistEntries() {
+  await Promise.all(
+    legacyDistEntries.map(async (entryName) => {
+      await fs.rm(path.join(distDir, entryName), { recursive: true, force: true });
+    })
+  );
+}
+
 await fs.mkdir(distDir, { recursive: true });
+await pruneLegacyDistEntries();
 await pruneExtensionlessDuplicates(distDir);
 await syncTruthDatasetFiles();
 await atomicWriteJsonFile(packageJsonPath, { type: "module" });

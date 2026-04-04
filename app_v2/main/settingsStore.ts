@@ -2,17 +2,21 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import electron from "electron";
 import type {
+  AppBranch,
   AppBgeM3Settings,
   AppOpsViewSettings,
   AppSettings,
   AppSettingsSnapshot,
-  AppWingsLoginSettings,
+  AppWingsBranchCredential,
+  AppWingsSharedCredentials,
 } from "../../src/desktop/app-v2-contracts.js";
 import {
+  APP_BRANCHES,
   DEFAULT_APP_BGE_SCORE_THRESHOLD,
   DEFAULT_APP_BGE_TOP_K,
   DEFAULT_APP_REPORT_WINDOW_DAYS,
 } from "../../src/desktop/app-v2-contracts.js";
+import { loadDefaultWingsSharedCredentials } from "./wingsSharedCredentials.js";
 
 const { app } = electron;
 
@@ -39,12 +43,35 @@ function normalizeOpsView(input: unknown): AppOpsViewSettings {
   };
 }
 
-function normalizeWingsLogin(input: unknown): AppWingsLoginSettings {
-  const wingsLogin = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
-  return {
-    loginId: normalizeText(wingsLogin.loginId),
-    password: normalizeText(wingsLogin.password),
-  };
+function normalizeWingsBranchCredential(input: unknown): AppWingsBranchCredential | null {
+  const payload = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const loginId = normalizeText(payload.loginId);
+  const password = normalizeText(payload.password);
+  if (!loginId || !password) return null;
+  return { loginId, password };
+}
+
+function buildEmptyWingsBranches(): Record<AppBranch, AppWingsBranchCredential | null> {
+  return APP_BRANCHES.reduce(
+    (acc, branch) => {
+      acc[branch] = null;
+      return acc;
+    },
+    {} as Record<AppBranch, AppWingsBranchCredential | null>
+  );
+}
+
+function normalizeWingsSharedCredentials(input: unknown): AppWingsSharedCredentials | null {
+  const payload = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const companyId = normalizeText(payload.companyId);
+  const rawBranches = payload.branches && typeof payload.branches === "object" ? (payload.branches as Record<string, unknown>) : {};
+  const branches = buildEmptyWingsBranches();
+  for (const branch of APP_BRANCHES) {
+    branches[branch] = normalizeWingsBranchCredential(rawBranches[branch]);
+  }
+  const hasAnyBranch = APP_BRANCHES.some((branch) => branches[branch] !== null);
+  if (!companyId || !hasAnyBranch) return null;
+  return { companyId, branches };
 }
 
 function normalizeSettings(input: Partial<AppSettings>): AppSettings {
@@ -67,7 +94,7 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
       ? Math.min(Math.max(Math.round(Number(input.reportWindowDays)), 1), 14)
       : DEFAULT_APP_REPORT_WINDOW_DAYS,
     bgeM3: normalizedBgeM3,
-    wingsLogin: normalizeWingsLogin(input.wingsLogin),
+    wingsSharedCredentials: normalizeWingsSharedCredentials(input.wingsSharedCredentials),
   };
 }
 
@@ -115,10 +142,26 @@ export async function saveSettings(input: Partial<AppSettings>): Promise<AppSett
       normalized.reportWindowDays ||
       normalized.bgeM3 ||
       normalized.opsView ||
-      normalized.wingsLogin?.loginId ||
-      normalized.wingsLogin?.password
+      normalized.wingsSharedCredentials
   );
   const nextConfig = hasAnySettings ? normalized : null;
+  const updatedAt = new Date().toISOString();
+  await fs.mkdir(path.dirname(getSettingsPath()), { recursive: true });
+  await fs.writeFile(
+    getSettingsPath(),
+    `${JSON.stringify({ config: nextConfig, updatedAt }, null, 2)}\n`,
+    "utf8"
+  );
+  return buildSnapshot(nextConfig, updatedAt);
+}
+
+export async function importWingsSharedCredentials(): Promise<AppSettingsSnapshot> {
+  const stored = await readStoredSettings();
+  const imported = await loadDefaultWingsSharedCredentials();
+  const nextConfig = normalizeSettings({
+    ...(stored.config ?? {}),
+    wingsSharedCredentials: imported,
+  });
   const updatedAt = new Date().toISOString();
   await fs.mkdir(path.dirname(getSettingsPath()), { recursive: true });
   await fs.writeFile(

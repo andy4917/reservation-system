@@ -1,7 +1,7 @@
 import electron from "electron";
 import type { BrowserWindow as ElectronBrowserWindow } from "electron";
-import type { AppProvider, AppProviderBrowserState, AppProviderOption } from "../../src/desktop/app-v2-contracts.js";
-import type { AppWingsLoginAttemptSnapshot, AppWingsLoginSettings } from "../../src/desktop/app-v2-contracts.js";
+import type { AppBranch, AppProvider, AppProviderBrowserState, AppProviderOption } from "../../src/desktop/app-v2-contracts.js";
+import type { AppWingsLoginAttemptSnapshot } from "../../src/desktop/app-v2-contracts.js";
 import { APP_PROVIDERS, getAppProviderOption } from "../../src/desktop/app-v2-contracts.js";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -215,10 +215,6 @@ async function appendWingsLoginLog(entry: Record<string, string>) {
   await fs.appendFile(getWingsLoginLogPath(), `${JSON.stringify(entry)}\n`, "utf8");
 }
 
-function hasWingsCredentials(settings: AppWingsLoginSettings | null | undefined) {
-  return Boolean(settings?.loginId && settings?.password);
-}
-
 function buildCookieHeader(cookies: SessionCookieShape[]) {
   return cookies
     .map((cookie) => `${cookie.name}=${cookie.value}`)
@@ -359,19 +355,22 @@ export async function ensureProviderBrowser(provider: AppProvider): Promise<AppP
   return refreshProviderState(provider);
 }
 
-export async function attemptWingsLogin(): Promise<AppWingsLoginAttemptSnapshot> {
+export async function attemptWingsLogin(branch: AppBranch): Promise<AppWingsLoginAttemptSnapshot> {
   const settings = await loadSettingsSnapshot();
-  const wingsLogin = settings.config?.wingsLogin ?? null;
-  if (!hasWingsCredentials(wingsLogin)) {
+  const sharedCredentials = settings.config?.wingsSharedCredentials ?? null;
+  const storedLogin = sharedCredentials?.branches?.[branch] ?? null;
+  const companyId = sharedCredentials?.companyId || "UHSUITE";
+  if (!storedLogin?.loginId || !storedLogin.password) {
     return {
+      branch,
       attempted: false,
       submitted: false,
-      summary: "저장된 WINGS 로그인 정보가 없습니다.",
-      loginId: wingsLogin?.loginId ?? "",
+      summary: "가져온 지점 공용 계정을 먼저 확인해야 합니다.",
+      companyId,
+      loginId: storedLogin?.loginId ?? "",
       loggedAt: null,
     };
   }
-  const storedLogin = wingsLogin as AppWingsLoginSettings;
 
   await ensureProviderBrowser("wings-pms");
   const loggedAt = new Date().toISOString();
@@ -379,9 +378,22 @@ export async function attemptWingsLogin(): Promise<AppWingsLoginAttemptSnapshot>
     "wings-pms",
     `
       (() => {
+        const companyId = ${JSON.stringify(companyId)};
         const loginId = ${JSON.stringify(storedLogin.loginId)};
         const password = ${JSON.stringify(storedLogin.password)};
         const textMatch = (value) => typeof value === "string" && /id|user|email|login/i.test(value);
+        const findCompanyInput = () => {
+          const inputs = Array.from(document.querySelectorAll("input"));
+          return inputs.find((input) => {
+            const type = String(input.getAttribute("type") || "").toLowerCase();
+            if (type === "password") return false;
+            const name = String(input.getAttribute("name") || "");
+            const id = String(input.getAttribute("id") || "");
+            const placeholder = String(input.getAttribute("placeholder") || "");
+            const value = String(input.value || "");
+            return /company|corp|comp|biz|group/i.test(\`\${name} \${id} \${placeholder}\`) || value.trim().toUpperCase() === companyId;
+          }) || null;
+        };
         const findIdInput = () => {
           const inputs = Array.from(document.querySelectorAll("input"));
           return inputs.find((input) => {
@@ -395,6 +407,7 @@ export async function attemptWingsLogin(): Promise<AppWingsLoginAttemptSnapshot>
         };
         const findPasswordInput = () =>
           Array.from(document.querySelectorAll("input")).find((input) => String(input.getAttribute("type") || "").toLowerCase() === "password") || null;
+        const companyInput = findCompanyInput();
         const submitButton =
           Array.from(document.querySelectorAll("button, input[type='submit']")).find((element) => {
             const text = (element.textContent || element.getAttribute("value") || "").toLowerCase();
@@ -403,7 +416,7 @@ export async function attemptWingsLogin(): Promise<AppWingsLoginAttemptSnapshot>
 
         const idInput = findIdInput();
         const passwordInput = findPasswordInput();
-        if (!idInput || !passwordInput) {
+        if (!companyInput || !idInput || !passwordInput) {
           return { submitted: false, reason: "login-fields-not-found" };
         }
         const setNativeValue = (element, value) => {
@@ -414,6 +427,7 @@ export async function attemptWingsLogin(): Promise<AppWingsLoginAttemptSnapshot>
           element.dispatchEvent(new Event("input", { bubbles: true }));
           element.dispatchEvent(new Event("change", { bubbles: true }));
         };
+        setNativeValue(companyInput, companyId);
         setNativeValue(idInput, loginId);
         setNativeValue(passwordInput, password);
         if (submitButton instanceof HTMLElement) {
@@ -428,15 +442,18 @@ export async function attemptWingsLogin(): Promise<AppWingsLoginAttemptSnapshot>
 
   await appendWingsLoginLog({
     loggedAt,
+    branch,
     loginId: storedLogin.loginId,
     submitted: result.submitted ? "yes" : "no",
     reason: result.reason || "",
   });
 
   return {
+    branch,
     attempted: true,
     submitted: result.submitted === true,
-    summary: result.submitted === true ? "저장된 WINGS 로그인 정보로 PMS 로그인을 시도했습니다." : `WINGS 로그인 시도 실패: ${result.reason || "unknown"}`,
+    summary: result.submitted === true ? "가져온 지점 공용 계정으로 Wings 로그인을 시도했습니다." : `Wings 로그인 시도 실패: ${result.reason || "unknown"}`,
+    companyId,
     loginId: storedLogin.loginId,
     loggedAt,
   };
