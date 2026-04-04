@@ -110,8 +110,8 @@
   const normalizeReservationChannel =
     typeof P.normalizeReservationChannel === "function"
       ? P.normalizeReservationChannel
-      : (value, sourceSystem = "", fallback = "") => {
-          const low = normalizeText(value || fallback || "").toLowerCase();
+      : (value, sourceSystem = "", defaultValue = "") => {
+          const low = normalizeText(value || defaultValue || "").toLowerCase();
           if (low.includes("station") || low.includes("uh suite")) return "STATION";
           if (low.includes("naver")) return "NAVER";
           if (low.includes("trip")) return "TRIP";
@@ -123,7 +123,7 @@
           if (low.includes("coupang")) return "COUPANG_TRAVEL";
           const src = normalizeText(sourceSystem || "").toUpperCase();
           if (src === "NAVER" || src === "STATION") return src;
-          return normalizeText(value || fallback || "").toUpperCase() || "UNKNOWN";
+          return normalizeText(value || defaultValue || "").toUpperCase() || "UNKNOWN";
         };
   let naverBizItemsCache = { ts: 0, items: [] };
   const pmsReservationCache = App.runtime.pmsReservationCache || (App.runtime.pmsReservationCache = new Map());
@@ -695,13 +695,12 @@
     return (Array.isArray(rows) ? rows : []).reduce(
       (acc, row) => {
         const key = normalizeText(row?.source || "api").toLowerCase();
-        if (key === "dom_fallback") acc.dom += 1;
-        else if (!key || key === "api") acc.api += 1;
+        if (!key || key === "api") acc.api += 1;
         else acc.other += 1;
         acc.total += 1;
         return acc;
       },
-      { api: 0, dom: 0, other: 0, total: 0 }
+      { api: 0, other: 0, total: 0 }
     );
   }
 
@@ -729,10 +728,8 @@
         providerType: key,
         totalFetches: 0,
         apiOnlyAccept: 0,
-        apiDomMerge: 0,
-        domOnlyFallback: 0,
         apiOnlyInsufficient: 0,
-        apiErrorNoDom: 0,
+        apiError: 0,
         lastEvent: null,
         updatedAt: ""
       };
@@ -746,10 +743,8 @@
       providerType: normalizeText(stats.providerType || ""),
       totalFetches: Number(stats.totalFetches || 0),
       apiOnlyAccept: Number(stats.apiOnlyAccept || 0),
-      apiDomMerge: Number(stats.apiDomMerge || 0),
-      domOnlyFallback: Number(stats.domOnlyFallback || 0),
       apiOnlyInsufficient: Number(stats.apiOnlyInsufficient || 0),
-      apiErrorNoDom: Number(stats.apiErrorNoDom || 0),
+      apiError: Number(stats.apiError || 0),
       updatedAt: normalizeText(stats.updatedAt || ""),
       lastEvent: stats.lastEvent && typeof stats.lastEvent === "object" ? { ...stats.lastEvent } : null
     };
@@ -795,17 +790,13 @@
     if (!stats) return null;
     stats.totalFetches += 1;
     if (meta?.route === "api_only_accept") stats.apiOnlyAccept += 1;
-    else if (meta?.route === "api_dom_merge") stats.apiDomMerge += 1;
-    else if (meta?.route === "dom_only_fallback") stats.domOnlyFallback += 1;
-    else if (meta?.route === "api_error_no_dom") stats.apiErrorNoDom += 1;
+    else if (meta?.route === "api_error") stats.apiError += 1;
     else stats.apiOnlyInsufficient += 1;
     stats.updatedAt = new Date().toISOString();
     const sessionCounts = {
       apiOnlyAccept: stats.apiOnlyAccept,
-      apiDomMerge: stats.apiDomMerge,
-      domOnlyFallback: stats.domOnlyFallback,
       apiOnlyInsufficient: stats.apiOnlyInsufficient,
-      apiErrorNoDom: stats.apiErrorNoDom,
+      apiError: stats.apiError,
       totalFetches: stats.totalFetches
     };
     stats.lastEvent = {
@@ -1187,11 +1178,11 @@
       typeof W.buildRequest === "function"
         ? W.buildRequest({ urlRaw, bundle, query })
         : (() => {
-            const fallbackRequest = buildReservationRequestOptions(urlRaw, bundle, query);
-            assertReadonlyPmsRequest(fallbackRequest.url, fallbackRequest.options);
+            const requestOptions = buildReservationRequestOptions(urlRaw, bundle, query);
+            assertReadonlyPmsRequest(requestOptions.url, requestOptions.options);
             return {
-              ...fallbackRequest,
-              endpointPath: normalizeText(fallbackRequest.url?.pathname || ""),
+              ...requestOptions,
+              endpointPath: normalizeText(requestOptions.url?.pathname || ""),
               requestSchemaIssues: []
             };
           })();
@@ -2445,7 +2436,7 @@
           obj.availableStock,
         totalStock
       ),
-      source: "dom_fallback"
+      source: "api"
     };
   }
 
@@ -2518,14 +2509,14 @@
     return rows;
   }
 
-  function pickFirstPositiveNumericId(candidates, fallback) {
+  function pickFirstPositiveNumericId(candidates, defaultValue) {
     for (const value of Array.isArray(candidates) ? candidates : []) {
       const text = normalizeText(value);
       if (!/^\d+$/.test(text)) continue;
       if (Number(text) <= 0) continue;
       return text;
     }
-    return fallback;
+    return defaultValue;
   }
 
   function toPositiveNumericId(value) {
@@ -2535,7 +2526,7 @@
     return text;
   }
 
-  function resolveStationBranchId(fallback = "") {
+  function resolveStationBranchId(explicitId = "") {
     const path = normalizeText(location.pathname || "");
     const href = normalizeText(location.href || "");
     const hash = normalizeText(location.hash || "");
@@ -2546,12 +2537,12 @@
       hash.match(/\/branch\/(\d+)/i)?.[1]
     ];
     const syncFallback = toPositiveNumericId(App.runtime?.syncConfigCache?.stationBranchId || "");
-    const explicitFallback = toPositiveNumericId(fallback || "");
-    const defaultFallback = toPositiveNumericId(POLICY_STATION_BRANCH_ID);
-    return pickFirstPositiveNumericId(matches, explicitFallback || syncFallback || defaultFallback);
+    const requestedId = toPositiveNumericId(explicitId || "");
+    const policyId = toPositiveNumericId(POLICY_STATION_BRANCH_ID);
+    return pickFirstPositiveNumericId(matches, requestedId || syncFallback || policyId);
   }
 
-  function resolveNaverBusinessId(fallback = "") {
+  function resolveNaverBusinessId(explicitId = "") {
     const path = normalizeText(location.pathname || "");
     const href = normalizeText(location.href || "");
     const hash = normalizeText(location.hash || "");
@@ -2562,9 +2553,9 @@
       hash.match(/\/businesses\/(\d+)/i)?.[1]
     ];
     const syncFallback = toPositiveNumericId(App.runtime?.syncConfigCache?.naverBusinessId || "");
-    const explicitFallback = toPositiveNumericId(fallback || "");
-    const defaultFallback = toPositiveNumericId(POLICY_NAVER_BUSINESS_ID);
-    return pickFirstPositiveNumericId(matches, explicitFallback || syncFallback || defaultFallback);
+    const requestedId = toPositiveNumericId(explicitId || "");
+    const policyId = toPositiveNumericId(POLICY_NAVER_BUSINESS_ID);
+    return pickFirstPositiveNumericId(matches, requestedId || syncFallback || policyId);
   }
 
 
@@ -2738,147 +2729,36 @@
 
   async function fetchProviderRows(providerType, query) {
     const fetcher = providerType === "naver-partner" ? fetchNaverRows : fetchStationRows;
-    let apiRows = [];
-    let apiError = null;
     try {
-      apiRows = await fetcher(query);
+      const apiRows = await fetcher(query);
+      const apiCoverage = assessProviderRowsCoverage(apiRows, query, providerType);
+      recordProviderFetchMeta(
+        buildProviderFetchMeta({
+          providerType,
+          route: apiCoverage.acceptable ? "api_only_accept" : "api_only_insufficient",
+          query,
+          rows: apiRows,
+          apiRows,
+          apiCoverage,
+          finalCoverage: apiCoverage
+        })
+      );
+      return apiRows;
     } catch (error) {
-      apiError = error;
-    }
-
-    if (apiError) {
-      const domRows = extractProviderRowsFromDom(providerType, query);
-      if (domRows.length > 0) {
-        const finalCoverage = assessProviderRowsCoverage(domRows, query, providerType);
-        recordProviderFetchMeta(
-          buildProviderFetchMeta({
-            providerType,
-            route: "dom_only_fallback",
-            query,
-            rows: domRows,
-            apiRows,
-            domRows,
-            finalCoverage,
-            apiError
-          })
-        );
-        console.warn("[inventory] provider API failed; fallback to DOM snapshot rows", {
-          providerType,
-          rowCount: domRows.length,
-          error: apiError?.message || String(apiError)
-        });
-        return domRows;
-      }
       recordProviderFetchMeta(
         buildProviderFetchMeta({
           providerType,
-          route: "api_error_no_dom",
+          route: "api_error",
           query,
-          rows: apiRows,
-          apiRows,
+          rows: [],
+          apiRows: [],
           domRows: [],
-          finalCoverage: assessProviderRowsCoverage(apiRows, query, providerType),
-          apiError
+          finalCoverage: assessProviderRowsCoverage([], query, providerType),
+          apiError: error
         })
       );
-      throw apiError;
+      throw error;
     }
-
-    const apiCoverage = assessProviderRowsCoverage(apiRows, query, providerType);
-    if (apiCoverage.acceptable) {
-      recordProviderFetchMeta(
-        buildProviderFetchMeta({
-          providerType,
-          route: "api_only_accept",
-          query,
-          rows: apiRows,
-          apiRows,
-          apiCoverage,
-          finalCoverage: apiCoverage
-        })
-      );
-      return apiRows;
-    }
-    const domRows = extractProviderRowsFromDom(providerType, query);
-    if (!domRows.length) {
-      recordProviderFetchMeta(
-        buildProviderFetchMeta({
-          providerType,
-          route: "api_only_insufficient",
-          query,
-          rows: apiRows,
-          apiRows,
-          apiCoverage,
-          finalCoverage: apiCoverage
-        })
-      );
-      return apiRows;
-    }
-
-    const merged = mergeProviderRowsPreferApi(apiRows, domRows);
-    const mergedCoverage = assessProviderRowsCoverage(merged, query, providerType);
-    if (mergedCoverage.acceptable || merged.length > apiRows.length) {
-      recordProviderFetchMeta(
-        buildProviderFetchMeta({
-          providerType,
-          route: "api_dom_merge",
-          query,
-          rows: merged,
-          apiRows,
-          domRows,
-          apiCoverage,
-          finalCoverage: mergedCoverage,
-          mergedCoverage
-        })
-      );
-      console.warn("[inventory] provider API low coverage; merged API+DOM snapshot", {
-        providerType,
-        api: apiCoverage,
-        merged: mergedCoverage
-      });
-      return merged;
-    }
-    recordProviderFetchMeta(
-      buildProviderFetchMeta({
-        providerType,
-        route: "api_only_insufficient",
-        query,
-        rows: apiRows,
-        apiRows,
-        domRows,
-        apiCoverage,
-        finalCoverage: apiCoverage,
-        mergedCoverage
-      })
-    );
-    return apiRows;
-  }
-
-
-  function buildProviderRowMergeKey(row) {
-    const day = normalizeText(row?.date || "");
-    const roomId = normalizeText(row?.roomId || "");
-    const roomName = normalizeText(row?.roomName || "");
-    if (!day) return "";
-    if (roomId) return `${day}::id::${roomId}`;
-    if (roomName) return `${day}::name::${roomName}`;
-    return "";
-  }
-
-
-  function mergeProviderRowsPreferApi(apiRows, domRows) {
-    const merged = new Map();
-    (Array.isArray(domRows) ? domRows : []).forEach((row) => {
-      const key = buildProviderRowMergeKey(row);
-      if (!key) return;
-      merged.set(key, row);
-    });
-    (Array.isArray(apiRows) ? apiRows : []).forEach((row) => {
-      const key = buildProviderRowMergeKey(row);
-      if (!key) return;
-      merged.set(key, row);
-    });
-    return [...merged.values()];
   }
 
 
@@ -3018,7 +2898,6 @@
     if (Number.isInteger(row?.totalStock)) score += 20;
     if (Number.isInteger(row?.priceSetId)) score += 10;
     if (String(row?.openStatus || "") !== "UNKNOWN") score += 10;
-    if (String(row?.source || "") === "dom_fallback") score -= 25;
     return score;
   }
 

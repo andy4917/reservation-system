@@ -1,10 +1,22 @@
+import {
+  APP_BRANCH_OPTION_RECORDS,
+  APP_PROVIDER_OPTION_RECORDS,
+  DEFAULT_APP_BGE_MODEL_ID as DEFAULT_APP_BGE_MODEL_ID_POLICY
+} from "./app-v2-runtime-policy.js";
+
 export const APP_PROVIDERS = ["wings-pms", "naver-partner", "admin-station"] as const;
 export const APP_BRANCHES = ["COEX", "GANGNAM", "SEOLLEUNG", "SAMSUNG"] as const;
-export const APP_SHELL_MODULES = ["pms-read", "ota-read", "sheet-read", "reservation-management", "settings"] as const;
+export const APP_SHELL_MODULES = [
+  "pms-read",
+  "ota-read",
+  "sheet-read",
+  "reservation-management",
+  "settings"
+] as const;
 export const APP_RESERVATION_ACTIONS = ["compare", "validate", "reconcile", "edit", "apply", "order-list", "arrival"] as const;
 export const APP_READ_SOURCES = ["pms", "ota", "sheet"] as const;
 export const DEFAULT_APP_REPORT_WINDOW_DAYS = 5;
-export const DEFAULT_APP_BGE_MODEL_ID = "Xenova/bge-m3";
+export const DEFAULT_APP_BGE_MODEL_ID = DEFAULT_APP_BGE_MODEL_ID_POLICY;
 export const DEFAULT_APP_BGE_TOP_K = 5;
 export const DEFAULT_APP_BGE_SCORE_THRESHOLD = 0.72;
 
@@ -44,47 +56,7 @@ export interface AppProviderOption {
   loginUrlHints: readonly string[];
 }
 
-export const APP_PROVIDER_OPTIONS: readonly AppProviderOption[] = [
-  {
-    provider: "wings-pms",
-    label: "Wings",
-    shortLabel: "WINGS",
-    partition: "persist:app-v2-wings",
-    startUrl: "https://pms.sanhait.com/",
-    sessionOrigin: "https://pms.sanhait.com",
-    apiOrigin: "https://pms.sanhait.com",
-    cookieScopeUrls: ["https://pms.sanhait.com/"],
-    allowedHostSuffixes: ["sanhait.com"],
-    readyHosts: ["pms.sanhait.com"],
-    loginUrlHints: ["identity/samlsso", "sso", "redirect"],
-  },
-  {
-    provider: "naver-partner",
-    label: "네이버 파트너",
-    shortLabel: "OTA",
-    partition: "persist:app-v2-naver",
-    startUrl: "https://partner.booking.naver.com/",
-    sessionOrigin: "https://partner.booking.naver.com",
-    apiOrigin: "https://api-partner.booking.naver.com",
-    cookieScopeUrls: ["https://partner.booking.naver.com/", "https://new.smartplace.naver.com/"],
-    allowedHostSuffixes: ["naver.com"],
-    readyHosts: ["partner.booking.naver.com", "new.smartplace.naver.com"],
-    loginUrlHints: [],
-  },
-  {
-    provider: "admin-station",
-    label: "Station",
-    shortLabel: "STATION",
-    partition: "persist:app-v2-station",
-    startUrl: "https://admin.admin-stationbyuhc.com/",
-    sessionOrigin: "https://admin.admin-stationbyuhc.com",
-    apiOrigin: "https://api.admin-stationbyuhc.com",
-    cookieScopeUrls: ["https://admin.admin-stationbyuhc.com/"],
-    allowedHostSuffixes: ["admin-stationbyuhc.com"],
-    readyHosts: ["admin.admin-stationbyuhc.com"],
-    loginUrlHints: [],
-  },
-] as const;
+export const APP_PROVIDER_OPTIONS: readonly AppProviderOption[] = APP_PROVIDER_OPTION_RECORDS;
 
 export interface AppBranchOption {
   branch: AppBranch;
@@ -93,12 +65,7 @@ export interface AppBranchOption {
   reason: string;
 }
 
-export const APP_BRANCH_OPTIONS: readonly AppBranchOption[] = [
-  { branch: "COEX", label: "코엑스", availability: "active", reason: "운영 지점" },
-  { branch: "GANGNAM", label: "강남", availability: "active", reason: "운영 지점" },
-  { branch: "SEOLLEUNG", label: "선릉", availability: "active", reason: "운영 지점" },
-  { branch: "SAMSUNG", label: "삼성", availability: "inactive", reason: "preopen inactive branch" },
-] as const;
+export const APP_BRANCH_OPTIONS: readonly AppBranchOption[] = APP_BRANCH_OPTION_RECORDS;
 
 export interface AppBgeM3Settings {
   enabled: boolean;
@@ -272,6 +239,7 @@ export interface AppLiveReadSnapshot {
   recordsImported: number;
   blockedReason: string | null;
   items: AppLiveReadPreviewItem[];
+  copyText: string | null;
   evidence: string[];
 }
 

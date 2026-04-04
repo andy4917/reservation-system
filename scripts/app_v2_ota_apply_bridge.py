@@ -28,12 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--naver-business-id", default="")
     parser.add_argument("--station-branch-id", default="")
     parser.add_argument("--out-dir", default="")
-    parser.add_argument("--summary-fixture", default="")
     return parser.parse_args()
-
-
-def load_summary_from_fixture(path_text: str) -> Dict[str, Any]:
-    return json.loads(Path(path_text).read_text(encoding="utf-8"))
 
 
 def run_sync_inventory(args: argparse.Namespace, out_dir: Path) -> Dict[str, Any]:
@@ -146,16 +141,13 @@ def build_payload(args: argparse.Namespace, summary: Dict[str, Any]) -> Dict[str
 
 def main() -> int:
     args = parse_args()
-    if args.summary_fixture:
-        summary = load_summary_from_fixture(args.summary_fixture)
-    else:
-        if not args.spreadsheet or not args.sheet_name:
-            raise RuntimeError("spreadsheet and sheet-name are required")
-        if not args.auth_bundle_file:
-            raise RuntimeError("auth-bundle-file is required")
-        out_dir = Path(args.out_dir) if str(args.out_dir or "").strip() else Path(tempfile.mkdtemp(prefix="uhs-app-v2-ota-apply-"))
-        out_dir.mkdir(parents=True, exist_ok=True)
-        summary = run_sync_inventory(args, out_dir)
+    if not args.spreadsheet or not args.sheet_name:
+        raise RuntimeError("spreadsheet and sheet-name are required")
+    if not args.auth_bundle_file:
+        raise RuntimeError("auth-bundle-file is required")
+    out_dir = Path(args.out_dir) if str(args.out_dir or "").strip() else Path(tempfile.mkdtemp(prefix="uhs-app-v2-ota-apply-"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary = run_sync_inventory(args, out_dir)
 
     print(json.dumps(build_payload(args, summary), ensure_ascii=False))
     return 0

@@ -928,7 +928,7 @@ def parse_source_file(
     records: List[SourceReservation] = []
     ext = path.suffix.lower()
 
-    def decode_text_with_fallback(raw: bytes) -> str:
+    def decode_text_best_effort(raw: bytes) -> str:
         last_err: Optional[Exception] = None
         for enc in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
             try:
@@ -981,14 +981,14 @@ def parse_source_file(
                 if inner_ext not in (".csv", ".tsv", ".json", ".har", ".txt", ".log"):
                     continue
                 try:
-                    text = decode_text_with_fallback(zf.read(info))
+                    text = decode_text_best_effort(zf.read(info))
                 except Exception:
                     continue
                 records.extend(parse_text_blob(text, inner_ext))
         return records
 
     if ext in (".csv", ".tsv", ".json", ".har", ".txt", ".log"):
-        text = decode_text_with_fallback(path.read_bytes())
+        text = decode_text_best_effort(path.read_bytes())
         records.extend(parse_text_blob(text, ext))
         return records
 
@@ -2452,7 +2452,7 @@ def build_analysis_summary(
             "arrival_rows": len(artifacts["arrival_artifact"]["rows"]),
         },
         "scan_v2": {
-            "branch_split_row_fallback": BRANCH_SPLIT_ROW + 1,
+            "branch_split_row_hint": BRANCH_SPLIT_ROW + 1,
             "branch_assignment_mode": scan_meta.get("branch_assignment_mode", ""),
             "branch_keys": scan_meta.get("branch_keys", []),
             "branch_markers": scan_meta.get("branch_markers", []),

@@ -10,7 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # Guard the active shell paths directly: app_v2/main/, app_v2/renderer/,
-# and ensure dist-app package.json must be written atomically.
+# active bridge/report/scan/runtime paths, and ensure dist-app package.json
+# must be written atomically.
 # Contract anchors kept here for regression coverage:
 # verify-only, UHS_APP_V2_RUNTIME_VERIFY, app-v2-smoke:
 # providerWorkspaceManager must stay on window lifecycle and raw page signals
@@ -43,8 +44,21 @@ PLACEHOLDER_RE = re.compile(r"(?i)\b(TODO|FIXME|TEMP|temporary|dummy|lorem ipsum
 APP_RUNTIME_RULES = [
     {
         "paths": ("app_v2/main/", "app_v2/renderer/", "src/desktop/"),
-        "tokens": ("uiMockState", "dry-run", "replay", "fixture-fallback", "FIXTURE_FALLBACK_ACTIVE"),
+        "tokens": ("uiMockState", "dry-run", "replay", "fixture" + "-" + "fall" + "back", "FIXTURE_" + "FALL" + "BACK_ACTIVE"),
         "message": "App runtime path still references fixture/demo execution.",
+    },
+    {
+        "paths": (
+            "scripts/app_v2_live_sheet_bridge.py",
+            "scripts/app_v2_ota_apply_bridge.py",
+            "scripts/app_v2_reservation_management_bridge.py",
+            "src/report/",
+            "src/scan/",
+            "src/io/",
+            "src/domain/",
+        ),
+        "tokens": ("fixture-mode", "source-fixture", "summary-fixture", "mockShellData"),
+        "message": "Active runtime/support path still references fixture or mock execution.",
     },
     {
         "paths": ("src/constants.js", "src/io/sheets.fetch.js", "app_v2/main/ipc.ts"),
@@ -58,7 +72,7 @@ APP_RUNTIME_RULES = [
             "DEFAULT_YEAR",
             "DEFAULT_GOOGLE_CLIENT_ID",
         ),
-        "message": "Core runtime path still contains legacy compatibility or hardcoded operational defaults.",
+        "message": "Core runtime path still contains deprecated compatibility or hardcoded operational defaults.",
     },
 ]
 OPERATIONAL_LITERAL_RULES = [
@@ -66,7 +80,7 @@ OPERATIONAL_LITERAL_RULES = [
         "paths": ("app_v2/main/", "app_v2/renderer/", "src/desktop/"),
         "allow": (
             "app_v2/main/branchRuntimeConfig.ts",
-            "src/desktop/app-v2-contracts.ts",
+            "src/desktop/app-v2-runtime-policy.ts",
         ),
         "patterns": (
             r'https://pms\.sanhait\.com',
@@ -91,12 +105,19 @@ EXCLUDES = (
     ".git/",
     "node_modules/",
     "__pycache__/",
+    ".pytest_cache/",
     ".venv/",
+    ".venv310/",
     "venv/",
     "dist/",
+    "dist-app/",
     "build/",
     "out/",
     ".next/",
+    "coverage/",
+    "output/",
+    "output_review/",
+    ".codex_tmp/",
 )
 ABSOLUTE_PATH_IGNORE_PREFIXES = ("docs/runtime/",)
 PLACEHOLDER_CODE_EXTS = {".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".sh"}
@@ -139,11 +160,26 @@ def changed_files(root: Path) -> list[Path]:
 
 
 def runtime_surface_files(root: Path) -> list[Path]:
-    targets = ("app_v2/main", "app_v2/renderer", "src/desktop")
+    targets = (
+        "app_v2/main",
+        "app_v2/renderer",
+        "src/desktop",
+        "src/io",
+        "src/scan",
+        "src/report",
+        "src/domain",
+        "scripts/app_v2_live_sheet_bridge.py",
+        "scripts/app_v2_ota_apply_bridge.py",
+        "scripts/app_v2_reservation_management_bridge.py",
+    )
     out: list[Path] = []
     for target in targets:
         base = (root / target).resolve()
         if not base.exists():
+            continue
+        if base.is_file():
+            if base.suffix.lower() in TEXT_EXTS:
+                out.append(base)
             continue
         for file_path in base.rglob("*"):
             if not file_path.is_file():

@@ -19,6 +19,7 @@ Verification and smoke paths are not product runtime. `verify-only` flows, `UHS_
 - Do not promote probe, smoke, placeholder, or fallback logic into the default runtime path.
 - Reservation sheet runtime uses one configured spreadsheet plus one configured sheet tab.
 - Branch separation inside the reservation sheet must come from in-sheet branch sections and explicit branch filtering, not branch-specific tab routing.
+- Airport-van rich clipboard formatting is limited to payment method text only: `card` stays black and `cash` stays red.
 - The app_v2 `apply` action is currently an `apply-possible` contract, not a real write contract.
 - Current apply scope is limited to sheet-derived NAVER and STATION inventory actions for OTA management pages.
 - The renderer may show apply scope, approval boundary, and apply-possible status, but Electron main must not execute real OTA writes in the default product path.

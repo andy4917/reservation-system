@@ -141,7 +141,7 @@
       : "";
     const candidates = [];
     const bestTypedCandidate = {};
-    const fallbackRows = [];
+    const reserveRows = [];
     const isDifferentProviderAliasRow = (row) => {
       if (!rowMatchesAnyProviderAlias(matrix, row)) return false;
       if (!providerKey) return true;
@@ -161,7 +161,7 @@
         );
       });
       if (!hasAnyDateValue) return;
-      fallbackRows.push(row);
+      reserveRows.push(row);
       const stat = scoreInventoryDataRow(matrix, row, dateCols);
       if (stat.parsedCount <= 0) return;
       const typeKey = detectInventoryTypeKeyFromAlias(safeLabel);
@@ -224,7 +224,7 @@
       }
       if (picked.length > 0) return picked;
     }
-    return fallbackRows.slice(0, maxCount);
+    return reserveRows.slice(0, maxCount);
   }
 
 

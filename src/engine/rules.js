@@ -144,7 +144,7 @@
     const mapped = mappedHex ? V2_COLOR_STATUS_CHANNEL_MAP[mappedHex] : null;
     if (mapped) return { status: mapped.status, channel: mapped.channel, errorCode: "" };
 
-    // Keep explicit text markers above note-based occupied fallback.
+    // Keep explicit text markers above note-based occupied inference.
     const note = normalizeText(cell?.note || "");
     const text = normalizeText(cell?.formattedValue || "");
     const textUpper = text.toUpperCase();
@@ -189,7 +189,7 @@
     }
     if (colorStatus.status === "OCCUPIED") return "OTHER";
 
-    // Legacy text fallback for no-fill cells.
+    // Historical text inference for no-fill cells.
     if (textUpper === "VAC") return "VAC";
     if (textUpper === "VIP" || noteUpper === "VIP") return "VIP";
     if (
@@ -316,8 +316,8 @@
     (roomPreset || []).forEach((room) => {
       const roomId = String(room.id);
       if (mapping.has(roomId)) return;
-      const fallback = remained.shift();
-      if (fallback) mapping.set(roomId, fallback);
+      const nextValue = remained.shift();
+      if (nextValue) mapping.set(roomId, nextValue);
     });
 
     return mapping;

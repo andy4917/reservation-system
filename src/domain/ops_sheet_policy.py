@@ -6,6 +6,18 @@ from typing import Optional, Tuple
 from src.domain.sheet_domain import extract_sheet_id, normalize_text
 
 DEFAULT_OPS_SHEET_SPREADSHEET = "1MfvPh2msnoXbG8Q2Mjpk5KVelh3Rv3HQ-SKt9P6xqjE"
+ARRIVAL_TEMPLATE_SPREADSHEET_ID = "1S-Dw_UEB3A2gXyf834BJfuNolDzz_hR8TsJfcTjEj7g"
+ARRIVAL_TEMPLATE_SHEET_NAME = "Arrival"
+ARRIVAL_TEMPLATE_ROOM_LAYOUT = {
+    "B동": [
+        "201", "202", "301", "302", "401", "402", "501", "502", "601", "602", "701",
+        "702", "801", "802", "901", "902", "1001", "1002", "1101", "1102", "1201", "1202",
+    ],
+    "A동": [
+        "A301", "A302", "A401", "A402", "A501", "A502", "A601", "A602", "A701", "A702",
+        "A801", "A802", "A901", "A902", "A1001", "A1002", "A1101", "A1102", "A1201",
+    ],
+}
 
 
 @dataclass(frozen=True)

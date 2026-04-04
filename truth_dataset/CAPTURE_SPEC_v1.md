@@ -45,8 +45,8 @@ truth_dataset/captures/<bundle_id>/
 
 ```bash
 python3 scripts/build_truth_capture_bundle.py \
-  --spec truth_dataset/fixtures/sample_capture_spec.json \
-  --output truth_dataset/fixtures/generated_sample_bundle.json
+  --spec truth_dataset/local/capture_spec.json \
+  --output truth_dataset/local/truth_bundle.json
 ```
 
 ## Minimum Sampling Policy

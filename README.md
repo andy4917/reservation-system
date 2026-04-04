@@ -14,8 +14,21 @@
 - 아키텍처/전환 문서: `docs/architecture/`
 - 시트 문서: `docs/sheets/`
 - 연동 문서: `docs/integrations/`
-- 이전 단계 설계/기록 보관: `docs/archive/`
 - 작업 인계/세션 메모: `tasks/handoffs/`
+
+## 코드 스켈레톤
+
+- `app_v2/main/`: Electron main 런타임, IPC, provider/session orchestration
+- `app_v2/renderer/`: renderer shell, 화면 상태, 사용자 조작면
+- `src/desktop/`: 앱 계약, 런타임 정책, shared defaults
+- `src/core_bridge/`: Python/C++ bridge wrapper와 parity entrypoint
+- `src/domain/`: 운영 규칙, 정책, canonical domain logic
+- `src/io/`: 외부 소스 fetch/adapter
+- `src/report/`: operator/export/report formatting
+- `src/scan/`: sheet scan, normalize, aggregation
+- `scripts/`: build/verify/bridge 실행 스크립트
+- `tests/`: regression 및 parity check
+- `truth_dataset/`: truth-set spec, validator input, fixture contract
 
 아키텍처 참고:
 - 제품/운영 기준선: `docs/architecture/APP_PRODUCT_OPERATING_MODEL.md`
@@ -89,6 +102,8 @@ python3.10 setup.py build_ext --inplace
 cd app_v2
 npm start
 ```
+
+Windows에서 WSL 경로로 앱을 띄울 때는 `scripts/run-app-windows.cmd`를 사용합니다.
 
 ## 확장 브리지 설치
 

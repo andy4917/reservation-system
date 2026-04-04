@@ -63,9 +63,9 @@
   const SYNC_CFG_STORAGE_VERSION = 3;
   const SECURE_ENCRYPT_MESSAGE = "inventory.secure.encrypt";
   const SECURE_DECRYPT_MESSAGE = "inventory.secure.decrypt";
-  function safeInt(value, fallback = 0) {
+  function safeInt(value, defaultValue = 0) {
     const n = Number(value);
-    if (Number.isNaN(n)) return fallback;
+    if (Number.isNaN(n)) return defaultValue;
     return Math.max(0, Math.floor(n));
   }
 
@@ -587,7 +587,7 @@
     return "";
   }
 
-  function normalizeReadonlyDateRange(rawRange, fallbackDays = 7, maxDays = WINGS_READONLY_MAX_QUERY_DAYS) {
+  function normalizeReadonlyDateRange(rawRange, defaultDays = 7, maxDays = WINGS_READONLY_MAX_QUERY_DAYS) {
     const source = rawRange && typeof rawRange === "object" && !Array.isArray(rawRange) ? rawRange : {};
     const requestedStartDate = parseWingsPresetDate(
       source.startDate || source.start_date || source.fromDate || source.from_date || ""
@@ -596,9 +596,9 @@
       source.endDate || source.end_date || source.toDate || source.to_date || ""
     );
     const today = toDateKey(new Date());
-    const fallbackEnd = toDateKey(addDays(fromDateKey(today) || new Date(), Math.max(0, fallbackDays)));
+    const defaultEnd = toDateKey(addDays(fromDateKey(today) || new Date(), Math.max(0, defaultDays)));
     const startDate = requestedStartDate || today;
-    let endDate = requestedEndDate || fallbackEnd;
+    let endDate = requestedEndDate || defaultEnd;
     if (startDate > endDate) {
       endDate = startDate;
     }
@@ -624,10 +624,10 @@
     return normalizeReadonlyDateRange(source, 7, WINGS_READONLY_MAX_QUERY_DAYS);
   }
 
-  function sanitizeWingsPmsBranchProfile(raw, fallbackBranch = "") {
+  function sanitizeWingsPmsBranchProfile(raw, defaultBranch = "") {
     const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
     const branch = normalizeBranchLabel(
-      source.branch || source.branchKey || source.branchLabel || source.label || fallbackBranch || ""
+      source.branch || source.branchKey || source.branchLabel || source.label || defaultBranch || ""
     );
     const pmsReservationUrl = normalizeText(
       source.pmsReservationUrl || source.pmsApiUrl || source.pmsReservationApiUrl || source.url || ""
@@ -1496,13 +1496,13 @@
     return Number.isInteger(value) && value > 0 ? value - 1 : null;
   }
 
-  function parseBooleanFlag(value, fallback = false) {
+  function parseBooleanFlag(value, defaultValue = false) {
     if (typeof value === "boolean") return value;
     const text = normalizeText(value).toLowerCase();
-    if (!text) return Boolean(fallback);
+    if (!text) return Boolean(defaultValue);
     if (["1", "true", "y", "yes", "on", "enable", "enabled"].includes(text)) return true;
     if (["0", "false", "n", "no", "off", "disable", "disabled"].includes(text)) return false;
-    return Boolean(fallback);
+    return Boolean(defaultValue);
   }
 
 
@@ -1708,7 +1708,7 @@
     }
 
     // Do not guess a room map from arbitrary sheet body rows.
-    // Without an explicit header, fallback ranges like A1:H320 can contain
+    // Without an explicit header, broad ranges like A1:H320 can contain
     // pricing tables or helper sections that would produce junk mappings.
     if (headerIdx < 0) return result;
 

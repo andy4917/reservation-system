@@ -29,6 +29,7 @@ async function main() {
     "dist-app/app_v2/main/ipc.js",
     "dist-app/app_v2/main/preflight.js",
     "dist-app/app_v2/main/settingsStore.js",
+    "dist-app/src/desktop/app-v2-contracts.js",
     "dist-app/app_v2/renderer/index.html"
   ];
   const removedLegacyEntries = [
@@ -37,7 +38,6 @@ async function main() {
     "dist-app/main",
     "dist-app/renderer",
     "dist-app/services",
-    "dist-app/src",
     "dist-app/vite.config",
     "dist-app/vite.config.js"
   ];
@@ -46,7 +46,8 @@ async function main() {
     path: relativePath,
     exists: fs.existsSync(path.join(root, relativePath))
   }));
-  const legacyChecks = removedLegacyEntries.map((relativePath) => ({
+  const coreBinaryCandidates = fs.readdirSync(root).filter((name) => /^inventory_cpp_core\..+\.(so|pyd|dylib)$/.test(name));
+  const removedEntryChecks = removedLegacyEntries.map((relativePath) => ({
     path: relativePath,
     exists: fs.existsSync(path.join(root, relativePath))
   }));
@@ -56,7 +57,8 @@ async function main() {
   const rendererAssetFiles = fs.existsSync(assetDir) ? fs.readdirSync(assetDir).sort() : [];
   const orphanedAssetFiles = rendererAssetFiles.filter((fileName) => !referencedAssetFiles.includes(fileName));
   const allPresent = fileChecks.every((entry) => entry.exists) &&
-    legacyChecks.every((entry) => entry.exists === false) &&
+    coreBinaryCandidates.length > 0 &&
+    removedEntryChecks.every((entry) => entry.exists === false) &&
     referencedAssetFiles.length > 0 &&
     orphanedAssetFiles.length === 0 &&
     referencedAssetFiles.every((fileName) => fs.existsSync(path.join(assetDir, fileName)));
@@ -68,7 +70,8 @@ async function main() {
         focus: options.focus,
         summary: allPresent ? "app_v2 build artifacts are clean." : "app_v2 build artifacts are missing or stale.",
         files: fileChecks,
-        removedLegacyEntries: legacyChecks,
+        coreBinaryCandidates,
+        removedLegacyEntries: removedEntryChecks,
         referencedAssetFiles,
         rendererAssetFiles,
         orphanedAssetFiles

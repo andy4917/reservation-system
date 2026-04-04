@@ -33,7 +33,7 @@ function main() {
   assert.doesNotMatch(runner, /APP_V2_FIXTURE_MODE|APP_V2_SOURCE_FIXTURE_JSON/);
 
   const preflight = read(root, "app_v2/main/preflight.ts");
-  assert.doesNotMatch(preflight, /시트명을 먼저 저장/);
+  assert.match(preflight, /스프레드시트와 시트명을 먼저 저장/);
 
   const settingsStore = read(root, "app_v2/main/settingsStore.ts");
   assert.doesNotMatch(settingsStore, /coexMain\) \|\| "코엑스"/);
@@ -66,11 +66,22 @@ function main() {
   assert.match(guardrails, /app-v2-smoke:/);
   assert.match(guardrails, /providerWorkspaceManager must stay on window lifecycle and raw page signals/i);
   assert.match(guardrails, /preflight\s+summary/i);
+  assert.match(guardrails, /src\/io/);
+  assert.match(guardrails, /src\/scan/);
+  assert.match(guardrails, /src\/report/);
+  assert.match(guardrails, /src\/domain/);
+  assert.match(guardrails, /app_v2_reservation_management_bridge\.py/);
+  assert.match(guardrails, /app_v2_ota_apply_bridge\.py/);
+  assert.match(guardrails, /fixture-mode/);
+  assert.match(guardrails, /summary-fixture/);
 
   const liveSheetBridge = read(root, "scripts/app_v2_live_sheet_bridge.py");
   const managementBridge = read(root, "scripts/app_v2_reservation_management_bridge.py");
+  const otaApplyBridge = read(root, "scripts/app_v2_ota_apply_bridge.py");
   assert.doesNotMatch(liveSheetBridge, /default=2026/);
   assert.doesNotMatch(managementBridge, /default=2026/);
+  assert.doesNotMatch(managementBridge, /fixture-mode|source-fixture/);
+  assert.doesNotMatch(otaApplyBridge, /summary-fixture/);
 
   const operatingContract = read(root, "docs/architecture/APP_V2_OPERATING_CONTRACT.md");
   assert.match(operatingContract, /Electron main is the source of truth/i);

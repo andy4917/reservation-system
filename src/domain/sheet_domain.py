@@ -662,9 +662,9 @@ def extract_sheet_id(value: str) -> str:
     return ""
 
 
-def infer_year_from_sheet_name(sheet_name: str, fallback: int) -> int:
+def infer_year_from_sheet_name(sheet_name: str, default_year: int) -> int:
     m = re.search(r"(20\d{2})", sheet_name)
     if m:
         return int(m.group(1))
-    return fallback
+    return default_year
 

@@ -649,7 +649,7 @@
       if (!knownRoomNo && !rangedRoomType && (!inferredRoomType || !hasRoomSignal)) continue;
 
       // When the sheet itself provides a stable local room-type header, prefer it over
-      // the shared fallback ROOM_MAP. This avoids cross-branch collisions such as
+      // the shared reserve ROOM_MAP. This avoids cross-branch collisions such as
       // Gangnam rows reusing COEX room numbers (401/501/1101/1102).
       const preferLocalHeaderType = !hasManualTypeRanges && Boolean(inferredRoomType) && hasRoomSignal;
       const roomType = rangedRoomType ||

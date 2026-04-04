@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-import json
-import subprocess
-import sys
-import tempfile
 from pathlib import Path
+from types import SimpleNamespace
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.app_v2_ota_apply_bridge import build_payload
 
 
-def write_fixture() -> Path:
-    payload = {
+def make_summary() -> dict:
+    return {
         "station": {
             "effective_actions": [
                 {
@@ -47,40 +49,19 @@ def write_fixture() -> Path:
             "totals": {"planned_actions": 2},
         },
     }
-    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False)
-    json.dump(payload, handle, ensure_ascii=False)
-    handle.flush()
-    handle.close()
-    return Path(handle.name)
-
-
-def run_bridge(*extra_args: str) -> dict:
-    fixture_path = write_fixture()
-    result = subprocess.run(
-        [
-            "python3",
-            str(ROOT / "scripts" / "app_v2_ota_apply_bridge.py"),
-            "--branch",
-            "COEX",
-            "--start-date",
-            "2026-04-04",
-            "--end-date",
-            "2026-04-04",
-            "--summary-fixture",
-            str(fixture_path),
-            *extra_args,
-        ],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr or result.stdout
-    return json.loads(result.stdout)
 
 
 def main() -> None:
-    dry_run = run_bridge()
+    dry_run = build_payload(
+        SimpleNamespace(
+            branch="COEX",
+            provider="both",
+            spreadsheet="sheet-id",
+            sheet_name="2026",
+            approve_plan_token="",
+        ),
+        make_summary(),
+    )
     assert dry_run["mode"] == "apply"
     assert dry_run["engineStatus"] == "planned"
     assert dry_run["planToken"] == "token-123"
@@ -89,7 +70,16 @@ def main() -> None:
     assert dry_run["issueCount"] == 2
     assert len(dry_run["rows"]) == 2
 
-    approved = run_bridge("--approve-plan-token", "token-123", "--execute-apply")
+    approved = build_payload(
+        SimpleNamespace(
+            branch="COEX",
+            provider="both",
+            spreadsheet="sheet-id",
+            sheet_name="2026",
+            approve_plan_token="token-123",
+        ),
+        make_summary(),
+    )
     assert approved["requiresApproval"] is True
     assert approved["applyAllowed"] is True
     assert "가능" in approved["summary"]

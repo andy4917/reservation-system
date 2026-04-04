@@ -219,7 +219,7 @@ def build_arrival_artifact(
                 {
                     "building": rule.building,
                     "room_prefixes": list(rule.room_prefixes),
-                    "fallback": bool(rule.fallback),
+                    "default_building": bool(rule.default_building),
                 }
                 for rule in policy.building_rules
             ],

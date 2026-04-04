@@ -1,28 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from src.core_bridge.runtime import load_cpp_module
-
-
-BuildCellsFallback = Callable[[int, int, List[Dict[str, Any]]], Dict[str, Any]]
-FindDateColumnsFallback = Callable[
-    [Dict[int, Dict[int, str]], int, int, int, int],
-    Tuple[int, List[Dict[str, Any]]],
-]
-DetectBlockRunsFallback = Callable[[List[Dict[str, Any]]], List[Dict[str, Any]]]
 
 
 def build_sheet_cells(
     start_row: int,
     start_col: int,
     row_data: List[Dict[str, Any]],
-    *,
-    fallback: BuildCellsFallback,
 ) -> Dict[str, Any]:
     core = load_cpp_module()
-    if core is None:
-        return fallback(start_row, start_col, row_data)
     result = core.scan_compute(
         {
             "op": "build_cells",
@@ -32,7 +20,7 @@ def build_sheet_cells(
         }
     )
     if not isinstance(result, dict):
-        return fallback(start_row, start_col, row_data)
+        return {}
     return result
 
 
@@ -46,11 +34,8 @@ def find_date_columns(
     date_header_hint_row: int,
     date_header_hint_col: int,
     date_weekday_hint_row: int,
-    fallback: FindDateColumnsFallback,
 ) -> Tuple[int, List[Dict[str, Any]]]:
     core = load_cpp_module()
-    if core is None:
-        return fallback(formatted_rows, start_row, max_row, max_col, year)
     result = core.scan_compute(
         {
             "op": "find_date_columns",
@@ -65,7 +50,7 @@ def find_date_columns(
         }
     )
     if not isinstance(result, dict):
-        return fallback(formatted_rows, start_row, max_row, max_col, year)
+        return -1, []
 
     row = int(result.get("row", -1))
     cols_raw = result.get("cols")
@@ -82,12 +67,8 @@ def find_date_columns(
 
 def detect_block_runs(
     events_by_row: List[Dict[str, Any]],
-    *,
-    fallback: DetectBlockRunsFallback,
 ) -> List[Dict[str, Any]]:
     core = load_cpp_module()
-    if core is None:
-        return fallback(events_by_row)
 
     result = core.scan_compute(
         {
@@ -96,11 +77,11 @@ def detect_block_runs(
         }
     )
     if not isinstance(result, dict):
-        return fallback(events_by_row)
+        return []
 
     rows = result.get("blocks")
     if not isinstance(rows, list):
-        return fallback(events_by_row)
+        return []
 
     out: List[Dict[str, Any]] = []
     for item in rows:

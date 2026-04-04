@@ -47,6 +47,7 @@ interface ProviderSessionReadPayload {
   recordsImported: number;
   summary: string;
   items: AppLiveReadPreviewItem[];
+  copyText?: string;
   evidence: string[];
   error?: string;
 }
@@ -70,6 +71,7 @@ function buildError(
     recordsImported: 0,
     blockedReason,
     items: [],
+    copyText: null,
     evidence,
   };
 }
@@ -311,11 +313,21 @@ function buildStationSessionScript(input: AppLiveReadInput) {
         subtitle: [normalize(row.date || row.businessDate || ""), String(row.settingStock ?? row.stockCount ?? row.stock ?? "")].filter(Boolean).join(" · "),
         statusLabel: normalize(row.openStatus || row.status || "LIVE") || "LIVE",
       }));
+      const copyText = [
+        "Station OTA 원본",
+        ...rows.map((row) => [
+          normalize(row.roomName || row.name || row.bizItemName || ""),
+          normalize(row.date || row.businessDate || row.day || ""),
+          String(row.settingStock ?? row.stockCount ?? row.stock ?? ""),
+          normalize(row.openStatus || row.status || ""),
+        ].filter(Boolean).join(" / "))
+      ].join("\\n");
       return {
         checkedAt: new Date().toISOString(),
         recordsImported: rows.length,
         summary: "Station 라이브 데이터를 읽었습니다.",
         items,
+        copyText,
         evidence: [
           "provider:admin-station",
           "branch:" + ctx.branch,
@@ -396,11 +408,20 @@ function buildNaverSessionScript(input: AppLiveReadInput) {
         subtitle: [row.date, String(row.bookingCount)].filter(Boolean).join(" · "),
         statusLabel: "LIVE",
       }));
+      const copyText = [
+        "Naver OTA 원본",
+        ...schedules.map((row) => [
+          row.roomName || "",
+          row.date || "",
+          String(row.bookingCount),
+        ].filter(Boolean).join(" / "))
+      ].join("\\n");
       return {
         checkedAt: new Date().toISOString(),
         recordsImported: schedules.length,
         summary: "네이버 OTA 라이브 데이터를 읽었습니다.",
         items: preview,
+        copyText,
         evidence: [
           "provider:naver-partner",
           "branch:" + ctx.branch,
@@ -443,6 +464,7 @@ export async function runPmsRead(input: AppLiveReadInput): Promise<AppLiveReadSn
       recordsImported: payload.recordsImported,
       blockedReason: null,
       items: payload.items,
+      copyText: payload.copyText ?? null,
       evidence: [...readiness.evidence, ...payload.evidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
     };
   } catch (error) {
@@ -499,6 +521,10 @@ export async function runOtaRead(input: AppLiveReadInput): Promise<AppLiveReadSn
   const recordsImported = successPayloads.reduce((sum, payload) => sum + payload.recordsImported, 0);
   const summary = successPayloads.map((payload) => payload.summary).join(" / ");
   const evidence = successPayloads.flatMap((payload) => payload.evidence);
+  const copyText = successPayloads
+    .map((payload) => payload.copyText?.trim() || "")
+    .filter(Boolean)
+    .join("\n\n");
   return {
     source: "ota",
     branch: input.branch,
@@ -508,6 +534,7 @@ export async function runOtaRead(input: AppLiveReadInput): Promise<AppLiveReadSn
     recordsImported,
     blockedReason: null,
     items,
+    copyText: copyText || null,
     evidence: [...naver.evidence, ...station.evidence, ...evidence, ...failureEvidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
   };
 }
@@ -536,6 +563,7 @@ export async function runSheetRead(input: AppLiveReadInput): Promise<AppLiveRead
       recordsImported: payload.recordsImported,
       blockedReason: null,
       items: scored.items,
+      copyText: null,
       evidence: [...scored.evidence, `window:${input.startDate}..${input.endDate}`, ...settingsEvidence],
     };
   } catch (error) {

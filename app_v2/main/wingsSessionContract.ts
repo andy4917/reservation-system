@@ -25,6 +25,14 @@ interface SerializedRequestContract {
   };
 }
 
+interface WingsExpenditureRows {
+  roomNo: string;
+  guestName: string;
+  nationality: string;
+  checkin: string;
+  checkout: string;
+}
+
 const PRESET_PAGE_IDS: Record<string, string> = {
   "wings-global-guest-list": "IR04_0100X_V03",
   "wings-reservation-list": "IR04_0200X_V03",
@@ -53,13 +61,17 @@ function buildReadonlyBody(input: WingsSessionContractInput) {
   body.set("filter[filters][1][field]", "PROPERTY_NO");
   body.set("filter[filters][1][value]", input.propertyNo);
   body.set("filter[filters][2][field]", "ARRV_DATE");
-  body.set("filter[filters][2][operator]", "gte");
-  body.set("filter[filters][2][value]", input.startDate);
-  body.set("filter[filters][3][field]", "ARRV_DATE");
-  body.set("filter[filters][3][operator]", "lte");
-  body.set("filter[filters][3][value]", input.endDate);
+  body.set("filter[filters][2][operator]", "lte");
+  body.set("filter[filters][2][value]", input.endDate);
+  body.set("filter[filters][3][field]", "DEPT_DATE");
+  body.set("filter[filters][3][operator]", "gte");
+  body.set("filter[filters][3][value]", input.startDate);
   body.set("ARRV_DATE_F", input.startDate);
   body.set("ARRV_DATE_T", input.endDate);
+  body.set("DEPT_DATE_F", input.startDate);
+  body.set("DEPT_DATE_T", input.endDate);
+  body.set("STAY_DATE_F", input.startDate);
+  body.set("STAY_DATE_T", input.endDate);
   return body.toString();
 }
 
@@ -128,6 +140,55 @@ export function buildWingsSessionReadScript(input: WingsSessionContractInput) {
         recordsImported: rows.length,
         summary: ctx.label + " PMS 라이브 데이터를 읽었습니다.",
         items,
+        evidence: [
+          "provider:wings-pms",
+          "branch:" + ctx.branch,
+          "runtimeHost:" + (location.host || "-"),
+          "sessionReadiness:browser-session",
+          "sourceLineage:" + url.pathname,
+          "pmsPropertyNo:" + ctx.propertyNo,
+          "pmsBsnsCode:" + ctx.bsnsCode,
+        ]
+      };
+    })()
+  `;
+}
+
+export function buildWingsExpenditureReadScript(input: WingsSessionContractInput) {
+  const contract = buildWingsReadonlyRequestContract(input);
+  const wingsOrigin = getAppProviderOption("wings-pms").sessionOrigin;
+  return `
+    (async () => {
+      const ctx = ${JSON.stringify(contract)};
+      const normalize = (value) => typeof value === "string" ? value.trim() : "";
+      const origin = location.origin || ${JSON.stringify(wingsOrigin)};
+      const url = new URL(ctx.request.urlPath, origin);
+      const response = await fetch(url.toString(), {
+        method: ctx.request.method,
+        credentials: "include",
+        headers: ctx.request.headers,
+        body: ctx.request.body
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error("PMS API (" + response.status + "): " + text.slice(0, 160));
+      }
+        const parsed = JSON.parse(text);
+        const rows = Array.isArray(parsed && parsed.rows)
+          ? parsed.rows
+          : Array.isArray(parsed && parsed.data && parsed.data.rows)
+            ? parsed.data.rows
+            : [];
+        return {
+          checkedAt: new Date().toISOString(),
+          recordsImported: rows.length,
+          rows: rows.map((row) => ({
+          roomNo: normalize(row.ROOM_NO || ""),
+          guestName: normalize(row.GUEST_NAME || row.INHS_GEST_NAME || ""),
+          nationality: normalize(row.NAT_NM || row.NAT_NAME || ""),
+          checkin: normalize(row.ARRV_DATE || ""),
+          checkout: normalize(row.DEPT_DATE || ""),
+        })).filter((row) => row.roomNo && row.checkin && row.checkout),
         evidence: [
           "provider:wings-pms",
           "branch:" + ctx.branch,

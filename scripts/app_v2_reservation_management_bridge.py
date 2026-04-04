@@ -33,8 +33,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--year", type=int, default=dt.date.today().year)
     parser.add_argument("--token-file", default=".google_oauth_token.json")
     parser.add_argument("--access-token", default="")
-    parser.add_argument("--fixture-mode", action="store_true")
-    parser.add_argument("--source-fixture", default="")
     parser.add_argument("--approve-plan-token", default="")
     parser.add_argument("--execute-apply", action="store_true")
     return parser.parse_args()
@@ -87,80 +85,6 @@ def load_live_blocks(args: argparse.Namespace) -> List[ReservationBlock]:
     return dedupe_blocks(all_blocks)
 
 
-def build_fixture_block(
-    *,
-    reservation_no: str,
-    room_no: str,
-    checkin: dt.date,
-    checkout: dt.date,
-    branch: str,
-    channel: str,
-    note: str = "",
-) -> ReservationBlock:
-    nights = max((checkout - checkin).days, 1)
-    return ReservationBlock(
-        row=0,
-        room_type="Urban Suite",
-        room_no=room_no,
-        start_col=0,
-        end_col=max(nights - 1, 0),
-        checkin=checkin,
-        checkout=checkout,
-        nights=nights,
-        price=120000,
-        note=note,
-        reservation_no=reservation_no,
-        reservation_key=reservation_no,
-        branch=branch,
-        channel=channel,
-        platform=channel,
-        source_columns=list(range(nights)),
-    )
-
-
-def build_fixture_blocks(branch: str, start_date: dt.date) -> List[ReservationBlock]:
-    if branch == "COEX":
-        return [
-            build_fixture_block(
-                reservation_no="COEX-A",
-                room_no="401",
-                checkin=start_date,
-                checkout=start_date + dt.timedelta(days=2),
-                branch=branch,
-                channel="NAVER",
-                note="예약자: Alex Kim",
-            ),
-            build_fixture_block(
-                reservation_no="COEX-B",
-                room_no="A701",
-                checkin=start_date + dt.timedelta(days=1),
-                checkout=start_date + dt.timedelta(days=2),
-                branch=branch,
-                channel="BOOKING",
-                note="예약자: Sara Park",
-            ),
-            build_fixture_block(
-                reservation_no="COEX-C",
-                room_no="508",
-                checkin=start_date + dt.timedelta(days=2),
-                checkout=start_date + dt.timedelta(days=4),
-                branch=branch,
-                channel="STATION",
-                note="예약자: Liam Chen",
-            ),
-        ]
-    return [
-        build_fixture_block(
-            reservation_no="GN-A",
-            room_no="1001",
-            checkin=start_date,
-            checkout=start_date + dt.timedelta(days=2),
-            branch=branch,
-            channel="NAVER",
-        )
-    ]
-
-
 def dedupe_blocks(blocks: List[ReservationBlock]) -> List[ReservationBlock]:
     deduped: Dict[tuple[str, str, str, str], ReservationBlock] = {}
     for block in blocks:
@@ -172,39 +96,6 @@ def dedupe_blocks(blocks: List[ReservationBlock]) -> List[ReservationBlock]:
         )
         deduped[key] = block
     return list(deduped.values())
-
-
-def load_source_records(path_text: str) -> List[SourceReservation]:
-    path = Path(str(path_text or "").strip())
-    if not path.exists():
-        raise AuditError(f"Source fixture not found: {path}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    rows = payload if isinstance(payload, list) else []
-    records: List[SourceReservation] = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        records.append(
-            SourceReservation(
-                source_system=str(row.get("source_system") or "PMS"),
-                reservation_no=str(row.get("reservation_no") or "").strip(),
-                channel=str(row.get("channel") or "").strip(),
-                checkin=parse_date(str(row.get("checkin"))),
-                checkout=parse_date(str(row.get("checkout"))),
-                nights=int(row.get("nights") or 0),
-                room_no=str(row.get("room_no") or "").strip(),
-                price=int(row["price"]) if row.get("price") is not None else None,
-                account=str(row.get("account") or "").strip(),
-                status=str(row.get("status") or "").strip(),
-                status_bucket=str(row.get("status_bucket") or "").strip(),
-                audit_anomaly=bool(row.get("audit_anomaly")),
-                branch=str(row.get("branch") or "").strip(),
-                reservation_ref=str(row.get("reservation_ref") or "").strip(),
-                nationality_nights=str(row.get("nationality_nights") or "").strip(),
-                raw=row,
-            )
-        )
-    return records
 
 
 def summarize_issue_type(issue_type: str) -> str:
@@ -285,78 +176,107 @@ def compute_plan_token(rows: List[Dict[str, str]]) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest() if rows else ""
 
 
-def main() -> int:
-    args = parse_args()
-    start_date = parse_date(args.start_date)
-    blocks = build_fixture_blocks(args.branch, start_date) if args.fixture_mode else load_live_blocks(args)
-    source_records = load_source_records(args.source_fixture) if str(args.source_fixture or "").strip() else []
+def make_source_reservation(row: Dict[str, Any]) -> SourceReservation:
+    return SourceReservation(
+        source_system=str(row.get("source_system") or "PMS"),
+        reservation_no=str(row.get("reservation_no") or "").strip(),
+        channel=str(row.get("channel") or "").strip(),
+        checkin=parse_date(str(row.get("checkin"))),
+        checkout=parse_date(str(row.get("checkout"))),
+        nights=int(row.get("nights") or 0),
+        room_no=str(row.get("room_no") or "").strip(),
+        price=int(row["price"]) if row.get("price") is not None else None,
+        account=str(row.get("account") or "").strip(),
+        status=str(row.get("status") or "").strip(),
+        status_bucket=str(row.get("status_bucket") or "").strip(),
+        audit_anomaly=bool(row.get("audit_anomaly")),
+        branch=str(row.get("branch") or "").strip(),
+        reservation_ref=str(row.get("reservation_ref") or "").strip(),
+        nationality_nights=str(row.get("nationality_nights") or "").strip(),
+        raw=row,
+    )
 
+
+def build_management_payload(
+    *,
+    action: str,
+    branch: str,
+    blocks: List[ReservationBlock],
+    source_records: List[SourceReservation],
+    approve_plan_token: str = "",
+    execute_apply: bool = False,
+    checked_at: str | None = None,
+) -> Dict[str, Any]:
+    checked = checked_at or dt.datetime.now().isoformat()
     if not source_records:
-        print(
-            json.dumps(
+        return {
+            "mode": action,
+            "branch": branch,
+            "checkedAt": checked,
+            "engineStatus": "pending-source",
+            "summary": f"{action} 엔진은 준비되었지만 source bundle이 아직 없습니다.",
+            "issueCount": 0,
+            "rows": [
                 {
-                    "mode": args.action,
-                    "branch": args.branch,
-                    "checkedAt": dt.datetime.now().isoformat(),
-                    "engineStatus": "pending-source",
-                    "summary": f"{args.action} 엔진은 준비되었지만 source bundle이 아직 없습니다.",
-                    "issueCount": 0,
-                    "rows": [
-                        {
-                            "id": f"{args.action}-pending",
-                            "primary": "source bundle 대기",
-                            "secondary": "PMS/OTA raw source records가 필요합니다.",
-                            "statusLabel": "PENDING",
-                            "detail": "source-bundle-missing",
-                        }
-                    ],
-                    "evidence": [f"sheetBlocks:{len(blocks)}", "sourceRecords:0"],
-                    "planToken": "",
-                    "requiresApproval": False,
-                    "applyAllowed": False,
-                },
-                ensure_ascii=False,
-            )
-        )
-        return 0
+                    "id": f"{action}-pending",
+                    "primary": "source bundle 대기",
+                    "secondary": "PMS/OTA raw source records가 필요합니다.",
+                    "statusLabel": "PENDING",
+                    "detail": "source-bundle-missing",
+                }
+            ],
+            "evidence": [f"sheetBlocks:{len(blocks)}", "sourceRecords:0"],
+            "planToken": "",
+            "requiresApproval": False,
+            "applyAllowed": False,
+        }
 
     issues = cross_validate_sheet_vs_sources(blocks, source_records)
-    if args.action == "compare":
+    if action == "compare":
         rows = compare_rows(issues)
         summary = f"비교 엔진이 이슈 {len(issues)}건을 집계했습니다."
-    elif args.action == "reconcile":
+    elif action == "reconcile":
         rows = reconcile_rows(issues)
         summary = f"대조 엔진이 이슈 {len(issues)}건을 정리했습니다."
     else:
         rows = build_patch_rows(issues)
         summary = f"반영 dry-run 계획 {len(rows)}건을 생성했습니다."
 
-    plan_token = compute_plan_token(rows) if args.action == "apply" else ""
-    requires_approval = bool(args.action == "apply" and rows)
-    apply_allowed = bool(args.action == "apply" and args.execute_apply and requires_approval and args.approve_plan_token == plan_token)
+    plan_token = compute_plan_token(rows) if action == "apply" else ""
+    requires_approval = bool(action == "apply" and rows)
+    apply_allowed = bool(action == "apply" and execute_apply and requires_approval and approve_plan_token == plan_token)
 
-    print(
-        json.dumps(
-            {
-                "mode": args.action,
-                "branch": args.branch,
-                "checkedAt": dt.datetime.now().isoformat(),
-                "engineStatus": "planned",
-                "summary": summary,
-                "issueCount": len(issues),
-                "rows": rows,
-                "evidence": [
-                    f"sheetBlocks:{len(blocks)}",
-                    f"sourceRecords:{len(source_records)}",
-                    f"issues:{len(issues)}",
-                ],
-                "planToken": plan_token,
-                "requiresApproval": requires_approval,
-                "applyAllowed": apply_allowed,
-            },
-            ensure_ascii=False,
-        )
+    return {
+        "mode": action,
+        "branch": branch,
+        "checkedAt": checked,
+        "engineStatus": "planned",
+        "summary": summary,
+        "issueCount": len(issues),
+        "rows": rows,
+        "evidence": [
+            f"sheetBlocks:{len(blocks)}",
+            f"sourceRecords:{len(source_records)}",
+            f"issues:{len(issues)}",
+        ],
+        "planToken": plan_token,
+        "requiresApproval": requires_approval,
+        "applyAllowed": apply_allowed,
+    }
+
+
+def main() -> int:
+    args = parse_args()
+    blocks = load_live_blocks(args)
+    payload = build_management_payload(
+        action=args.action,
+        branch=args.branch,
+        blocks=blocks,
+        source_records=[],
+        approve_plan_token=str(args.approve_plan_token or ""),
+        execute_apply=bool(args.execute_apply),
     )
+    print(json.dumps(payload, ensure_ascii=False))
     return 0
 
 

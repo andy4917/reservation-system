@@ -11,6 +11,14 @@ from src.report.ops_sheet_export import build_ops_sheet_export_bundle
 
 
 def main() -> None:
+    export_source = (ROOT / "src" / "report" / "ops_sheet_export.py").read_text(encoding="utf-8")
+    ops_policy_source = (ROOT / "src" / "domain" / "ops_sheet_policy.py").read_text(encoding="utf-8")
+    assert "ARRIVAL_TEMPLATE_SPREADSHEET_ID =" not in export_source
+    assert "ARRIVAL_TEMPLATE_SHEET_NAME =" not in export_source
+    assert "ARRIVAL_TEMPLATE_ROOM_LAYOUT =" not in export_source
+    assert "ARRIVAL_TEMPLATE_SPREADSHEET_ID =" in ops_policy_source
+    assert "ARRIVAL_TEMPLATE_ROOM_LAYOUT =" in ops_policy_source
+
     orderlist_rows = [
         {
             "date": "2026-03-05",
@@ -82,9 +90,9 @@ def main() -> None:
         },
     ]
 
-    bundle = build_ops_sheet_export_bundle(orderlist_rows, arrival_rows, spreadsheet_id="dummy")
+    bundle = build_ops_sheet_export_bundle(orderlist_rows, arrival_rows, spreadsheet_id="test-sheet")
 
-    assert bundle["tabs"] == ["코엑스", "코엑스2", "강남"]
+    assert bundle["tabs"] == ["코엑스", "코엑스2", "선릉1", "강남"]
 
     order_packets = {item["tab_name"]: item for item in bundle["orderlist_packets"]}
     assert order_packets["코엑스"]["rows"][0]["객실번호"] == "401"
@@ -109,7 +117,7 @@ def main() -> None:
     assert by_room["A701"]["departure_text"] == "전체청소"
     assert by_room["A701"]["arrival_text"] == "전체청소"
     assert any(item["range"] == "B2" and item["value"] == "3/5" for item in arrival_packet["cell_updates"])
-    assert arrival_packet["legacy_rows"][0]["객실번호"] == "401"
+    assert arrival_packet["export_rows"][0]["객실번호"] == "401"
 
     print("regression_ops_sheet_export_py: OK")
 

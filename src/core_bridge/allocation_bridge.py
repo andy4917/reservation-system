@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List
+from typing import Any, Dict, List
 
 from src.core_bridge.runtime import load_cpp_module
 
@@ -9,12 +9,8 @@ def allocate_room_units(
     room_ids: List[str],
     current_stock_by_room: Dict[str, int],
     target_units: int,
-    *,
-    fallback: Callable[[List[str], Dict[str, int], int], Dict[str, int]],
 ) -> Dict[str, int]:
     core = load_cpp_module()
-    if core is None:
-        return fallback(room_ids, current_stock_by_room, target_units)
     result = core.allocation_compute(
         {
             "mode": "binary",
@@ -30,12 +26,8 @@ def allocate_room_units_flexible(
     room_ids: List[str],
     current_stock_by_room: Dict[str, int],
     target_units: int,
-    *,
-    fallback: Callable[[List[str], Dict[str, int], int], Dict[str, int]],
 ) -> Dict[str, int]:
     core = load_cpp_module()
-    if core is None:
-        return fallback(room_ids, current_stock_by_room, target_units)
     result = core.allocation_compute(
         {
             "mode": "flexible",

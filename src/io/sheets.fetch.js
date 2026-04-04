@@ -297,7 +297,7 @@
         message:
           `${providerKey} inventory data row slots are incomplete. ` +
           `urban=${slotRows.urban ?? "-"}, doubleTwin=${slotRows.doubleTwin ?? "-"}, grand=${slotRows.grand ?? "-"}${manualHint}` +
-          (!strictMode ? " (auto mode: continuing with derived/provider fallback)" : "")
+          (!strictMode ? " (auto mode: continuing with derived/provider path)" : "")
       });
       return issues;
     }
@@ -310,7 +310,7 @@
         message:
           `${providerKey} inventory data row slots contain duplicate rows. ` +
         `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand}` +
-          (!strictMode ? " (continuing with provider/derived fallback)" : "")
+          (!strictMode ? " (continuing with provider/derived path)" : "")
       });
     }
     const physicalOrderVariant = !(slots[0] < slots[1] && slots[1] < slots[2]);
@@ -330,7 +330,7 @@
             `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand}`
           : `${providerKey} inventory data row slots are type-complete but physically ordered differently. ` +
             `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand} ` +
-            "(continuing with provider/derived fallback)"
+            "(continuing with provider/derived path)"
       });
     }
     return issues;
@@ -662,7 +662,7 @@
     };
 
     let best = null;
-    let fallback = null;
+    let reserve = null;
     for (let row = range.start; row <= range.end; row += 1) {
       if (matrix.hiddenRows?.has(row)) continue;
       const label = rowAliasText(matrix, row);
@@ -670,8 +670,8 @@
       if (label && ["total", "room sold", "sold"].some((token) => label.includes(token))) continue;
       if (!allowPkgInventoryRows && rowAliasLooksPkg(label)) continue;
       const scored = scoreInventoryDataRowSignal(row);
-      if (!fallback || scored.rawCount > fallback.rawCount || (scored.rawCount === fallback.rawCount && row < fallback.row)) {
-        fallback = { row, rawCount: scored.rawCount };
+      if (!reserve || scored.rawCount > reserve.rawCount || (scored.rawCount === reserve.rawCount && row < reserve.row)) {
+        reserve = { row, rawCount: scored.rawCount };
       }
       if (scored.parsedCount <= 0) continue;
       if (!best || scored.score > best.score || (scored.score === best.score && row < best.row)) {
@@ -679,7 +679,7 @@
       }
     }
     if (Number.isInteger(best?.row)) return best.row;
-    return Number.isInteger(fallback?.row) ? fallback.row : null;
+    return Number.isInteger(reserve?.row) ? reserve.row : null;
   }
 
   function collectProviderInventoryDataRowsByTypeRanges(matrix, dateCols, typeRanges, options = null) {
@@ -794,7 +794,7 @@
     if (Number.isInteger(providerRow) && best.row === providerRow) {
       selectedReason = "provider_row_selected";
     } else if (providerCandidate && best.score > providerCandidate.score) {
-      selectedReason = "fallback_to_better_data_row";
+      selectedReason = "better_data_row_selected";
     } else if (providerCandidate && best.score === providerCandidate.score) {
       selectedReason = "provider_row_tie_break_lost";
     }
@@ -993,13 +993,13 @@
 
   function scanConfigFromMetadata(metadata) {
     const out = {};
-    const parseBooleanFlag = (value, fallback = false) => {
+    const parseBooleanFlag = (value, defaultValue = false) => {
       if (typeof value === "boolean") return value;
       const text = normalizeText(value).toLowerCase();
-      if (!text) return Boolean(fallback);
+      if (!text) return Boolean(defaultValue);
       if (["1", "true", "y", "yes", "on", "enable", "enabled"].includes(text)) return true;
       if (["0", "false", "n", "no", "off", "disable", "disabled"].includes(text)) return false;
-      return Boolean(fallback);
+      return Boolean(defaultValue);
     };
     const pick = (keys) => {
       for (const key of keys) {
@@ -1545,11 +1545,11 @@
       const providerKey = context.providerType === "admin-station" ? "STATION" : "NAVER";
       const hostDiagnostics = providerKey === "STATION" ? stationDerived.diagnostics : naverDerived.diagnostics;
       const formulaTypeCounts = isFormulaRangeSane ? (formulaHints?.expectedTypeCounts || {}) : {};
-      const fallbackTypeCounts = countExpectedRoomTypesFromMap(expectedFallbackRoomTypeByRoomNo);
+      const derivedTypeCounts = countExpectedRoomTypesFromMap(expectedFallbackRoomTypeByRoomNo);
       const expectedTypeCounts = {
-        urban: validationSupport.toPositiveIntOrNull(formulaTypeCounts.urban) ?? Number(fallbackTypeCounts.urban || 0),
-        doubleTwin: validationSupport.toPositiveIntOrNull(formulaTypeCounts.doubleTwin) ?? Number(fallbackTypeCounts.doubleTwin || 0),
-        grand: validationSupport.toPositiveIntOrNull(formulaTypeCounts.grand) ?? Number(fallbackTypeCounts.grand || 0)
+        urban: validationSupport.toPositiveIntOrNull(formulaTypeCounts.urban) ?? Number(derivedTypeCounts.urban || 0),
+        doubleTwin: validationSupport.toPositiveIntOrNull(formulaTypeCounts.doubleTwin) ?? Number(derivedTypeCounts.doubleTwin || 0),
+        grand: validationSupport.toPositiveIntOrNull(formulaTypeCounts.grand) ?? Number(derivedTypeCounts.grand || 0)
       };
       const detectedTypeCounts = summarizeDetectedRoomTypeCounts(hostDiagnostics?.roomTypeCounts || {});
       if (

@@ -156,7 +156,6 @@ class SheetMatrix:
             start_row,
             start_col,
             row_data,
-            fallback=_build_sheet_cells_py,
         )
         self.max_row = int(parsed.get("max_row", start_row))
         self.max_col = int(parsed.get("max_col", start_col))
@@ -778,7 +777,7 @@ def extract_numeric_reservation_no(note: str, note_info: NoteInfo) -> Optional[s
     return None
 
 
-def build_note_fallback_key(note_info: NoteInfo) -> Optional[str]:
+def build_note_identity_key(note_info: NoteInfo) -> Optional[str]:
     name = normalize_text(note_info.guest_name).lower()
     period = ""
     if note_info.stay_checkin and note_info.stay_checkout:
@@ -794,13 +793,13 @@ def parse_reservation_identity(note: str) -> Dict[str, Any]:
     text = note or ""
     note_info = parse_note_info(text)
     reservation_no = extract_numeric_reservation_no(text, note_info)
-    name_period_key = build_note_fallback_key(note_info)
+    name_period_key = build_note_identity_key(note_info)
     reservation_key = reservation_no or name_period_key
-    used_raw_note_fallback = False
+    used_raw_note_key = False
     if not reservation_key and normalize_text(text):
         digest = hashlib.sha1(normalize_text(text).encode("utf-8")).hexdigest()[:12]
         reservation_key = f"note:{digest}"
-        used_raw_note_fallback = True
+        used_raw_note_key = True
     note_parse_fail = bool(normalize_text(text)) and (
         not bool(reservation_no) and not bool(name_period_key)
     )
@@ -808,7 +807,7 @@ def parse_reservation_identity(note: str) -> Dict[str, Any]:
         "note_info": note_info,
         "reservation_no": reservation_no,
         "reservation_key": reservation_key,
-        "used_raw_note_fallback": used_raw_note_fallback,
+        "used_raw_note_key": used_raw_note_key,
         "note_parse_fail": note_parse_fail,
     }
 
@@ -933,7 +932,6 @@ def find_date_columns(
         date_header_hint_row=DATE_HEADER_HINT_ROW,
         date_header_hint_col=DATE_HEADER_HINT_COL,
         date_weekday_hint_row=DATE_WEEKDAY_HINT_ROW,
-        fallback=lambda rows, sr, mr, mc, y: _find_date_columns_py(matrix, sr, mr, mc, y),
     )
 
     if row_idx < 0 or len(cols_raw) < 7:
@@ -1315,7 +1313,7 @@ def extract_reservation_blocks(
     if uses_room_section_branch:
         branch_assignment_mode = "room_section_anchor"
     else:
-        branch_assignment_mode = "dynamic_markers" if branch_markers else "split_row_fallback"
+        branch_assignment_mode = "dynamic_markers" if branch_markers else "split_row"
     branch_room_totals = Counter(
         normalize_text(room.branch) or resolve_row_branch(row)
         for row, room in room_rows.items()
@@ -1456,17 +1454,17 @@ def extract_reservation_blocks(
                 formatted_value=cell.formatted_value,
             )
             if color_error:
-                fallback_tag = ""
+                note_tag = ""
                 if status == CELL_STATUS_OCCUPIED and channel == "UNKNOWN":
-                    fallback_tag = " (fallback-occupied)"
+                    note_tag = " (occupied-derived)"
                 elif status == CELL_STATUS_BLOCKED:
-                    fallback_tag = " (fallback-blocked)"
+                    note_tag = " (blocked-derived)"
                 add_error(
                     "UNKNOWN_COLOR",
                     row,
                     col,
                     date_val,
-                    f"color={normalize_text(cell.background_hex)}{fallback_tag}",
+                    f"color={normalize_text(cell.background_hex)}{note_tag}",
                 )
                 increment_day_count(date_val, branch, "unknown")
                 add_long_tail_candidate(
@@ -1507,13 +1505,13 @@ def extract_reservation_blocks(
                         date_val,
                         "failed to build reservation key from note",
                     )
-                if note_data.get("used_raw_note_fallback"):
+                if note_data.get("used_raw_note_key"):
                     add_error(
                         "NOTEKEY_FALLBACK_RAW_NOTE",
                         row,
                         col,
                         date_val,
-                        "used hashed raw note fallback key",
+                        "used hashed raw note key",
                     )
                 if not reservation_key:
                     add_error(
@@ -1572,7 +1570,6 @@ def extract_reservation_blocks(
 
     detected_runs = bridge_detect_block_runs(
         events_by_row,
-        fallback=_detect_block_runs_py,
     )
     for run in detected_runs:
         if not isinstance(run, dict):

@@ -54,6 +54,7 @@ export function createIdleRead(source: AppReadSource, branch: AppBranch): AppLiv
     recordsImported: 0,
     blockedReason: null,
     items: [],
+    copyText: null,
     evidence: [],
   };
 }

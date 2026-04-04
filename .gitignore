@@ -20,3 +20,4 @@ models/
 *.pyd
 *.dll
 *.dylib
+*.egg-info/

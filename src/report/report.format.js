@@ -216,8 +216,8 @@
   }
 
 
-  function oneBasedColToA1(colOneBased, fallbackOneBased = 1) {
-    const n = Number.isInteger(colOneBased) && colOneBased > 0 ? colOneBased : fallbackOneBased;
+  function oneBasedColToA1(colOneBased, defaultOneBased = 1) {
+    const n = Number.isInteger(colOneBased) && colOneBased > 0 ? colOneBased : defaultOneBased;
     return colZeroToA1(Math.max(0, n - 1));
   }
 
@@ -225,28 +225,28 @@
   function buildScanConfigTemplateTsv(config) {
     const cfg = sanitizeSyncConfig(config || {});
     const scan = sanitizeScanConfig(cfg.scan || {});
-    const fallbackDateRow = scan.dateRow || (DATE_HEADER_HINT.dateRow + 1);
-    const fallbackWeekdayRow = scan.weekdayRow || (fallbackDateRow + 1);
-    const fallbackRoomStartRow = scan.roomStartRow || (fallbackDateRow + 2);
-    const fallbackInvStartRow = scan.inventorySearchStartRow || fallbackRoomStartRow;
+    const derivedDateRow = scan.dateRow || (DATE_HEADER_HINT.dateRow + 1);
+    const derivedWeekdayRow = scan.weekdayRow || (derivedDateRow + 1);
+    const derivedRoomStartRow = scan.roomStartRow || (derivedDateRow + 2);
+    const derivedInvStartRow = scan.inventorySearchStartRow || derivedRoomStartRow;
     const dateStartCol = oneBasedColToA1(scan.dateStartCol, 3);
     const dateEndCol = oneBasedColToA1(scan.dateEndCol, 53);
 
     const rows = [
       ["key", "value", "note"],
       ["mode", scan.mode || "manual", "manual or auto"],
-      ["date_row", fallbackDateRow, "date header row"],
-      ["weekday_row", fallbackWeekdayRow, "weekday header row"],
+      ["date_row", derivedDateRow, "date header row"],
+      ["weekday_row", derivedWeekdayRow, "weekday header row"],
       ["date_start_col", dateStartCol, "date start column"],
       ["date_end_col", dateEndCol, "date end column"],
-      ["room_start_row", fallbackRoomStartRow, "room list start row"],
+      ["room_start_row", derivedRoomStartRow, "room list start row"],
       ["urban_start_row", scan.urbanStartRow || "", "room block Urban start"],
       ["urban_end_row", scan.urbanEndRow || "", "room block Urban end"],
       ["double_twin_start_row", scan.doubleTwinStartRow || "", "room block Double Twin start"],
       ["double_twin_end_row", scan.doubleTwinEndRow || "", "room block Double Twin end"],
       ["grand_start_row", scan.grandStartRow || "", "room block Grand start"],
       ["grand_end_row", scan.grandEndRow || "", "room block Grand end"],
-      ["inventory_search_start_row", fallbackInvStartRow, "inventory alias search start"],
+      ["inventory_search_start_row", derivedInvStartRow, "inventory alias search start"],
       ["station_inventory_row", scan.stationInventoryRow || "", "station provider row (optional)"],
       ["naver_inventory_row", scan.naverInventoryRow || "", "naver provider row (optional)"],
       ["station_urban_start_row", scan.stationUrbanStartRow || "", "station Urban start (optional)"],

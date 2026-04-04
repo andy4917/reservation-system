@@ -49,8 +49,8 @@
     return isInactiveReservationStatus(status) ? "CANCELED" : "ACTIVE";
   }
 
-  function normalizeReservationChannel(value, sourceSystem = "", fallback = "") {
-    const low = normalizeText(value || fallback || "").toLowerCase();
+  function normalizeReservationChannel(value, sourceSystem = "", defaultValue = "") {
+    const low = normalizeText(value || defaultValue || "").toLowerCase();
     if (low.includes("station") || low.includes("uh suite")) return "STATION";
     if (low.includes("naver")) return "NAVER";
     if (low.includes("trip")) return "TRIP";
@@ -62,7 +62,7 @@
     if (low.includes("coupang")) return "COUPANG_TRAVEL";
     const src = normalizeText(sourceSystem || "").toUpperCase();
     if (src === "NAVER" || src === "STATION") return src;
-    return normalizeText(value || fallback || "").toUpperCase() || "UNKNOWN";
+    return normalizeText(value || defaultValue || "").toUpperCase() || "UNKNOWN";
   }
 
   Object.assign(ns, {

@@ -1,6 +1,6 @@
 :root {
   color-scheme: light;
-  font-family: "Pretendard", "SUIT", "Noto Sans KR", sans-serif;
+  font-family: "SUIT", "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
   --bg: #eef3f7;
   --bg-strong: #e0e8ef;
   --surface: rgba(255, 255, 255, 0.92);
@@ -154,6 +154,59 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+.ops-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.apply-header-main {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.apply-header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.inventory-mode-icon-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.inventory-mode-icon-button,
+.copy-icon-button {
+  display: inline-grid;
+  place-items: center;
+  align-items: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+
+.inventory-mode-icon-button.active {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+  color: #f6fbff;
+}
+
+.inventory-mode-icon-button svg,
+.copy-icon-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .auth-chip-row {
@@ -596,92 +649,6 @@ select {
 
 .step-chip.locked {
   opacity: 0.48;
-}
-
-.ia-group-stack {
-  display: grid;
-  gap: 0.85rem;
-  margin-top: 1rem;
-}
-
-.ia-group-card {
-  border-radius: 20px;
-  border: 1px solid rgba(19, 32, 49, 0.08);
-  background: rgba(245, 248, 251, 0.9);
-  padding: 0.95rem;
-}
-
-.ia-group-card.active {
-  background: #ffffff;
-  box-shadow: 0 14px 28px rgba(17, 28, 40, 0.08);
-}
-
-.ia-group-card-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: start;
-}
-
-.ia-group-card-head strong,
-.ia-group-card-head span,
-.ia-group-card-head em {
-  display: block;
-}
-
-.ia-group-card-head strong {
-  margin-top: 0.15rem;
-}
-
-.ia-group-card-head span {
-  margin-top: 0.35rem;
-  color: var(--muted);
-  font-size: 0.84rem;
-  line-height: 1.5;
-}
-
-.ia-group-card-head em {
-  color: var(--accent-strong);
-  font-style: normal;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.ia-action-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
-  margin-top: 0.85rem;
-}
-
-.ia-action-button {
-  width: 100%;
-  text-align: left;
-  border-radius: 18px;
-  padding: 0.9rem 0.95rem;
-  background: #eef3f6;
-  color: var(--text);
-}
-
-.ia-action-button strong,
-.ia-action-button span {
-  display: block;
-}
-
-.ia-action-button span {
-  margin-top: 0.35rem;
-  color: var(--muted);
-  font-size: 0.8rem;
-  line-height: 1.45;
-}
-
-.ia-action-button.active {
-  background: linear-gradient(180deg, #7390a5 0%, #5f788a 100%);
-  color: #f6fbff;
-}
-
-.ia-action-button.active span {
-  color: rgba(246, 251, 255, 0.82);
 }
 
 .toggle-stack {

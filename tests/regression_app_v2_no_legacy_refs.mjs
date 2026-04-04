@@ -20,7 +20,8 @@ function main() {
     "docs/runtime/STAGE_V1_CHECKLIST.md",
     "tests/regression_app_v2_shell_contract.mjs",
     "tests/regression_app_v2_operating_boundary.mjs",
-    "scripts/app_v2_runtime_verify.mjs"
+    "scripts/app_v2_runtime_verify.mjs",
+    "scripts/validate_truth_dataset.py"
   ];
 
   activeFiles.forEach((relativePath) => {
@@ -29,6 +30,8 @@ function main() {
     assert.doesNotMatch(content, /dist-app\/vite\.config(?:\.js)?\b/);
     assert.doesNotMatch(content, /scripts\/live_read_verify\.mjs/);
     assert.doesNotMatch(content, /scripts\/live_sheet_verify\.mjs/);
+    assert.doesNotMatch(content, /sample_live_capture_bundle\.json/);
+    assert.doesNotMatch(content, /sample_capture_spec\.json/);
   });
 
   const removedLegacyFiles = [
@@ -36,6 +39,13 @@ function main() {
     "scripts/live_read_verify.mjs",
     "scripts/live_sheet_verify.mjs",
     "scripts/dryrun_wings_live_flow.mjs",
+    "docs/archive",
+    "tests/regression_ota_dom_fallback_poc.mjs",
+    "tests/regression_google_refresh_secret_fallback.mjs",
+    "tests/regression_sheet_room_row_fallbacks.mjs",
+    "truth_dataset/fixtures/sample_capture_spec.json",
+    "truth_dataset/fixtures/sample_live_capture_bundle.json",
+    "truth_dataset/fixtures/sample_sources",
     "tests/regression_ui_surface_split.mjs",
     "tests/regression_ui_settings_surface_runtime_scope.mjs",
     "dist-app/contracts",
@@ -43,7 +53,6 @@ function main() {
     "dist-app/main",
     "dist-app/renderer",
     "dist-app/services",
-    "dist-app/src",
     "dist-app/vite.config",
     "dist-app/vite.config.js"
   ];
