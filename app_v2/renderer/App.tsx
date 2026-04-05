@@ -399,6 +399,37 @@ interface InventoryProviderDraftState {
   writeRequestedAt: string | null;
 }
 
+function buildInitialInventoryWorkbenchState(): AppInventoryWorkbenchState {
+  return {
+    view: "inventory-management",
+    rowLimit: 21,
+    boardMode: "sheet",
+    editMode: false,
+    otaMode: "naver",
+    coexWing: "A",
+    hoveredDiffId: null,
+    motionKey: 0,
+  };
+}
+
+function buildInitialInventorySyncState(): InventoryProviderDraftState {
+  return {
+    syncedAt: null,
+    copiedAt: null,
+    writeRequestedAt: null,
+  };
+}
+
+function buildInitialErrorWorkbenchState(): AppErrorWorkbenchState {
+  return {
+    panelTab: null,
+    selectedIssueId: null,
+    resolvedIssueIds: [],
+    quickScanPassedIds: [],
+    decisionMap: {},
+  };
+}
+
 function matchesReservationActionRow(item: AppLiveReadPreviewItem, row: AppReservationActionRow) {
   const haystack = [row.primary, row.secondary, row.detail, row.statusLabel].join(" ").toLowerCase();
   return [item.roomNo, item.roomType, item.guestName, item.reservationNo].some((value) => Boolean(value && haystack.includes(String(value).toLowerCase())));
@@ -528,32 +559,15 @@ export default function App() {
   const [opsBoardDate, setOpsBoardDate] = useState("");
   const [opsApplySummary, setOpsApplySummary] = useState("");
   const [wingsLoginSummary, setWingsLoginSummary] = useState("WINGS 공용 계정을 아직 가져오지 않았습니다.");
-  const [inventoryWorkbench, setInventoryWorkbench] = useState<AppInventoryWorkbenchState>({
-    view: "inventory-management",
-    rowLimit: 21,
-    boardMode: "sheet",
-    editMode: false,
-    otaMode: "naver",
-    coexWing: "A",
-    hoveredDiffId: null,
-    motionKey: 0,
-  });
-  const [inventoryProviderDrafts, setInventoryProviderDrafts] = useState<Record<AppOtaMode, InventoryProviderDraftState>>({
-    naver: { syncedAt: null, copiedAt: null, writeRequestedAt: null },
-    station: { syncedAt: null, copiedAt: null, writeRequestedAt: null },
-  });
-  const [errorWorkbench, setErrorWorkbench] = useState<AppErrorWorkbenchState>({
-    panelTab: null,
-    selectedIssueId: null,
-    resolvedIssueIds: [],
-    quickScanPassedIds: [],
-    decisionMap: {},
-  });
+  const [inventoryWorkbench, setInventoryWorkbench] = useState<AppInventoryWorkbenchState>(buildInitialInventoryWorkbenchState);
+  const [inventorySyncState, setInventorySyncState] = useState<InventoryProviderDraftState>(buildInitialInventorySyncState);
+  const [errorWorkbench, setErrorWorkbench] = useState<AppErrorWorkbenchState>(buildInitialErrorWorkbenchState);
   const previousModuleRef = useRef<AppShellModule>("reservation-management");
   const previousActionRef = useRef<AppReservationAction>("validate");
   const autoOpenedProvidersRef = useRef<Set<AppProvider>>(new Set());
   const autoWingsLoginAttemptedRef = useRef(false);
   const errorPanelRef = useRef<HTMLDivElement | null>(null);
+  const lastWindowScopeRef = useRef(`${windowStart}:${windowEnd}`);
 
   const api = window.desktopApp;
   const activeBranchSheetNames = useMemo(() => (sheetName ? [sheetName] : []), [sheetName]);
@@ -639,29 +653,23 @@ export default function App() {
     setActiveSource("sheet");
     setOpsApplySummary("");
     setActiveManagementView("inventory-management");
-    setInventoryWorkbench({
-      view: "inventory-management",
-      rowLimit: 21,
-      boardMode: "sheet",
-      editMode: false,
-      otaMode: "naver",
-      coexWing: "A",
-      hoveredDiffId: null,
-      motionKey: 0,
-    });
-    setInventoryProviderDrafts({
-      naver: { syncedAt: null, copiedAt: null, writeRequestedAt: null },
-      station: { syncedAt: null, copiedAt: null, writeRequestedAt: null },
-    });
-    setErrorWorkbench({
-      panelTab: null,
-      selectedIssueId: null,
-      resolvedIssueIds: [],
-      quickScanPassedIds: [],
-      decisionMap: {},
-    });
+    setInventoryWorkbench(buildInitialInventoryWorkbenchState());
+    setInventorySyncState(buildInitialInventorySyncState());
+    setErrorWorkbench(buildInitialErrorWorkbenchState());
     autoWingsLoginAttemptedRef.current = false;
   }, [selectedBranch]);
+
+  useEffect(() => {
+    const nextScope = `${windowStart}:${windowEnd}`;
+    if (lastWindowScopeRef.current === nextScope) return;
+    lastWindowScopeRef.current = nextScope;
+    setWorkspacePhase("idle");
+    setReservationResult(null);
+    setOpsApplySummary("");
+    setInventorySyncState(buildInitialInventorySyncState());
+    setErrorWorkbench(buildInitialErrorWorkbenchState());
+    setWorkspaceMessage("조회 기간이 바뀌어 이전 작업 결과를 정리했습니다. 다시 조회 후 진행해 주세요.");
+  }, [windowEnd, windowStart]);
 
   async function saveSettings() {
     if (!api?.saveSettings) return;
@@ -794,7 +802,6 @@ export default function App() {
         endDate: windowEnd,
         spreadsheet,
         sheetNames: activeBranchSheetNames,
-        reportDate: activeOpsDate || windowStart,
       });
       setOpsApplySummary(snapshot.summary);
       setWorkspaceMessage(snapshot.summary);
@@ -876,18 +883,12 @@ export default function App() {
       if (inventoryWorkbench.boardMode === "ota") {
         if (!reads.ota.copyText) throw new Error("OTA 원본 조회 결과가 아직 없습니다.");
         await copyTextToClipboard(reads.ota.copyText);
-        setInventoryProviderDrafts((current) => ({
-          ...current,
-          [inventoryWorkbench.otaMode]: { ...current[inventoryWorkbench.otaMode], copiedAt: nowIso() },
-        }));
+        setInventorySyncState((current) => ({ ...current, copiedAt: nowIso() }));
         setWorkspaceMessage("OTA 원본 재고값을 클립보드에 복사했습니다.");
       } else {
         if (actionOutputRows.length === 0) throw new Error("복사할 시트 기준 재고표가 없습니다.");
         await copyTextToClipboard(buildApplyInventoryCopyText(actionOutputRows, branchOption.label, windowStart, windowEnd));
-        setInventoryProviderDrafts((current) => ({
-          ...current,
-          [inventoryWorkbench.otaMode]: { ...current[inventoryWorkbench.otaMode], copiedAt: nowIso() },
-        }));
+        setInventorySyncState((current) => ({ ...current, copiedAt: nowIso() }));
         setWorkspaceMessage("시트 기준 재고표를 클립보드에 복사했습니다.");
       }
     } catch (error) {
@@ -918,10 +919,7 @@ export default function App() {
       motionKey: current.motionKey + 1,
     }));
     await executeReservationAction("apply");
-    setInventoryProviderDrafts((current) => ({
-      ...current,
-      [inventoryWorkbench.otaMode]: { ...current[inventoryWorkbench.otaMode], syncedAt: nowIso() },
-    }));
+    setInventorySyncState((current) => ({ ...current, syncedAt: nowIso() }));
   }
 
   async function executeInventoryWrite() {
@@ -929,10 +927,7 @@ export default function App() {
       setWorkspaceMessage("실제 반영 전에 동기화 결과와 승인 토큰이 필요합니다.");
       return;
     }
-    setInventoryProviderDrafts((current) => ({
-      ...current,
-      [inventoryWorkbench.otaMode]: { ...current[inventoryWorkbench.otaMode], writeRequestedAt: nowIso() },
-    }));
+    setInventorySyncState((current) => ({ ...current, writeRequestedAt: nowIso() }));
     await executeReservationAction("apply", {
       approvePlanToken: reservationResult.planToken,
       executeApply: true,
@@ -953,7 +948,7 @@ export default function App() {
       otaMode: mode,
       motionKey: current.motionKey + 1,
     }));
-    setWorkspaceMessage(mode === "naver" ? "네이버 재고 작업으로 전환했습니다." : "스테이션 재고 작업으로 전환했습니다.");
+    setWorkspaceMessage(mode === "naver" ? "네이버 표시로 전환했습니다." : "스테이션 표시로 전환했습니다.");
   }
 
   function updateIssueDecision(issueId: string, status: AppIssueStatus) {
@@ -1110,14 +1105,17 @@ export default function App() {
     if (runtimeReadiness.blockingSources.length === 0) return "실조회 준비 상태를 다시 확인해 주세요.";
     return `현재 실조회 전에 ${runtimeReadiness.blockingSources.length}개 항목을 먼저 준비해야 합니다.`;
   }, [runtimeReadiness]);
+  const sheetReservationBlocks = useMemo(
+    () => reads.sheet.items.filter((item) => isReservationBlockItem(item)),
+    [reads.sheet.items],
+  );
   const sheetReservationItems = useMemo(
     () =>
-      reads.sheet.items.filter((item) => {
-        if (!isReservationBlockItem(item)) return false;
+      sheetReservationBlocks.filter((item) => {
         const haystack = [item.roomNo, item.roomType, item.guestName, item.reservationNo, item.channel, item.noteHead].join(" ").toLowerCase();
         return haystack.includes(searchQuery.trim().toLowerCase());
       }),
-    [reads.sheet.items, searchQuery],
+    [searchQuery, sheetReservationBlocks],
   );
   const selectedRoomDetail =
     sheetReservationItems.find((item) => item.id === selectedRoomDetailId) ?? sheetReservationItems[0] ?? null;
@@ -1293,30 +1291,32 @@ export default function App() {
       ? reads.ota.items.find((item) => [item.title, item.subtitle].join(" ").includes(selectedRoomDetail.roomNo ?? ""))
       : null;
   const selectedChannelVisual = getChannelVisual(selectedRoomDetail?.channel);
-  const inventoryPreviewItems = useMemo(() => {
-    const capped = sheetReservationItems.slice(0, inventoryWorkbench.rowLimit);
-    if (selectedBranch !== "COEX") return capped;
-    return capped.filter((item) => String(item.roomNo || "").toUpperCase().startsWith(inventoryWorkbench.coexWing));
-  }, [inventoryWorkbench.coexWing, inventoryWorkbench.rowLimit, selectedBranch, sheetReservationItems]);
-  const activeInventoryDraft = inventoryProviderDrafts[inventoryWorkbench.otaMode];
+  const inventoryDisplayItems = useMemo(() => {
+    const baseItems = searchQuery.trim() ? sheetReservationItems : sheetReservationBlocks;
+    const wingFiltered =
+      selectedBranch === "COEX"
+        ? baseItems.filter((item) => String(item.roomNo || "").toUpperCase().startsWith(inventoryWorkbench.coexWing))
+        : baseItems;
+    return wingFiltered.slice(0, inventoryWorkbench.rowLimit);
+  }, [inventoryWorkbench.coexWing, inventoryWorkbench.rowLimit, searchQuery, selectedBranch, sheetReservationBlocks, sheetReservationItems]);
   const inventoryBoardRows = useMemo(
     () =>
       buildInventoryBoardRows(
-        inventoryPreviewItems,
+        inventoryDisplayItems,
         windowDays,
-        Boolean(activeInventoryDraft.syncedAt) || inventoryWorkbench.editMode,
+        Boolean(inventorySyncState.syncedAt) || inventoryWorkbench.editMode,
         inventoryWorkbench.otaMode,
         errorWorkbench.decisionMap,
       ),
-    [activeInventoryDraft.syncedAt, errorWorkbench.decisionMap, inventoryPreviewItems, inventoryWorkbench.editMode, inventoryWorkbench.otaMode, windowDays],
+    [errorWorkbench.decisionMap, inventoryDisplayItems, inventorySyncState.syncedAt, inventoryWorkbench.editMode, inventoryWorkbench.otaMode, windowDays],
   );
   const inventoryBoardRowMap = useMemo(
     () => new Map(inventoryBoardRows.map((row) => [row.id, row] as const)),
     [inventoryBoardRows],
   );
   const errorIssues = useMemo(
-    () => buildErrorWorkbenchIssues(sheetReservationItems, actionOutputRows, errorWorkbench.decisionMap),
-    [actionOutputRows, errorWorkbench.decisionMap, sheetReservationItems],
+    () => buildErrorWorkbenchIssues(sheetReservationBlocks, actionOutputRows, errorWorkbench.decisionMap),
+    [actionOutputRows, errorWorkbench.decisionMap, sheetReservationBlocks],
   );
   const errorCounts = useMemo(
     () => ({
@@ -1328,8 +1328,14 @@ export default function App() {
   );
   const visibleErrorIssues = useMemo(() => {
     if (!errorWorkbench.panelTab) return [];
-    return errorIssues.filter((issue) => issue.status === errorWorkbench.panelTab && !errorWorkbench.resolvedIssueIds.includes(issue.id));
-  }, [errorIssues, errorWorkbench.panelTab, errorWorkbench.resolvedIssueIds]);
+    return errorIssues.filter((issue) => {
+      if (issue.status !== errorWorkbench.panelTab) return false;
+      if (errorWorkbench.resolvedIssueIds.includes(issue.id)) return false;
+      if (!searchQuery.trim()) return true;
+      const haystack = [issue.roomLabel, issue.roomType, issue.guestLabel, issue.summary, issue.detail].join(" ").toLowerCase();
+      return haystack.includes(searchQuery.trim().toLowerCase());
+    });
+  }, [errorIssues, errorWorkbench.panelTab, errorWorkbench.resolvedIssueIds, searchQuery]);
   const selectedErrorIssue =
     errorIssues.find((issue) => issue.id === errorWorkbench.selectedIssueId) ??
     visibleErrorIssues[0] ??
@@ -1357,11 +1363,11 @@ export default function App() {
   }, [selectedRoomDetailId, sheetReservationItems]);
 
   useEffect(() => {
-    if (inventoryPreviewItems.length === 0) return;
-    if (!inventoryPreviewItems.some((item) => item.id === selectedRoomDetailId)) {
-      setSelectedRoomDetailId(inventoryPreviewItems[0]?.id ?? null);
+    if (inventoryDisplayItems.length === 0) return;
+    if (!inventoryDisplayItems.some((item) => item.id === selectedRoomDetailId)) {
+      setSelectedRoomDetailId(inventoryDisplayItems[0]?.id ?? null);
     }
-  }, [inventoryPreviewItems, selectedRoomDetailId]);
+  }, [inventoryDisplayItems, selectedRoomDetailId]);
 
   useEffect(() => {
     if (opsAvailableDates.length === 0) {
@@ -1995,7 +2001,7 @@ export default function App() {
                           className={`step-chip-button ${inventoryWorkbench.coexWing === wing ? "active" : ""}`}
                           onClick={() => setInventoryWorkbench((current) => ({ ...current, coexWing: wing }))}
                         >
-                          {wing}동
+                          {wing}동 보기
                         </button>
                       ))}
                     </div>
@@ -2032,9 +2038,9 @@ export default function App() {
                       OTA WRITE
                     </button>
                   </div>
-                  {activeInventoryDraft.syncedAt ? (
+                  {inventorySyncState.syncedAt ? (
                     <div className="detail-panel small-label">
-                      {inventoryWorkbench.otaMode === "naver" ? "NAVER" : "STATION"} 작업 상태를 임시 저장했습니다. 마지막 동기화 {formatDateTime(activeInventoryDraft.syncedAt)}
+                      표시 전환과 별개로, 실제 동기화 결과는 조회 기간 전체 기준으로 유지됩니다. 마지막 동기화 {formatDateTime(inventorySyncState.syncedAt)}
                     </div>
                   ) : null}
                 </article>
@@ -2050,8 +2056,8 @@ export default function App() {
                             type="button"
                             className={`ghost-button inventory-mode-icon-button ${inventoryWorkbench.otaMode === "naver" ? "active" : ""}`}
                             onClick={() => handleInventoryOtaModeChange("naver")}
-                            aria-label="NAVER 재고 작업"
-                            title="NAVER 재고 작업"
+                            aria-label="NAVER 표시"
+                            title="NAVER 표시"
                           >
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                               <path d="M6 18V6l12 12V6" />
@@ -2061,8 +2067,8 @@ export default function App() {
                             type="button"
                             className={`ghost-button inventory-mode-icon-button ${inventoryWorkbench.otaMode === "station" ? "active" : ""}`}
                             onClick={() => handleInventoryOtaModeChange("station")}
-                            aria-label="STATION 재고 작업"
-                            title="STATION 재고 작업"
+                            aria-label="STATION 표시"
+                            title="STATION 표시"
                           >
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                               <path d="M5 12h14" />
@@ -2112,10 +2118,10 @@ export default function App() {
                           </button>
                         </div>
                       </div>
-                      <p className="support-copy">시트 기준 재고값을 {inventoryWorkbench.otaMode === "naver" ? "NAVER" : "STATION"} OTA 관리 기준과 겹쳐 보고, 수정 모드에서는 위 시트 / 아래 OTA 순서로 확인합니다.</p>
+                      <p className="support-copy">{inventoryWorkbench.otaMode === "naver" ? "NAVER" : "STATION"} 표시는 화면 전환용이며, 실제 동기화와 WRITE 범위는 설정된 조회 기간 전체 기준으로 처리합니다. 수정 모드에서는 위 시트 / 아래 OTA 순서로 확인합니다.</p>
                     </div>
                     <div className="ops-panel-actions">
-                      <div className="detail-panel small-label">{inventoryPreviewItems.length}개 예약 블록</div>
+                      <div className="detail-panel small-label">{inventoryDisplayItems.length}개 예약 블록 표시</div>
                       <button
                         type="button"
                         className="ghost-button copy-icon-button"
@@ -2164,8 +2170,8 @@ export default function App() {
 
                   <div className="room-detail-layout">
                     <div className="room-detail-list">
-                      {inventoryPreviewItems.length > 0 ? (
-                        inventoryPreviewItems.map((item) => {
+                      {inventoryDisplayItems.length > 0 ? (
+                        inventoryDisplayItems.map((item) => {
                           const issueStatus = inventoryBoardRowMap.get(item.id)?.issueStatus ?? "normal";
                           return (
                             <button

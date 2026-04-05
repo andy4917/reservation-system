@@ -43,7 +43,7 @@ function main() {
   assert.match(appSource, /setSelectedRoomDetailId/);
   assert.match(appSource, /room-block/);
   assert.match(appSource, /rowLimit:\s*21/);
-  assert.match(appSource, /sheetReservationItems\.slice\(0,\s*inventoryWorkbench\.rowLimit\)/);
+  assert.match(appSource, /wingFiltered\.slice\(0,\s*inventoryWorkbench\.rowLimit\)/);
 
   console.log("regression_app_v2_sheet_room_detail_contract: OK");
 }

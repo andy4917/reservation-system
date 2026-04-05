@@ -101,46 +101,62 @@ def main() -> int:
         orderlist_policy=OrderlistPolicy(),
     )
     bundle = artifacts["ops_sheet_bundle"]
-    report_date = normalize_text(args.report_date) or normalize_text(args.start_date)
+    requested_report_date = normalize_text(args.report_date)
     writer = GoogleSheetsClient(access_token=access_token)
 
     if args.action == "order-list":
-        filtered_order_rows = filter_rows_by_report_date(artifacts["orderlist_artifact"]["rows"], report_date)
-        filtered_bundle = build_ops_sheet_export_bundle(
-            filtered_order_rows,
+        order_rows = artifacts["orderlist_artifact"]["rows"]
+        if requested_report_date:
+            order_rows = filter_rows_by_report_date(order_rows, requested_report_date)
+        export_bundle = build_ops_sheet_export_bundle(
+            order_rows,
             [],
             client=readonly_client,
             spreadsheet_id=normalize_ops_sheet_spreadsheet(args.ops_sheet_spreadsheet),
         )
         applied = apply_orderlist_packets(
             client=writer,
-            spreadsheet_id=filtered_bundle["spreadsheet_id"],
-            packets=filtered_bundle["orderlist_packets"],
+            spreadsheet_id=export_bundle["spreadsheet_id"],
+            packets=export_bundle["orderlist_packets"],
+        )
+        scope_label = (
+            f"{requested_report_date} 기준"
+            if requested_report_date
+            else f"{args.start_date} ~ {args.end_date} 기간 전체"
         )
         print(json.dumps({
             "action": args.action,
             "branch": args.branch,
-            "reportDate": report_date,
-            "summary": f"오더리스트 {sum(item['row_count'] for item in applied)}행을 시트에 적용했습니다.",
+            "reportDate": requested_report_date,
+            "summary": f"오더리스트 {scope_label} {sum(item['row_count'] for item in applied)}행을 시트에 적용했습니다.",
             "appliedCount": sum(item["row_count"] for item in applied),
-            "spreadsheetId": filtered_bundle["spreadsheet_id"],
+            "spreadsheetId": export_bundle["spreadsheet_id"],
             "targetSheetNames": [item["tab_name"] for item in applied],
             "appliedAt": dt.datetime.now().isoformat(),
         }, ensure_ascii=False))
         return 0
 
-    arrival_packets = [packet for packet in bundle["arrival_packets"] if normalize_text(packet.get("report_date", "")) == report_date]
+    arrival_packets = bundle["arrival_packets"]
+    if requested_report_date:
+        arrival_packets = [
+            packet for packet in arrival_packets if normalize_text(packet.get("report_date", "")) == requested_report_date
+        ]
     if not arrival_packets:
-        raise AuditError(f"Arrival packet not found for report_date={report_date}")
-    applied_packet = apply_arrival_packet(client=writer, packet=arrival_packets[0])
+        raise AuditError(f"Arrival packet not found for report_date={requested_report_date}")
+    applied_packets = [apply_arrival_packet(client=writer, packet=packet) for packet in arrival_packets]
+    scope_label = (
+        f"{requested_report_date} 기준"
+        if requested_report_date
+        else f"{args.start_date} ~ {args.end_date} 기간 전체"
+    )
     print(json.dumps({
         "action": args.action,
         "branch": args.branch,
-        "reportDate": report_date,
-        "summary": f"어라이벌 보드 {report_date} 데이터를 시트에 적용했습니다.",
-        "appliedCount": applied_packet["cell_update_count"],
-        "spreadsheetId": applied_packet["spreadsheet_id"],
-        "targetSheetNames": [applied_packet["sheet_name"]],
+        "reportDate": requested_report_date,
+        "summary": f"어라이벌 보드 {scope_label} 데이터를 시트에 적용했습니다.",
+        "appliedCount": sum(packet["cell_update_count"] for packet in applied_packets),
+        "spreadsheetId": applied_packets[0]["spreadsheet_id"],
+        "targetSheetNames": sorted({packet["sheet_name"] for packet in applied_packets}),
         "appliedAt": dt.datetime.now().isoformat(),
     }, ensure_ascii=False))
     return 0

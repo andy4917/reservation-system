@@ -26,6 +26,7 @@ function main() {
 
   assert.match(appSource, /실패|실패했습니다|오류|오류/);
   assert.match(appSource, /설정 오류|연결 새로고침|연결 상태/);
+  assert.match(appSource, /buildErrorWorkbenchIssues\(sheetReservationBlocks/);
   assert.match(appCss, /read-badges span\[data-status="error"\]/);
 
   assert.match(liveRead, /buildError\("pms"/);

@@ -28,8 +28,9 @@ function main() {
   assert.match(appSource, /OTA 원본 복사|재고표 복사/);
   assert.match(appSource, /예약 시트 재고 작업대/);
   assert.match(appSource, /동기화|수정 모드|OTA WRITE/);
-  assert.match(appSource, /시트 기준 재고값을/);
+  assert.match(appSource, /조회 기간이 바뀌어 이전 작업 결과를 정리했습니다/);
   assert.match(appSource, /NAVER|STATION/);
+  assert.match(appSource, /표시는 화면 전환용이며, 실제 동기화와 WRITE 범위는 설정된 조회 기간 전체 기준으로 처리합니다/);
   assert.match(appSource, /WRITE 가능|자동 마감|조회한 시점의 예약 시트 스냅샷/);
   assert.match(appSource, /apply/);
 

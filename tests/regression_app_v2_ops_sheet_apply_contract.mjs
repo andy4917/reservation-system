@@ -23,6 +23,11 @@ function main() {
   assert.match(ipc, /desktop-app:apply-ops-sheet-output/);
   assert.match(runner, /applyOpsSheetOutput/);
   assert.match(appSource, /시트 적용/);
+  assert.doesNotMatch(appSource, /reportDate:\s*activeOpsDate/);
+
+  const applyScript = read(root, "scripts/app_v2_apply_ops_sheet.py");
+  assert.match(applyScript, /기간 전체/);
+  assert.match(applyScript, /applied_packets = \[apply_arrival_packet/);
 
   console.log("regression_app_v2_ops_sheet_apply_contract: OK");
 }
