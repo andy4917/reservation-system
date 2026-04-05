@@ -1,0 +1,32 @@
+# App V2 Operating Contract
+
+Electron main is the source of truth for runtime orchestration, provider windows, settings, and verification state.
+
+Renderer is a thin control panel. It renders current state, launches explicit actions, and must not invent product truth, cached demo results, or synthetic success states on its own.
+
+Verification and smoke paths are not product runtime. `verify-only` flows, `UHS_APP_V2_RUNTIME_VERIFY`, and `app-v2-smoke:` hooks may observe runtime state, but they must not be promoted into the default user path.
+
+## Runtime Boundaries
+
+- `providerWorkspaceManager` owns provider window lifecycle and raw page signals only.
+- providerWorkspaceManager must stay on window lifecycle and raw page signals.
+- heuristic operating verdicts must not live in providerWorkspaceManager.
+- provider operating adapter is the only place that may derive readiness from raw provider signals.
+- provider operating evidence must remain explicit and inspectable from Electron main.
+
+## Product Path Rules
+
+- Do not promote probe, smoke, placeholder, or fallback logic into the default runtime path.
+- Reservation sheet runtime uses one configured spreadsheet plus one configured sheet tab.
+- Branch separation inside the reservation sheet must come from in-sheet branch sections and explicit branch filtering, not branch-specific tab routing.
+- Airport-van rich clipboard formatting is limited to payment method text only: `card` stays black and `cash` stays red.
+- The app_v2 `apply` action is currently an `apply-possible` contract, not a real write contract.
+- Current apply scope is limited to sheet-derived NAVER and STATION inventory actions for OTA management pages.
+- The renderer may show apply scope, approval boundary, and apply-possible status, but Electron main must not execute real OTA writes in the default product path.
+- The renderer must expose live-read proof from actual runtime evidence and explicit readiness state, not from assumed success labels.
+- Session-auth proof and config-auth proof must remain visibly separate in the product surface.
+- Interactive startup must prime app-owned provider BrowserWindow partitions in hidden state from Electron main.
+- Main-window lifecycle must not depend on the total BrowserWindow count once hidden provider windows exist.
+- Renderer must not unlock downstream actions from readiness-only checks that did not execute the real product path.
+- Demo, fixture, or replay-only inputs must stay outside the default runtime path.
+- preflight summary must describe actual configuration truth and provider state, not guessed readiness.

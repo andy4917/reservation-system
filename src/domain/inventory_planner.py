@@ -100,11 +100,7 @@ def _build_provider_plan_py(provider_key: str, reconciliation: Dict[str, Any]) -
 
 
 def _build_provider_plan(provider_key: str, reconciliation: Dict[str, Any]) -> Dict[str, Any]:
-    return bridge_build_provider_plan(
-        provider_key,
-        reconciliation,
-        fallback=_build_provider_plan_py,
-    )
+    return bridge_build_provider_plan(provider_key, reconciliation)
 
 
 def _compute_plan_token(payload: Dict[str, Any]) -> str:

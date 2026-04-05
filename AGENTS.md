@@ -1,5 +1,14 @@
-# Project Guardrails
+# Repository Guardrails
 
-- Keep this file limited to repository-specific rules for this project.
-- Do not commit or paste live credentials, tokens, cookies, auth bundles, or OAuth secrets into tracked files or instructions.
-- Use `instruction-hygiene` when refactoring `AGENTS.md` or other instruction files.
+- Do not add fallbacks, bypasses, shadow routes, or legacy compatibility paths unless registered in the documented operating contract or an explicitly tracked repo exception file.
+- Do not add raw endpoint calls outside the endpoint registry.
+- Do not add feature flags outside the current repo-owned flag/config registry.
+- Unknown cases must fail explicitly. Do not guess. Do not silently fallback.
+- For behavior changes, add or update a failing test first.
+- Prefer deleting obsolete code over preserving compatibility branches.
+- If public behavior, API, or operator workflow changes, update mapped Markdown docs in the same change.
+- Do not access environment variables outside the config layer.
+- Do not hardcode operational values in product runtime files. Only login ID/password literals are allowed. Put every other operational value in the shared constants registry, settings store, branch runtime mapping, endpoint registry, or truth dataset, then reference that source.
+- Do not leave TODO, HACK, or TEMP comments.
+- Do not commit live credentials, tokens, cookies, auth bundles, or OAuth secrets.
+- Before completion, all required checks must pass for the touched surface. For `app_v2`, this includes `npm run app:check`; add targeted regression commands when behavior changes.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List
+from typing import Any, Dict, List
 
 from src.core_bridge.runtime import load_cpp_module
 
@@ -8,12 +8,8 @@ from src.core_bridge.runtime import load_cpp_module
 def summarize_station_actual_units_by_date(
     station_rows: List[Dict[str, Any]],
     room_ids: List[str],
-    *,
-    fallback: Callable[[List[Dict[str, Any]], List[str]], Dict[str, int]],
 ) -> Dict[str, int]:
     core = load_cpp_module()
-    if core is None:
-        return fallback(station_rows, room_ids)
     result = core.reconciliation_compute(
         {
             "op": "summarize_station_actual_units_by_date",
@@ -30,12 +26,8 @@ def summarize_station_actual_units_by_date(
 def summarize_naver_actual_units_by_date(
     current_by_room: Dict[str, Dict[str, Dict[str, Any]]],
     room_ids: List[str],
-    *,
-    fallback: Callable[[Dict[str, Dict[str, Dict[str, Any]]], List[str]], Dict[str, int]],
 ) -> Dict[str, int]:
     core = load_cpp_module()
-    if core is None:
-        return fallback(current_by_room, room_ids)
     result = core.reconciliation_compute(
         {
             "op": "summarize_naver_actual_units_by_date",
@@ -54,15 +46,8 @@ def build_provider_reconciliation(
     desired_units_by_date: Dict[str, int],
     actual_units_by_date: Dict[str, int],
     action_stats_by_date: Dict[str, Dict[str, int]],
-    *,
-    fallback: Callable[
-        [str, Dict[str, int], Dict[str, int], Dict[str, Dict[str, int]]],
-        Dict[str, Any],
-    ],
 ) -> Dict[str, Any]:
     core = load_cpp_module()
-    if core is None:
-        return fallback(provider_key, desired_units_by_date, actual_units_by_date, action_stats_by_date)
     result = core.reconciliation_compute(
         {
             "op": "build_provider_reconciliation",

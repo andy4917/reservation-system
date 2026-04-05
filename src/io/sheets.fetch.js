@@ -44,7 +44,7 @@
   const R = App.engine?.rules || {};
   const B = App.scan?.blockBuilder || {};
   const A = App.scan?.aggregator || {};
-  const { normalizeText, parseJsonMaybe, sanitizeScanConfig, parseOptionalPositiveInt, parseColumnRefToOneBased, oneBasedToZeroBased, colZeroToA1, gridRangeToA1, parseScanConfigFromValuesGrid, parseRoomTypeMapFromValuesGrid, extractSpreadsheetId, ensureGoogleAccessToken, resolveEffectiveScanConfig, mergeRoomTypeMap, hasGoogleRefreshCredentials, normalizeScanKey } = N;
+  const { normalizeText, parseJsonMaybe, sanitizeScanConfig, parseOptionalPositiveInt, parseColumnRefToOneBased, oneBasedToZeroBased, colZeroToA1, gridRangeToA1, parseScanConfigFromValuesGrid, parseRoomTypeMapFromValuesGrid, extractSpreadsheetId, ensureGoogleAccessToken, resolveEffectiveScanConfig, mergeRoomTypeMap, hasGoogleRefreshCredentials, normalizeScanKey, normalizeBranchLabel } = N;
   const { buildSnapshotCacheKey, buildSnapshotQuickCacheKey, digestValueRanges } = K;
   const { buildManualRoomTypeRanges, hasCompleteManualRoomTypeRanges, areInventoryRawsEquivalent, parseStockValue, colorObjToHex } = R;
   const {
@@ -53,6 +53,8 @@
     detectRoomTypeFormulaHints,
     extractReservationBlocksByDate,
     buildDerivedRoomValuesFromSheetState,
+    buildRoomTypeMapFromSheetLocalHeaders,
+    buildExpectedRoomTypeTotalsByKey,
     countExpectedRoomTypesFromMap,
     summarizeDetectedRoomTypeCounts,
     countExpectedPartitionRooms,
@@ -278,6 +280,8 @@
     const mode = normalizeText(options?.mode || "auto").toLowerCase() === "manual" ? "manual" : "auto";
     const hasCompleteManualTypeRanges = options?.hasCompleteManualTypeRanges === true;
     const strictMode = hasCompleteManualTypeRanges;
+    const providerRow = Number.isInteger(options?.providerRow) ? Number(options.providerRow) : null;
+    const selectedValueRow = Number.isInteger(options?.selectedValueRow) ? Number(options.selectedValueRow) : null;
     const slotRows = {
       urban: Number.isInteger(slots[0]) ? slots[0] + 1 : null,
       doubleTwin: Number.isInteger(slots[1]) ? slots[1] + 1 : null,
@@ -293,7 +297,7 @@
         message:
           `${providerKey} inventory data row slots are incomplete. ` +
           `urban=${slotRows.urban ?? "-"}, doubleTwin=${slotRows.doubleTwin ?? "-"}, grand=${slotRows.grand ?? "-"}${manualHint}` +
-          (!strictMode ? " (auto mode: continuing with derived/provider fallback)" : "")
+          (!strictMode ? " (auto mode: continuing with derived/provider path)" : "")
       });
       return issues;
     }
@@ -305,11 +309,19 @@
         severity: strictMode ? "error" : "warn",
         message:
           `${providerKey} inventory data row slots contain duplicate rows. ` +
-          `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand}` +
-          (!strictMode ? " (continuing with provider/derived fallback)" : "")
+        `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand}` +
+          (!strictMode ? " (continuing with provider/derived path)" : "")
       });
     }
-    if (!(slots[0] < slots[1] && slots[1] < slots[2])) {
+    const physicalOrderVariant = !(slots[0] < slots[1] && slots[1] < slots[2]);
+    const providerOccupiesTypedSlot = Number.isInteger(providerRow) && slots.some((row) => row === providerRow);
+    const selectedProviderRow = Number.isInteger(providerRow) && Number.isInteger(selectedValueRow) && providerRow === selectedValueRow;
+    const canToleratePhysicalOrderVariant =
+      !strictMode &&
+      uniqueRows.size === slots.length &&
+      providerOccupiesTypedSlot &&
+      selectedProviderRow;
+    if (physicalOrderVariant && !canToleratePhysicalOrderVariant) {
       issues.push({
         code: strictMode ? "INVENTORY_DATA_ROW_SLOT_ORDER_INVALID" : "INVENTORY_DATA_ROW_PHYSICAL_ORDER_VARIANT",
         severity: strictMode ? "error" : "warn",
@@ -318,10 +330,209 @@
             `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand}`
           : `${providerKey} inventory data row slots are type-complete but physically ordered differently. ` +
             `urban=${slotRows.urban}, doubleTwin=${slotRows.doubleTwin}, grand=${slotRows.grand} ` +
-            "(continuing with provider/derived fallback)"
+            "(continuing with provider/derived path)"
       });
     }
     return issues;
+  }
+
+  function buildStructuralValidationSummary(providerKey, providerRow, valueSource, dataRows, options = null) {
+    const slots = Array.isArray(dataRows) ? dataRows.slice(0, 3) : [];
+    const typedSlotRows = {
+      urban: Number.isInteger(slots[0]) ? slots[0] + 1 : null,
+      doubleTwin: Number.isInteger(slots[1]) ? slots[1] + 1 : null,
+      grand: Number.isInteger(slots[2]) ? slots[2] + 1 : null
+    };
+    const validRows = slots.filter((row) => Number.isInteger(row));
+    const typedSlotComplete = validRows.length === 3;
+    const typedSlotDuplicate = new Set(validRows).size !== validRows.length;
+    const physicalOrderVariant = typedSlotComplete && !(slots[0] < slots[1] && slots[1] < slots[2]);
+    const providerRowOneBased = Number.isInteger(providerRow) ? providerRow + 1 : null;
+    const selectedValueRow = Number.isInteger(valueSource?.row) ? valueSource.row + 1 : null;
+    const providerOccupiesTypedSlot = Number.isInteger(providerRow) && validRows.some((row) => row === providerRow);
+    const providerRowRole = !Number.isInteger(providerRow)
+      ? "none"
+      : providerOccupiesTypedSlot
+        ? "aggregate+typed-slot"
+        : "aggregate-only";
+    const providerValueSourceKind = !Number.isInteger(valueSource?.row)
+      ? "none"
+      : Number.isInteger(providerRow) && valueSource.row === providerRow
+        ? "provider-row"
+        : "typed-row";
+    const branchSectionEvidence = [];
+    if (normalizeText(options?.branch || "")) branchSectionEvidence.push(`branch:${normalizeText(options.branch)}`);
+    if (normalizeText(options?.sheetName || "")) branchSectionEvidence.push(`sheet:${normalizeText(options.sheetName)}`);
+    if (normalizeText(options?.sectionKey || "")) branchSectionEvidence.push(`sectionKey:${normalizeText(options.sectionKey)}`);
+    if (Number.isInteger(options?.titleRow)) branchSectionEvidence.push(`titleRow:${Number(options.titleRow) + 1}`);
+    if (Number.isInteger(options?.headerRow)) branchSectionEvidence.push(`headerRow:${Number(options.headerRow) + 1}`);
+    if (Number.isInteger(options?.dateRow)) branchSectionEvidence.push(`dateRow:${Number(options.dateRow) + 1}`);
+    if (Number.isInteger(options?.roomStartRow)) branchSectionEvidence.push(`roomStartRow:${Number(options.roomStartRow) + 1}`);
+    if (Number.isInteger(options?.inventorySearchStartRow)) {
+      branchSectionEvidence.push(`inventorySearchStartRow:${Number(options.inventorySearchStartRow) + 1}`);
+    }
+    if (Number.isInteger(options?.sectionCount)) branchSectionEvidence.push(`sectionCount:${Number(options.sectionCount)}`);
+    if (providerRowOneBased) branchSectionEvidence.push(`${providerKey}:providerRow:${providerRowOneBased}`);
+    return {
+      providerRow: providerRowOneBased,
+      providerValueRow: selectedValueRow,
+      providerRowRole,
+      providerValueSourceKind,
+      providerValueSourceReason: normalizeText(valueSource?.selectedReason || ""),
+      typedSlotRows,
+      typedSlotComplete,
+      typedSlotDuplicate,
+      physicalOrderVariant,
+      branchSectionEvidence
+    };
+  }
+
+  const ROOM_NO_LIKE_RE = /^(?:[A-Z]\d{3,4}|\d{3,4})$/i;
+
+  function getSectionRowText(matrix, row, maxCols = 4) {
+    const parts = [];
+    for (let col = 0; col < maxCols; col += 1) {
+      const text = normalizeText(matrix.get(row, col).formattedValue);
+      if (text) parts.push(text);
+    }
+    return normalizeText(parts.join(" "));
+  }
+
+  function detectKnownBranchLabel(value) {
+    const raw = normalizeText(value || "");
+    const lowered = raw.toLowerCase();
+    if (!lowered) return "";
+    if (/(^|[^a-z])coex([^a-z]|$)|코엑스/.test(lowered)) return "COEX";
+    if (/(^|[^a-z])samseong([^a-z]|$)|삼성/.test(lowered)) return "BRANCH_THE_SAMSEONG";
+    if (/(^|[^a-z])gangnam([^a-z]|$)|강남/.test(lowered)) return "GANGNAM";
+    if (/(^|[^a-z])seolleung([^a-z]|$)|선릉/.test(lowered)) return "BRANCH_THE_SEOLLEUNG";
+    return "";
+  }
+
+  function isTypeRoomHeaderRow(matrix, row) {
+    const colA = normalizeText(matrix.get(row, 0).formattedValue).toLowerCase();
+    const colB = normalizeText(matrix.get(row, 1).formattedValue).toLowerCase();
+    return colA === "type" && colB === "room";
+  }
+
+  function findSectionHeaderRow(matrix, titleRow, nextMarkerRow) {
+    const scanStart = Number.isInteger(titleRow) ? titleRow + 1 : matrix.startRow;
+    const scanEnd = Math.min(matrix.maxRow, Math.max(scanStart, (nextMarkerRow || matrix.maxRow + 1) - 1));
+    for (let row = scanStart; row <= Math.min(scanEnd, scanStart + 8); row += 1) {
+      if (isTypeRoomHeaderRow(matrix, row)) return row;
+    }
+    return null;
+  }
+
+  function detectBranchMarkerRows(matrix, rowStart, rowEnd) {
+    const markers = [];
+    for (let row = rowStart; row <= rowEnd; row += 1) {
+      if (rowMatchesAnyProviderAlias(matrix, row)) continue;
+      const label = getSectionRowText(matrix, row);
+      if (!label || ROOM_NO_LIKE_RE.test(label.replace(/\s+/g, ""))) continue;
+      const knownBranch = detectKnownBranchLabel(label);
+      const branch = knownBranch || (typeof normalizeBranchLabel === "function" ? normalizeBranchLabel(label) : "");
+      if (!knownBranch) continue;
+      if (!branch) continue;
+      if (markers.length > 0 && markers[markers.length - 1].branch === branch && row - markers[markers.length - 1].row <= 2) {
+        continue;
+      }
+      markers.push({ row, branch, label });
+    }
+    return markers;
+  }
+
+  function findSectionRoomStartRow(matrix, contentStartRow, sectionEndRow) {
+    if (!Number.isInteger(contentStartRow)) return null;
+    const scanEnd = Math.min(matrix.maxRow, Math.max(contentStartRow, (sectionEndRow || matrix.maxRow + 1) - 1));
+    for (let row = contentStartRow; row <= Math.min(scanEnd, contentStartRow + 24); row += 1) {
+      const roomType = normalizeText(matrix.get(row, 0).formattedValue);
+      const roomNo = normalizeText(matrix.get(row, 1).formattedValue);
+      if (!roomType || !roomNo) continue;
+      if (!ROOM_NO_LIKE_RE.test(roomNo)) continue;
+      if (rowMatchesAnyProviderAlias(matrix, row)) continue;
+      return row;
+    }
+    return null;
+  }
+
+  function findSectionInventoryStartRow(matrix, contentStartRow, roomStartRow, sectionEndRow) {
+    const startRow = Number.isInteger(roomStartRow)
+      ? roomStartRow + 1
+      : Number.isInteger(contentStartRow)
+        ? contentStartRow
+        : null;
+    if (!Number.isInteger(startRow)) return null;
+    const scanEnd = Math.min(matrix.maxRow, Math.max(startRow, (sectionEndRow || matrix.maxRow + 1) - 1));
+    for (let row = startRow; row <= Math.min(scanEnd, startRow + 120); row += 1) {
+      if (rowMatchesAnyProviderAlias(matrix, row)) return row;
+    }
+    return null;
+  }
+
+  function detectSheetSections(matrix, options = null) {
+    if (!matrix) return [];
+    const branchHint = typeof normalizeBranchLabel === "function" ? normalizeBranchLabel(options?.branch || "") : normalizeText(options?.branch || "");
+    const selectedDateRow = Number.isInteger(options?.dateRow) ? Number(options.dateRow) : null;
+    const selectedRoomStartRow = Number.isInteger(options?.roomStartRow) ? Number(options.roomStartRow) : null;
+    const selectedInventoryStartRow = Number.isInteger(options?.inventorySearchStartRow) ? Number(options.inventorySearchStartRow) : null;
+    const markers = detectBranchMarkerRows(matrix, matrix.startRow, matrix.maxRow);
+    const sections = markers.map((marker, index) => {
+      const nextMarkerRow = index + 1 < markers.length ? markers[index + 1].row : matrix.maxRow + 1;
+      const titleRow = Number.isInteger(marker?.row) ? marker.row : null;
+      const headerRow = findSectionHeaderRow(matrix, titleRow, nextMarkerRow);
+      const isSelectedSection =
+        (Number.isInteger(selectedDateRow) && Number.isInteger(headerRow) && headerRow === selectedDateRow) ||
+        (!Number.isInteger(selectedDateRow) && normalizeText(marker?.branch || "") === normalizeText(branchHint || ""));
+      const sectionKey = normalizeText(isSelectedSection ? branchHint || marker?.branch || "" : marker?.branch || "");
+      const contentStartRow = Number.isInteger(headerRow) ? headerRow + 1 : Number.isInteger(titleRow) ? titleRow + 1 : null;
+      const roomStartRow = isSelectedSection && Number.isInteger(selectedRoomStartRow)
+        ? selectedRoomStartRow
+        : findSectionRoomStartRow(matrix, contentStartRow, nextMarkerRow);
+      const inventoryStartRow = isSelectedSection && Number.isInteger(selectedInventoryStartRow)
+        ? selectedInventoryStartRow
+        : findSectionInventoryStartRow(matrix, contentStartRow, roomStartRow, nextMarkerRow);
+      const state = Number.isInteger(roomStartRow) ? "active" : "preopen";
+      return {
+        sectionKey,
+        titleRow,
+        headerRow,
+        state,
+        roomStartRow,
+        inventoryStartRow,
+        evidence: [
+          marker?.label ? `titleLabel:${marker.label}` : "",
+          sectionKey ? `sectionKey:${sectionKey}` : "",
+          `sectionState:${state}`,
+          Number.isInteger(titleRow) ? `titleRow:${titleRow + 1}` : "",
+          Number.isInteger(headerRow) ? `headerRow:${headerRow + 1}` : "",
+          Number.isInteger(roomStartRow) ? `roomStartRow:${roomStartRow + 1}` : "",
+          Number.isInteger(inventoryStartRow) ? `inventorySearchStartRow:${inventoryStartRow + 1}` : ""
+        ].filter(Boolean)
+      };
+    }).filter((section) => Number.isInteger(section.headerRow));
+
+    if (sections.length === 0 && (Number.isInteger(selectedDateRow) || branchHint)) {
+      return [
+        {
+          sectionKey: branchHint,
+          titleRow: null,
+          headerRow: selectedDateRow,
+          state: Number.isInteger(selectedRoomStartRow) ? "active" : "preopen",
+          roomStartRow: selectedRoomStartRow,
+          inventoryStartRow: selectedInventoryStartRow,
+          evidence: [
+            branchHint ? `sectionKey:${branchHint}` : "",
+            `sectionState:${Number.isInteger(selectedRoomStartRow) ? "active" : "preopen"}`,
+            Number.isInteger(selectedDateRow) ? `headerRow:${selectedDateRow + 1}` : "",
+            Number.isInteger(selectedRoomStartRow) ? `roomStartRow:${selectedRoomStartRow + 1}` : "",
+            Number.isInteger(selectedInventoryStartRow) ? `inventorySearchStartRow:${selectedInventoryStartRow + 1}` : ""
+          ].filter(Boolean)
+        }
+      ];
+    }
+
+    return sections;
   }
 
   function normalizeOneBasedRange(startOneBased, endOneBased) {
@@ -451,7 +662,7 @@
     };
 
     let best = null;
-    let fallback = null;
+    let reserve = null;
     for (let row = range.start; row <= range.end; row += 1) {
       if (matrix.hiddenRows?.has(row)) continue;
       const label = rowAliasText(matrix, row);
@@ -459,8 +670,8 @@
       if (label && ["total", "room sold", "sold"].some((token) => label.includes(token))) continue;
       if (!allowPkgInventoryRows && rowAliasLooksPkg(label)) continue;
       const scored = scoreInventoryDataRowSignal(row);
-      if (!fallback || scored.rawCount > fallback.rawCount || (scored.rawCount === fallback.rawCount && row < fallback.row)) {
-        fallback = { row, rawCount: scored.rawCount };
+      if (!reserve || scored.rawCount > reserve.rawCount || (scored.rawCount === reserve.rawCount && row < reserve.row)) {
+        reserve = { row, rawCount: scored.rawCount };
       }
       if (scored.parsedCount <= 0) continue;
       if (!best || scored.score > best.score || (scored.score === best.score && row < best.row)) {
@@ -468,7 +679,7 @@
       }
     }
     if (Number.isInteger(best?.row)) return best.row;
-    return Number.isInteger(fallback?.row) ? fallback.row : null;
+    return Number.isInteger(reserve?.row) ? reserve.row : null;
   }
 
   function collectProviderInventoryDataRowsByTypeRanges(matrix, dateCols, typeRanges, options = null) {
@@ -583,7 +794,7 @@
     if (Number.isInteger(providerRow) && best.row === providerRow) {
       selectedReason = "provider_row_selected";
     } else if (providerCandidate && best.score > providerCandidate.score) {
-      selectedReason = "fallback_to_better_data_row";
+      selectedReason = "better_data_row_selected";
     } else if (providerCandidate && best.score === providerCandidate.score) {
       selectedReason = "provider_row_tie_break_lost";
     }
@@ -642,6 +853,7 @@
     buildProviderValueRowMismatchIssues,
     buildProviderValueSourceCoverageIssues,
     buildInventoryDataRowSlotIssues,
+    buildStructuralValidationSummary,
     summarizeReservationBlocksDetailed,
     buildValidationErrorMessage
   };
@@ -781,13 +993,13 @@
 
   function scanConfigFromMetadata(metadata) {
     const out = {};
-    const parseBooleanFlag = (value, fallback = false) => {
+    const parseBooleanFlag = (value, defaultValue = false) => {
       if (typeof value === "boolean") return value;
       const text = normalizeText(value).toLowerCase();
-      if (!text) return Boolean(fallback);
+      if (!text) return Boolean(defaultValue);
       if (["1", "true", "y", "yes", "on", "enable", "enabled"].includes(text)) return true;
       if (["0", "false", "n", "no", "off", "disable", "disabled"].includes(text)) return false;
-      return Boolean(fallback);
+      return Boolean(defaultValue);
     };
     const pick = (keys) => {
       for (const key of keys) {
@@ -952,6 +1164,7 @@
     loadSheetReadHints,
     getCachedSheetSnapshot,
     cacheSheetSnapshotResult,
+    detectSheetSections,
     buildSheetReadPlan,
     executeSheetRead,
     assembleSnapshotFromSheetRead
@@ -1204,6 +1417,35 @@
       else if (inventoryBoundaryRows.length > 0) roomScanEndRow = Math.min(...inventoryBoundaryRows) - 1;
       else roomScanEndRow = Math.min(matrix.maxRow, roomStartRow + 180);
       roomScanEndRow = Math.max(roomStartRow, roomScanEndRow);
+      const detectedSections = detectSheetSections(matrix, {
+        branch: query?.branch || "",
+        dateRow,
+        roomStartRow,
+        inventorySearchStartRow
+      });
+      const selectedSection =
+        detectedSections.find((section) => Number.isInteger(section?.headerRow) && section.headerRow === dateRow) ||
+        detectedSections.find((section) => normalizeText(section?.sectionKey || "") === normalizeText(query?.branch || "")) ||
+        null;
+      const localRoomTypeByRoomNo = buildRoomTypeMapFromSheetLocalHeaders(
+        matrix,
+        filteredDateCols,
+        roomStartRow,
+        effectiveRoomTypeRanges,
+        roomScanEndRow
+      );
+      const hasHintRoomMap = Object.keys(plan.sheetHints?.roomTypeByRoomNo || {}).length > 0;
+      const hasLocalRoomTypeMap = Object.keys(localRoomTypeByRoomNo || {}).length > 0;
+      const effectiveDerivedRoomTypeByRoomNo = hasLocalRoomTypeMap
+        ? mergeRoomTypeMap(plan.effectiveRoomTypeByRoomNo, localRoomTypeByRoomNo)
+        : plan.effectiveRoomTypeByRoomNo;
+      const expectedFallbackRoomTypeByRoomNo =
+        !hasHintRoomMap && hasLocalRoomTypeMap
+          ? localRoomTypeByRoomNo
+          : plan.effectiveRoomTypeByRoomNo;
+      const expectedTypeTotalsByKeyForDerived = isFormulaRangeSane
+        ? expectedTypeTotalsByKey
+        : buildExpectedRoomTypeTotalsByKey(expectedFallbackRoomTypeByRoomNo);
       const naverDataRows = hasManualNaverTypeRanges
         ? inventorySelection.collectProviderInventoryDataRowsByTypeRanges(matrix, filteredDateCols, manualNaverTypeRanges, naverInventoryRowOptions)
         : collectProviderInventoryDataRows(matrix, inventoryRows.NAVER, filteredDateCols, 3, naverInventoryRowOptions);
@@ -1263,11 +1505,11 @@
         ROOM_PRESETS["naver-partner"] || [],
         naverRoomValues,
         roomStartRow,
-        plan.effectiveRoomTypeByRoomNo,
+        effectiveDerivedRoomTypeByRoomNo,
         "NAVER",
         effectiveRoomTypeRanges,
         roomScanEndRow,
-        expectedTypeTotalsByKey
+        expectedTypeTotalsByKeyForDerived
       );
       const stationDerived = buildDerivedRoomValuesFromSheetState(
         matrix,
@@ -1276,11 +1518,11 @@
         ROOM_PRESETS["admin-station"] || [],
         stationRoomValues,
         roomStartRow,
-        plan.effectiveRoomTypeByRoomNo,
+        effectiveDerivedRoomTypeByRoomNo,
         "STATION",
         effectiveRoomTypeRanges,
         roomScanEndRow,
-        expectedTypeTotalsByKey
+        expectedTypeTotalsByKeyForDerived
       );
       const reservationBlockScan = extractReservationBlocksByDate(
         matrix,
@@ -1303,11 +1545,11 @@
       const providerKey = context.providerType === "admin-station" ? "STATION" : "NAVER";
       const hostDiagnostics = providerKey === "STATION" ? stationDerived.diagnostics : naverDerived.diagnostics;
       const formulaTypeCounts = isFormulaRangeSane ? (formulaHints?.expectedTypeCounts || {}) : {};
-      const fallbackTypeCounts = countExpectedRoomTypesFromMap(plan.effectiveRoomTypeByRoomNo);
+      const derivedTypeCounts = countExpectedRoomTypesFromMap(expectedFallbackRoomTypeByRoomNo);
       const expectedTypeCounts = {
-        urban: validationSupport.toPositiveIntOrNull(formulaTypeCounts.urban) ?? Number(fallbackTypeCounts.urban || 0),
-        doubleTwin: validationSupport.toPositiveIntOrNull(formulaTypeCounts.doubleTwin) ?? Number(fallbackTypeCounts.doubleTwin || 0),
-        grand: validationSupport.toPositiveIntOrNull(formulaTypeCounts.grand) ?? Number(fallbackTypeCounts.grand || 0)
+        urban: validationSupport.toPositiveIntOrNull(formulaTypeCounts.urban) ?? Number(derivedTypeCounts.urban || 0),
+        doubleTwin: validationSupport.toPositiveIntOrNull(formulaTypeCounts.doubleTwin) ?? Number(derivedTypeCounts.doubleTwin || 0),
+        grand: validationSupport.toPositiveIntOrNull(formulaTypeCounts.grand) ?? Number(derivedTypeCounts.grand || 0)
       };
       const detectedTypeCounts = summarizeDetectedRoomTypeCounts(hostDiagnostics?.roomTypeCounts || {});
       if (
@@ -1324,7 +1566,7 @@
         expectedTypeCounts.doubleTwin = Number(detectedTypeCounts.doubleTwin || 0);
         expectedTypeCounts.grand = Number(detectedTypeCounts.grand || 0);
       }
-      const expectedPartitionCounts = countExpectedPartitionRooms(plan.effectiveRoomTypeByRoomNo);
+      const expectedPartitionCounts = countExpectedPartitionRooms(expectedFallbackRoomTypeByRoomNo);
       const detectedPartitionCounts = summarizeDetectedPartitionCounts(hostDiagnostics?.partitionCounts || {});
       const hasPartitionExpectation = hasCompleteManualRoomTypeRanges(effectiveRoomTypeRanges);
       const totalExpectedPartition =
@@ -1396,7 +1638,26 @@
         hostManualTypeRanges,
         {
           mode: plan.effectiveScanCfg?.mode,
-          hasCompleteManualTypeRanges: hostHasCompleteManualTypeRanges
+          hasCompleteManualTypeRanges: hostHasCompleteManualTypeRanges,
+          providerRow: inventoryRows[providerKey],
+          selectedValueRow: providerKey === "STATION" ? stationValueSource.row : naverValueSource.row
+        }
+      );
+      const hostStructuralSummary = validationSupport.buildStructuralValidationSummary(
+        providerKey,
+        inventoryRows[providerKey],
+        providerKey === "STATION" ? stationValueSource : naverValueSource,
+        hostInventoryDataRows,
+        {
+          branch: normalizeText(query?.branch || ""),
+          sheetName: firstSheet?.properties?.title || syncConfig.sheetName,
+          sectionKey: normalizeText(selectedSection?.sectionKey || query?.branch || ""),
+          titleRow: selectedSection?.titleRow,
+          headerRow: selectedSection?.headerRow,
+          dateRow,
+          roomStartRow,
+          sectionCount: detectedSections.length,
+          inventorySearchStartRow
         }
       );
       const formulaRangeMismatchIssues = validationSupport.buildFormulaSoldVacRangeMismatchIssues(formulaHints);
@@ -1590,6 +1851,15 @@
               ...inventorySelection.toOneBasedTypeRanges(manualStationTypeRanges || {})
             }
           },
+          sections: detectedSections.map((section) => ({
+            sectionKey: normalizeText(section.sectionKey || ""),
+            state: section.state === "preopen" ? "preopen" : "active",
+            titleRow: Number.isInteger(section.titleRow) ? section.titleRow + 1 : null,
+            headerRow: Number.isInteger(section.headerRow) ? section.headerRow + 1 : null,
+            roomStartRow: Number.isInteger(section.roomStartRow) ? section.roomStartRow + 1 : null,
+            inventoryStartRow: Number.isInteger(section.inventoryStartRow) ? section.inventoryStartRow + 1 : null,
+            evidence: Array.isArray(section.evidence) ? section.evidence.filter((entry) => typeof entry === "string" && entry.trim()) : []
+          })),
           fetchMode: plan.effectiveUseFullRange ? "full" : "fast",
           validation: {
             providerKey,
@@ -1608,14 +1878,22 @@
             providerValueRowMismatchCount: hostProviderValueRowAudit.mismatchCount,
             providerValueRawCount: hostProviderCoverageAudit.rawCount,
             providerValueParsedCount: hostProviderCoverageAudit.parsedCount,
+            providerRow: hostStructuralSummary.providerRow,
+            providerValueRow: hostStructuralSummary.providerValueRow,
+            providerRowRole: hostStructuralSummary.providerRowRole,
+            providerValueSourceKind: hostStructuralSummary.providerValueSourceKind,
+            providerValueSourceReason: hostStructuralSummary.providerValueSourceReason,
+            validationStructuralSummary: hostStructuralSummary,
             issues: validationIssues
-          }
+          },
+          validationStructuralSummary: hostStructuralSummary
         },
         readHints: {
           fingerprint: plan.sheetHints.fingerprint || "",
           roomMapCount: Object.keys(plan.sheetHints.roomTypeByRoomNo || {}).length,
           anchorSummary: { ...(plan.sheetHints.anchorSummary || {}) },
-          roomTypeByRoomNo: { ...(plan.sheetHints.roomTypeByRoomNo || {}) }
+          roomTypeByRoomNo: { ...(plan.sheetHints.roomTypeByRoomNo || {}) },
+          localRoomTypeByRoomNo
         }
       };
 

@@ -30,6 +30,7 @@ class OrderlistDecisionRule:
 class OrderlistPolicy:
     core_labels: Tuple[str, ...] = CORE_ORDERLIST_LABELS
     exclude_departure_only: bool = True
+    exclude_room_makeup: bool = False
     periodic_room_cleaning_min_nights: int = 4
     periodic_room_cleaning_first_offset_days: int = 3
     periodic_room_cleaning_interval_days: int = 4
@@ -65,7 +66,7 @@ class OrderlistPolicy:
 class ArrivalBuildingRule:
     building: str
     room_prefixes: Tuple[str, ...] = ()
-    fallback: bool = False
+    default_building: bool = False
 
 
 @dataclass(frozen=True)
@@ -73,7 +74,7 @@ class ArrivalArtifactPolicy:
     separate_turnover_section: bool = True
     building_rules: Tuple[ArrivalBuildingRule, ...] = (
         ArrivalBuildingRule(building="A동", room_prefixes=("A",)),
-        ArrivalBuildingRule(building="B동", fallback=True),
+        ArrivalBuildingRule(building="B동", default_building=True),
     )
     flag_aliases: Dict[str, Tuple[str, ...]] = field(
         default_factory=lambda: {
@@ -139,15 +140,15 @@ def resolve_arrival_building(
     policy: ArrivalArtifactPolicy = DEFAULT_ARRIVAL_ARTIFACT_POLICY,
 ) -> str:
     room_key = normalize_room_no_key(format_ops_room_label(room_no) or room_no)
-    fallback = ""
+    default_building = ""
     for rule in policy.building_rules:
-        if rule.fallback:
-            fallback = rule.building
+        if rule.default_building:
+            default_building = rule.building
         for prefix in rule.room_prefixes:
             normalized_prefix = normalize_text(prefix).upper()
             if normalized_prefix and room_key.startswith(normalized_prefix):
                 return rule.building
-    return fallback
+    return default_building
 
 
 def get_periodic_room_cleaning_dates(

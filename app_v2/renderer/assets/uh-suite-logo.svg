@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" role="img" aria-labelledby="title desc">
+  <title id="title">UH SUITE logo</title>
+  <desc id="desc">Circular UH Suite by Urbanhost logo mark</desc>
+  <rect width="220" height="220" fill="#f7f9fb"/>
+  <circle cx="110" cy="110" r="82" fill="none" stroke="#1a1a1a" stroke-width="1.5"/>
+  <path d="M104 50c-18 0-33 15-33 33 0 16 11 29 26 32V79h14v86h-6V95h-8c-22 0-40-18-40-40s18-40 40-40c11 0 22 5 29 13l-10 8c-4-4-10-6-16-6Z" fill="#111"/>
+  <path d="M113 39c20 0 37 17 37 37 0 16-10 30-25 35V98c8-4 13-12 13-22 0-13-11-24-24-24h-1V39h0Z" fill="#111"/>
+  <text x="110" y="155" text-anchor="middle" font-family="Times New Roman, serif" font-size="24" font-weight="700" fill="#111">UH SUITE</text>
+  <text x="110" y="174" text-anchor="middle" font-family="Times New Roman, serif" font-size="8" letter-spacing="2" fill="#111">BY</text>
+  <text x="110" y="187" text-anchor="middle" font-family="Times New Roman, serif" font-size="10" letter-spacing="1.5" fill="#111">URBANHOST</text>
+  <defs>
+    <path id="circleTextTop" d="M34 86a76 76 0 0 1 152 0"/>
+    <path id="circleTextBottom" d="M186 134a76 76 0 0 1-152 0"/>
+  </defs>
+  <text font-family="Arial, sans-serif" font-size="10" fill="#444" letter-spacing="1.1">
+    <textPath href="#circleTextTop" startOffset="12%">THAT YOU NEED TO REST</textPath>
+  </text>
+  <text font-family="Arial, sans-serif" font-size="10" fill="#444" letter-spacing="1.1">
+    <textPath href="#circleTextBottom" startOffset="18%">AT YOUR OWN PACE.</textPath>
+  </text>
+</svg>

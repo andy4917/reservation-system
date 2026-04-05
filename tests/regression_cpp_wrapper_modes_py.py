@@ -21,6 +21,7 @@ def _core_available() -> bool:
 
 
 def main() -> None:
+    assert _core_available(), "inventory_cpp_core must be built"
     station_rows = [
         {"date": "2026-03-01", "roomId": "1", "stockCount": 1},
         {"date": "2026-03-01", "roomId": "2", "stockCount": 0},
@@ -28,22 +29,13 @@ def main() -> None:
     room_ids = ["1", "2"]
     expected = _summarize_station_actual_units_by_date_py(station_rows, room_ids)
 
-    old_mode = os.getenv("INVENTORY_CPP_MODE")
     old_module = os.getenv("INVENTORY_CPP_MODULE")
     try:
-        os.environ["INVENTORY_CPP_MODE"] = "off"
         os.environ["INVENTORY_CPP_MODULE"] = "inventory_cpp_core"
         reset_cpp_module_cache()
-        off_result = summarize_station_actual_units_by_date(station_rows, room_ids)
-        assert off_result == expected
+        required_result = summarize_station_actual_units_by_date(station_rows, room_ids)
+        assert required_result == expected
 
-        os.environ["INVENTORY_CPP_MODE"] = "auto"
-        os.environ["INVENTORY_CPP_MODULE"] = "module_that_does_not_exist_for_test"
-        reset_cpp_module_cache()
-        auto_result = summarize_station_actual_units_by_date(station_rows, room_ids)
-        assert auto_result == expected
-
-        os.environ["INVENTORY_CPP_MODE"] = "required"
         os.environ["INVENTORY_CPP_MODULE"] = "module_that_does_not_exist_for_test"
         reset_cpp_module_cache()
         raised = False
@@ -53,19 +45,13 @@ def main() -> None:
             raised = True
         assert raised is True
 
-        if _core_available():
-            os.environ["INVENTORY_CPP_MODE"] = "required"
-            os.environ["INVENTORY_CPP_MODULE"] = "inventory_cpp_core"
-            reset_cpp_module_cache()
-            required_result = summarize_station_actual_units_by_date(station_rows, room_ids)
-            assert required_result == expected
+        os.environ["INVENTORY_CPP_MODULE"] = "inventory_cpp_core"
+        reset_cpp_module_cache()
+        restored_result = summarize_station_actual_units_by_date(station_rows, room_ids)
+        assert restored_result == expected
 
         print("regression_cpp_wrapper_modes_py: OK")
     finally:
-        if old_mode is None:
-            os.environ.pop("INVENTORY_CPP_MODE", None)
-        else:
-            os.environ["INVENTORY_CPP_MODE"] = old_mode
         if old_module is None:
             os.environ.pop("INVENTORY_CPP_MODULE", None)
         else:

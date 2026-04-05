@@ -9,8 +9,8 @@
   const roomPresetsPolicy = syncPolicy.roomPresets || {};
   const roomTypeMapPolicy = syncPolicy.roomTypeByRoomNo || {};
 
-  const FIXED_NAVER_BUSINESS_ID = String(syncPolicy.defaultNaverBusinessId || "1356779");
-  const FIXED_STATION_BRANCH_ID = String(syncPolicy.defaultStationBranchId || "18");
+  const POLICY_NAVER_BUSINESS_ID = String(syncPolicy.defaultNaverBusinessId || "");
+  const POLICY_STATION_BRANCH_ID = String(syncPolicy.defaultStationBranchId || "");
   const PMS_ORIGINS = {
     NAVER_PARTNER: "https://partner.booking.naver.com",
     NAVER_API: String(syncPolicy.defaultNaverApiBase || "https://api-partner.booking.naver.com"),
@@ -24,13 +24,13 @@
   const PREF_KEY = "inventory_date_range_pref_v4";
   const SYNC_CFG_KEY = "inventory_sheet_sync_cfg_v1";
   const SYNC_APPLY_KEY = "inventory_sheet_apply_enabled_v1";
-  const SYNC_FEATURE_KEY_LEGACY = "inventory_sheet_sync_enabled_v1";
-  const DEFAULT_SPREADSHEET_ID = String(sheetDefaults.spreadsheetId || "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8");
-  const DEFAULT_SHEET_NAME = String(sheetDefaults.sheetName || "2026");
-  const DEFAULT_START_ROW = Number(sheetDefaults.startRow || 61);
-  const DEFAULT_YEAR = Number(sheetDefaults.year || 2026);
-  const DEFAULT_GOOGLE_CLIENT_ID =
-    String(sheetDefaults.googleClientId || "197214578423-9b9647iri321d86g9bvhpdm8sp73qf3b.apps.googleusercontent.com");
+  const SYNC_FEATURE_KEY_COMPAT = "inventory_sheet_sync_enabled_v1";
+  const POLICY_SPREADSHEET_ID = String(sheetDefaults.spreadsheetId || "");
+  const POLICY_SHEET_NAME = String(sheetDefaults.sheetName || "2026");
+  const POLICY_START_ROW = Number(sheetDefaults.startRow || 61);
+  const POLICY_SHEET_YEAR = Number(sheetDefaults.year || 2026);
+  const POLICY_GOOGLE_CLIENT_ID =
+    String(sheetDefaults.googleClientId || "");
   const DEFAULT_SYNC_SLEEP_MS = 900;
   const SHEET_GRID_FAST_ROW_LIMIT = 260;
   const NAVER_SCHEDULE_FETCH_CONCURRENCY = 3;
@@ -60,12 +60,12 @@
   const READ_ONLY_TOOL_MODE = true;
   const EMBEDDED_AUTH_MODE = false;
   const EMBEDDED_AUTH = {
-    spreadsheet: DEFAULT_SPREADSHEET_ID,
-    sheetName: DEFAULT_SHEET_NAME,
-    startRow: DEFAULT_START_ROW,
-    year: DEFAULT_YEAR,
+    spreadsheet: POLICY_SPREADSHEET_ID,
+    sheetName: POLICY_SHEET_NAME,
+    startRow: POLICY_START_ROW,
+    year: POLICY_SHEET_YEAR,
     stockMode: "available",
-    clientId: DEFAULT_GOOGLE_CLIENT_ID,
+    clientId: POLICY_GOOGLE_CLIENT_ID,
     clientSecret: "",
     refreshToken: ""
   };
@@ -429,45 +429,45 @@
   let stationTokenCache = { token: null, expiresAt: 0 };
   let naverBizItemsCache = { ts: 0, items: [] };
 
-  function buildStationCalendarUrl(branchId = FIXED_STATION_BRANCH_ID) {
+  function buildStationCalendarUrl(branchId = POLICY_STATION_BRANCH_ID) {
     return new URL(`/admin/branch/${branchId}/calendar`, PMS_ORIGINS.STATION_API);
   }
 
-  function buildStationApplyUrl(branchId = FIXED_STATION_BRANCH_ID) {
+  function buildStationApplyUrl(branchId = POLICY_STATION_BRANCH_ID) {
     return new URL(`/admin/branch/${branchId}/apply/price-set`, PMS_ORIGINS.STATION_API);
   }
 
-  function buildNaverBizItemsUrl(businessId = FIXED_NAVER_BUSINESS_ID) {
+  function buildNaverBizItemsUrl(businessId = POLICY_NAVER_BUSINESS_ID) {
     return new URL(`/v3.1/businesses/${businessId}/biz-items`, PMS_ORIGINS.NAVER_API);
   }
 
-  function buildNaverDailySchedulesUrl(businessId = FIXED_NAVER_BUSINESS_ID, bizItemId = "") {
+  function buildNaverDailySchedulesUrl(businessId = POLICY_NAVER_BUSINESS_ID, bizItemId = "") {
     return new URL(`/v3.0/businesses/${businessId}/biz-items/${bizItemId}/daily-schedules`, PMS_ORIGINS.NAVER_API);
   }
 
-  function buildNaverStockSchedulesUrl(businessId = FIXED_NAVER_BUSINESS_ID, bizItemId = "") {
+  function buildNaverStockSchedulesUrl(businessId = POLICY_NAVER_BUSINESS_ID, bizItemId = "") {
     return new URL(`/v3.0/businesses/${businessId}/biz-items/${bizItemId}/stock-schedules`, PMS_ORIGINS.NAVER_API);
   }
 
-  function buildNaverSaleSchedulesUrl(businessId = FIXED_NAVER_BUSINESS_ID, bizItemId = "") {
+  function buildNaverSaleSchedulesUrl(businessId = POLICY_NAVER_BUSINESS_ID, bizItemId = "") {
     return new URL(`/v3.1/businesses/${businessId}/biz-items/${bizItemId}/sale-schedules`, PMS_ORIGINS.NAVER_API);
   }
 
   App.constants = {
     __ready: true,
-    FIXED_NAVER_BUSINESS_ID,
-    FIXED_STATION_BRANCH_ID,
+    POLICY_NAVER_BUSINESS_ID,
+    POLICY_STATION_BRANCH_ID,
     PMS_ORIGINS,
     NAVER_COOKIE_EXPORT_URLS,
     PREF_KEY,
     SYNC_CFG_KEY,
     SYNC_APPLY_KEY,
-    SYNC_FEATURE_KEY_LEGACY,
-    DEFAULT_SPREADSHEET_ID,
-    DEFAULT_SHEET_NAME,
-    DEFAULT_START_ROW,
-    DEFAULT_YEAR,
-    DEFAULT_GOOGLE_CLIENT_ID,
+    SYNC_FEATURE_KEY_COMPAT,
+    POLICY_SPREADSHEET_ID,
+    POLICY_SHEET_NAME,
+    POLICY_START_ROW,
+    POLICY_SHEET_YEAR,
+    POLICY_GOOGLE_CLIENT_ID,
     DEFAULT_SYNC_SLEEP_MS,
     SHEET_GRID_FAST_ROW_LIMIT,
     NAVER_SCHEDULE_FETCH_CONCURRENCY,

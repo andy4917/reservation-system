@@ -6,6 +6,18 @@ from typing import Optional, Tuple
 from src.domain.sheet_domain import extract_sheet_id, normalize_text
 
 DEFAULT_OPS_SHEET_SPREADSHEET = "1MfvPh2msnoXbG8Q2Mjpk5KVelh3Rv3HQ-SKt9P6xqjE"
+ARRIVAL_TEMPLATE_SPREADSHEET_ID = "1S-Dw_UEB3A2gXyf834BJfuNolDzz_hR8TsJfcTjEj7g"
+ARRIVAL_TEMPLATE_SHEET_NAME = "Arrival"
+ARRIVAL_TEMPLATE_ROOM_LAYOUT = {
+    "B동": [
+        "201", "202", "301", "302", "401", "402", "501", "502", "601", "602", "701",
+        "702", "801", "802", "901", "902", "1001", "1002", "1101", "1102", "1201", "1202",
+    ],
+    "A동": [
+        "A301", "A302", "A401", "A402", "A501", "A502", "A601", "A602", "A701", "A702",
+        "A801", "A802", "A901", "A902", "A1001", "A1002", "A1101", "A1102", "A1201",
+    ],
+}
 
 
 @dataclass(frozen=True)
@@ -14,6 +26,8 @@ class OpsSheetTabPolicy:
     branch: str
     building: str
     property_label: str
+    sheet_gid: str = ""
+    sheet_url: str = ""
 
 
 DEFAULT_OPS_SHEET_TABS: Tuple[OpsSheetTabPolicy, ...] = (
@@ -22,18 +36,32 @@ DEFAULT_OPS_SHEET_TABS: Tuple[OpsSheetTabPolicy, ...] = (
         branch="COEX",
         building="B동",
         property_label="UH suite 더 코엑스",
+        sheet_gid="1932864543",
+        sheet_url="https://docs.google.com/spreadsheets/d/1MfvPh2msnoXbG8Q2Mjpk5KVelh3Rv3HQ-SKt9P6xqjE/edit?gid=1932864543#gid=1932864543",
     ),
     OpsSheetTabPolicy(
         tab_name="코엑스2",
         branch="COEX",
         building="A동",
         property_label="UH suite 더 코엑스2",
+        sheet_gid="1165686679",
+        sheet_url="https://docs.google.com/spreadsheets/d/1MfvPh2msnoXbG8Q2Mjpk5KVelh3Rv3HQ-SKt9P6xqjE/edit?gid=1165686679#gid=1165686679",
+    ),
+    OpsSheetTabPolicy(
+        tab_name="선릉1",
+        branch="SEOLLEUNG",
+        building="",
+        property_label="UH Suite 선릉",
+        sheet_gid="627997160",
+        sheet_url="https://docs.google.com/spreadsheets/d/1MfvPh2msnoXbG8Q2Mjpk5KVelh3Rv3HQ-SKt9P6xqjE/edit?gid=627997160#gid=627997160",
     ),
     OpsSheetTabPolicy(
         tab_name="강남",
         branch="GANGNAM",
         building="",
         property_label="UH Suite 강남",
+        sheet_gid="1493215200",
+        sheet_url="https://docs.google.com/spreadsheets/d/1MfvPh2msnoXbG8Q2Mjpk5KVelh3Rv3HQ-SKt9P6xqjE/edit?gid=1493215200#gid=1493215200",
     ),
 )
 

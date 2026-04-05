@@ -15,6 +15,11 @@
       ],
       "branches": [
         {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
+        {
           "branch": "COEX",
           "display_name": "더 코엑스",
           "observed_in_har": true
@@ -198,6 +203,11 @@
       ],
       "branches": [
         {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
+        {
           "branch": "COEX",
           "display_name": "더 코엑스",
           "observed_in_har": true
@@ -267,6 +277,11 @@
         "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03_SUM.do"
       ],
       "branches": [
+        {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
         {
           "branch": "COEX",
           "display_name": "더 코엑스",
@@ -361,6 +376,11 @@
       ],
       "branches": [
         {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
+        {
           "branch": "COEX",
           "display_name": "더 코엑스",
           "observed_in_har": true
@@ -395,6 +415,11 @@
         "/pms/biz/ir01_0300/searchListRoomBlockChart_V03.do"
       ],
       "branches": [
+        {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
         {
           "branch": "COEX",
           "display_name": "더 코엑스",
@@ -471,6 +496,11 @@
       ],
       "branches": [
         {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
+        {
           "branch": "COEX",
           "display_name": "더 코엑스",
           "observed_in_har": true
@@ -542,6 +572,11 @@
         "/pms/biz/ir02_0100/searchListRoomAvailable.do"
       ],
       "branches": [
+        {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
         {
           "branch": "COEX",
           "display_name": "더 코엑스",
@@ -653,6 +688,11 @@
       ],
       "branches": [
         {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
+        {
           "branch": "COEX",
           "display_name": "더 코엑스",
           "observed_in_har": true
@@ -691,6 +731,11 @@
       ],
       "branches": [
         {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
+        {
           "branch": "GANGNAM",
           "display_name": "강남",
           "observed_in_har": true
@@ -723,6 +768,11 @@
         "/pms/biz/ir01_0124/searchListAssignedRoom.do"
       ],
       "branches": [
+        {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
         {
           "branch": "GANGNAM",
           "display_name": "강남",
@@ -790,6 +840,11 @@
         "/pms/biz/ir01_0124/searchListRoom.do"
       ],
       "branches": [
+        {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
         {
           "branch": "GANGNAM",
           "display_name": "강남",
@@ -860,6 +915,11 @@
         "/pms/biz/ir01_0124/searchListRoomTypeByParam.do"
       ],
       "branches": [
+        {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
         {
           "branch": "GANGNAM",
           "display_name": "강남",
@@ -1267,6 +1327,11 @@
       ],
       "branches": [
         {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
+        {
           "branch": "COEX",
           "display_name": "더 코엑스",
           "observed_in_har": true
@@ -1439,6 +1504,11 @@
       ],
       "branches": [
         {
+          "branch": "BRANCH_THE_SEOLLEUNG",
+          "display_name": "선릉",
+          "observed_in_har": true
+        },
+        {
           "branch": "COEX",
           "display_name": "더 코엑스",
           "observed_in_har": true
@@ -1493,7 +1563,7 @@
       "response_row_keys": []
     }
   ],
-  "unknown_endpoint_count": 12,
+  "unknown_endpoint_count": 21,
   "notes": [
     "Capabilities are generated from latest official COEX/GANGNAM HAR captures and exclude endpoints still classified as unknown.",
     "Legacy reservation-list HAR alias is intentionally excluded from default capability paths.",

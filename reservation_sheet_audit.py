@@ -928,7 +928,7 @@ def parse_source_file(
     records: List[SourceReservation] = []
     ext = path.suffix.lower()
 
-    def decode_text_with_fallback(raw: bytes) -> str:
+    def decode_text_best_effort(raw: bytes) -> str:
         last_err: Optional[Exception] = None
         for enc in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
             try:
@@ -981,14 +981,14 @@ def parse_source_file(
                 if inner_ext not in (".csv", ".tsv", ".json", ".har", ".txt", ".log"):
                     continue
                 try:
-                    text = decode_text_with_fallback(zf.read(info))
+                    text = decode_text_best_effort(zf.read(info))
                 except Exception:
                     continue
                 records.extend(parse_text_blob(text, inner_ext))
         return records
 
     if ext in (".csv", ".tsv", ".json", ".har", ".txt", ".log"):
-        text = decode_text_with_fallback(path.read_bytes())
+        text = decode_text_best_effort(path.read_bytes())
         records.extend(parse_text_blob(text, ext))
         return records
 
@@ -1022,7 +1022,7 @@ def build_google_oauth_url(
         "response_type": "code",
         "scope": scope,
         "access_type": "offline",
-        "prompt": "consent",
+        "prompt": "consent select_account",
         "code_challenge": challenge,
         "code_challenge_method": "S256",
         "state": state,
@@ -2452,7 +2452,7 @@ def build_analysis_summary(
             "arrival_rows": len(artifacts["arrival_artifact"]["rows"]),
         },
         "scan_v2": {
-            "branch_split_row_fallback": BRANCH_SPLIT_ROW + 1,
+            "branch_split_row_hint": BRANCH_SPLIT_ROW + 1,
             "branch_assignment_mode": scan_meta.get("branch_assignment_mode", ""),
             "branch_keys": scan_meta.get("branch_keys", []),
             "branch_markers": scan_meta.get("branch_markers", []),
@@ -2500,9 +2500,117 @@ def apply_no_proxy_if_requested(args: argparse.Namespace) -> None:
     setattr(args, "_no_proxy_applied", True)
 
 
+def resolve_client_id(
+    args: Optional[argparse.Namespace] = None,
+    token: Optional[Dict[str, Any]] = None,
+) -> str:
+    arg_value = ""
+    if args is not None:
+        arg_value = str(getattr(args, "client_id", "") or "").strip()
+    token_value = ""
+    if token:
+        token_value = str(token.get("client_id", "") or "").strip()
+    if token_value and (not arg_value or arg_value == DEFAULT_CLIENT_ID):
+        return token_value
+    if arg_value:
+        return arg_value
+    if token_value:
+        return token_value
+    return DEFAULT_CLIENT_ID
+
+
+def iter_google_client_secret_files(
+    *,
+    token_file: Optional[Path] = None,
+) -> Iterable[Path]:
+    roots: List[Path] = []
+    if token_file is not None:
+        for ancestor in token_file.resolve().parents:
+            roots.extend(
+                [
+                    ancestor,
+                    ancestor / "Downloads",
+                    ancestor / "OneDrive",
+                    ancestor / "OneDrive" / "Downloads",
+                    ancestor / "OneDrive" / "바탕 화면",
+                ]
+            )
+            if len(roots) >= 40:
+                break
+    roots.extend(
+        [
+            Path.cwd(),
+            Path.home(),
+            Path.home() / "Downloads",
+            Path.home() / "OneDrive",
+            Path.home() / "OneDrive" / "Downloads",
+            Path.home() / "OneDrive" / "바탕 화면",
+        ]
+    )
+    user_profile = str(os.getenv("USERPROFILE", "") or "").strip()
+    if user_profile:
+        profile_path = Path(user_profile)
+        roots.extend(
+            [
+                profile_path,
+                profile_path / "Downloads",
+                profile_path / "OneDrive",
+                profile_path / "OneDrive" / "Downloads",
+                profile_path / "OneDrive" / "바탕 화면",
+            ]
+        )
+    seen_roots = set()
+    for root in roots:
+        try:
+            resolved = root.resolve()
+        except OSError:
+            resolved = root
+        if resolved in seen_roots or not root.exists() or not root.is_dir():
+            continue
+        seen_roots.add(resolved)
+        for pattern in ("client_secret*.json",):
+            for candidate in root.glob(pattern):
+                if candidate.is_file():
+                    yield candidate
+
+
+def discover_client_secret(
+    *,
+    client_id: str,
+    token_file: Optional[Path] = None,
+    exclude_values: Optional[Iterable[str]] = None,
+) -> str:
+    target_client_id = str(client_id or "").strip()
+    if not target_client_id:
+        return ""
+    excluded = {
+        str(value or "").strip()
+        for value in (exclude_values or [])
+        if str(value or "").strip()
+    }
+    for candidate in iter_google_client_secret_files(token_file=token_file):
+        try:
+            payload = load_json(candidate)
+        except (OSError, json.JSONDecodeError):
+            continue
+        installed = payload.get("installed")
+        if not isinstance(installed, dict):
+            continue
+        candidate_client_id = str(installed.get("client_id", "") or "").strip()
+        candidate_secret = str(installed.get("client_secret", "") or "").strip()
+        if candidate_client_id != target_client_id or not candidate_secret:
+            continue
+        if candidate_secret in excluded:
+            continue
+        return candidate_secret
+    return ""
+
+
 def resolve_client_secret(
     args: Optional[argparse.Namespace] = None,
     token: Optional[Dict[str, Any]] = None,
+    token_file: Optional[Path] = None,
+    client_id: str = "",
 ) -> str:
     if args is not None:
         value = str(getattr(args, "client_secret", "") or "").strip()
@@ -2515,6 +2623,12 @@ def resolve_client_secret(
         value = str(token.get("client_secret", "") or "").strip()
         if value:
             return value
+    discovered = discover_client_secret(
+        client_id=client_id or resolve_client_id(args=args, token=token),
+        token_file=token_file,
+    )
+    if discovered:
+        return discovered
     return ""
 
 
@@ -2551,12 +2665,35 @@ def get_access_token(args: argparse.Namespace) -> str:
         raise AuditError(
             "?좏겙??留뚮즺?섏뿀怨?refresh_token???놁뒿?덈떎. oauth-start/oauth-finish瑜??ㅼ떆 ?ㅽ뻾?섏꽭??"
         )
-    client_secret = resolve_client_secret(args=args, token=token)
-    refreshed = refresh_access_token(
-        args.client_id, refresh_token_val, client_secret=client_secret
+    client_id = resolve_client_id(args=args, token=token)
+    client_secret = resolve_client_secret(
+        args=args,
+        token=token,
+        token_file=token_file,
+        client_id=client_id,
     )
+    try:
+        refreshed = refresh_access_token(
+            client_id, refresh_token_val, client_secret=client_secret
+        )
+    except AuditError as exc:
+        message = str(exc).lower()
+        if "invalid_client" not in message:
+            raise
+        recovered_secret = discover_client_secret(
+            client_id=client_id,
+            token_file=token_file,
+            exclude_values=[client_secret],
+        )
+        if not recovered_secret:
+            raise
+        refreshed = refresh_access_token(
+            client_id, refresh_token_val, client_secret=recovered_secret
+        )
+        client_secret = recovered_secret
     merged = dict(token)
     merged.update(refreshed)
+    merged["client_id"] = client_id
     if "refresh_token" not in merged:
         merged["refresh_token"] = refresh_token_val
     if client_secret:
@@ -2598,7 +2735,12 @@ def command_oauth_finish(args: argparse.Namespace) -> int:
     if not pkce_file.exists():
         raise AuditError(f"PKCE ?뚯씪???놁뒿?덈떎: {pkce_file}")
     pending = load_json(pkce_file)
-    client_secret = resolve_client_secret(args=args, token=pending)
+    client_secret = resolve_client_secret(
+        args=args,
+        token=pending,
+        token_file=Path(args.token_file),
+        client_id=str(pending.get("client_id", "") or ""),
+    )
     token = exchange_auth_code_for_token(
         client_id=pending["client_id"],
         code=args.code,
@@ -2617,11 +2759,15 @@ def command_oauth_finish(args: argparse.Namespace) -> int:
 
 def command_oauth_auto(args: argparse.Namespace) -> int:
     token = oauth_auto_issue_token(
-        client_id=args.client_id,
+        client_id=resolve_client_id(args=args),
         redirect_uri=args.redirect_uri,
         scope=args.scope,
         token_file=Path(args.token_file),
-        client_secret=resolve_client_secret(args=args),
+        client_secret=resolve_client_secret(
+            args=args,
+            token_file=Path(args.token_file),
+            client_id=resolve_client_id(args=args),
+        ),
         timeout_sec=args.oauth_timeout_sec,
         open_browser=not args.no_browser,
     )
@@ -2917,11 +3063,15 @@ def command_analyze_current(args: argparse.Namespace) -> int:
             raise
         print("[OAuth] ?좏슚???좏겙???놁뼱 ?먮룞 諛쒓툒???쒖옉?⑸땲??")
         oauth_auto_issue_token(
-            client_id=args.client_id,
+            client_id=resolve_client_id(args=args),
             redirect_uri=args.redirect_uri,
             scope=args.scope,
             token_file=Path(args.token_file),
-            client_secret=resolve_client_secret(args=args),
+            client_secret=resolve_client_secret(
+                args=args,
+                token_file=Path(args.token_file),
+                client_id=resolve_client_id(args=args),
+            ),
             timeout_sec=args.oauth_timeout_sec,
             open_browser=not args.no_browser,
         )

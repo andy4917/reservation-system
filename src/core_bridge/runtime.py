@@ -3,17 +3,9 @@ from __future__ import annotations
 import importlib
 import os
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Any
 
-_VALID_MODES = {"auto", "required", "off"}
 _DEFAULT_MODULE_NAME = "inventory_cpp_core"
-
-
-def get_cpp_mode() -> str:
-    mode = str(os.getenv("INVENTORY_CPP_MODE", "auto") or "auto").strip().lower()
-    if mode not in _VALID_MODES:
-        return "auto"
-    return mode
 
 
 def get_cpp_module_name() -> str:
@@ -30,17 +22,9 @@ def reset_cpp_module_cache() -> None:
     _import_cpp_module.cache_clear()
 
 
-def load_cpp_module() -> Optional[Any]:
-    mode = get_cpp_mode()
-    if mode == "off":
-        return None
-
+def load_cpp_module() -> Any:
     module_name = get_cpp_module_name()
     try:
         return _import_cpp_module(module_name)
     except Exception as exc:  # noqa: BLE001
-        if mode == "required":
-            raise RuntimeError(
-                f"INVENTORY_CPP_MODE=required but module '{module_name}' failed to load: {exc}"
-            ) from exc
-        return None
+        raise RuntimeError(f"required inventory core module '{module_name}' failed to load: {exc}") from exc

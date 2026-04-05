@@ -7,12 +7,15 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from src.domain.ops_sheet_policy import (
+    ARRIVAL_TEMPLATE_ROOM_LAYOUT,
+    ARRIVAL_TEMPLATE_SHEET_NAME,
+    ARRIVAL_TEMPLATE_SPREADSHEET_ID,
     DEFAULT_OPS_SHEET_TABS,
     format_ops_sheet_room_no,
     resolve_ops_sheet_tab,
 )
 from src.domain.sheet_domain import normalize_room_no_key, normalize_text
-from src.io.sheets_api import GoogleSheetsReadonlyClient
+from src.io.sheets_api import GoogleSheetsClient, GoogleSheetsReadonlyClient
 
 ORDERLIST_PACKET_FIELDNAMES = [
     "No.",
@@ -38,20 +41,6 @@ ARRIVAL_PACKET_FIELDNAMES = [
     "체크아웃",
     "비고",
 ]
-
-ARRIVAL_TEMPLATE_SPREADSHEET_ID = "1S-Dw_UEB3A2gXyf834BJfuNolDzz_hR8TsJfcTjEj7g"
-ARRIVAL_TEMPLATE_SHEET_NAME = "Arrival"
-ARRIVAL_TEMPLATE_ROOM_LAYOUT = {
-    "B동": [
-        "201", "202", "301", "302", "401", "402", "501", "502", "601", "602", "701",
-        "702", "801", "802", "901", "902", "1001", "1002", "1101", "1102", "1201", "1202",
-    ],
-    "A동": [
-        "A301", "A302", "A401", "A402", "A501", "A502", "A601", "A602", "A701", "A702",
-        "A801", "A802", "A901", "A902", "A1001", "A1002", "A1101", "A1102", "A1201",
-    ],
-}
-
 
 def build_ops_sheet_export_bundle(
     orderlist_rows: List[Dict[str, Any]],
@@ -214,8 +203,8 @@ def build_arrival_template_packet(
         "row_count": len(grid_rows),
         "grid_rows": grid_rows,
         "cell_updates": cell_updates,
-        "legacy_fieldnames": ARRIVAL_PACKET_FIELDNAMES,
-        "legacy_rows": sorted(
+        "export_fieldnames": ARRIVAL_PACKET_FIELDNAMES,
+        "export_rows": sorted(
             [
                 {
                     "No.": idx,
@@ -453,3 +442,57 @@ def write_packet_text_files(
         tab_name = normalize_text(packet.get("tab_name", "")).replace(" ", "_")
         (out_dir / f"{prefix}_{tab_name}.tsv").write_text(packet.get("tsv", ""), encoding="utf-8-sig")
         (out_dir / f"{prefix}_{tab_name}.csv").write_text(packet.get("csv", ""), encoding="utf-8-sig")
+
+
+def apply_orderlist_packets(
+    *,
+    client: GoogleSheetsClient,
+    spreadsheet_id: str,
+    packets: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    results: List[Dict[str, Any]] = []
+    for packet in packets:
+      tab_name = normalize_text(packet.get("tab_name", ""))
+      if not tab_name:
+          continue
+      start_row = int(packet.get("suggested_paste_start_row", 4) or 4)
+      rows = packet.get("rows", [])
+      fieldnames = packet.get("fieldnames", ORDERLIST_PACKET_FIELDNAMES)
+      values = [[row.get(field, "") for field in fieldnames] for row in rows]
+      clear_range = f"'{tab_name}'!A{start_row}:I200"
+      client.clear_values(spreadsheet_id, clear_range)
+      if values:
+          client.update_values(spreadsheet_id, f"'{tab_name}'!A{start_row}", values)
+      results.append(
+          {
+              "tab_name": tab_name,
+              "start_row": start_row,
+              "row_count": len(values),
+          }
+      )
+    return results
+
+
+def apply_arrival_packet(
+    *,
+    client: GoogleSheetsClient,
+    packet: Dict[str, Any],
+) -> Dict[str, Any]:
+    spreadsheet_id = normalize_text(packet.get("spreadsheet_id", "")) or ARRIVAL_TEMPLATE_SPREADSHEET_ID
+    sheet_name = normalize_text(packet.get("sheet_name", "")) or ARRIVAL_TEMPLATE_SHEET_NAME
+    data = [
+        {
+            "range": f"'{sheet_name}'!{item['range']}",
+            "majorDimension": "ROWS",
+            "values": [[item.get("value", "")]],
+        }
+        for item in packet.get("cell_updates", [])
+        if normalize_text(item.get("range", ""))
+    ]
+    if data:
+        client.batch_update_values(spreadsheet_id, data)
+    return {
+        "sheet_name": sheet_name,
+        "spreadsheet_id": spreadsheet_id,
+        "cell_update_count": len(data),
+    }

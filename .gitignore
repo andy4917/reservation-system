@@ -1,4 +1,5 @@
 .google_oauth_token.json
+.superpowers/
 .serena/
 .uv-cache/
 .vscode/
@@ -19,3 +20,4 @@ models/
 *.pyd
 *.dll
 *.dylib
+*.egg-info/

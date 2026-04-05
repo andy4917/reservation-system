@@ -1,5 +1,0 @@
-Desktop app quick launch:
-- Double-click "..\\앱 실행.cmd" from the repo root on Windows.
-- Or run "npm start" inside this app folder.
-- The cmd file is only a thin wrapper. Actual launch runs through "..\\run-app.ps1".
-- If Windows Electron is missing, the launcher tries "npm.cmd install" first.

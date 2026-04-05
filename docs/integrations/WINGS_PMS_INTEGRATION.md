@@ -2,7 +2,7 @@
 
 ## Current Baseline
 
-- Source of truth for this document: official `2026-03-12` COEX/GANGNAM HAR captures.
+- Source of truth for this document: official `2026-03-12` COEX/GANGNAM HAR captures plus the `2026-03-31` SEOLLEUNG sample HAR.
 - Wings PMS is operating as a shared multi-property surface keyed by `PROPERTY_NO` and `BSNS_CODE`.
 - Reservation read flow is `POST + application/x-www-form-urlencoded` rather than simple `GET`.
 - The system must remain read-only. `update`, `insert`, `delete`, `send` endpoints are explicitly blocked.
@@ -30,7 +30,7 @@ Current read paths directly tied to this project:
 
 - `wings-global-guest-list`
   - default path: `/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do`
-  - current branches: `COEX`, `GANGNAM`
+  - current branches: `COEX`, `GANGNAM`, `BRANCH_THE_SEOLLEUNG`
 - `wings-reservation-list`
   - default path: `/pms/biz/ir04_0200X_V03/searchListRsvn.do`
   - current observed branch: `COEX`
@@ -55,6 +55,9 @@ The legacy reservation-list path is kept only so older HAR bundles still parse. 
 
 - HAR remains a structure source, not the long-term auth source.
 - If the official browser session is live, runtime uses the browser-assisted auth path and does not enter managed recovery mode.
+- The default session owner is the app-managed persistent BrowserWindow partition for `wings-pms`, not an external browser handoff.
+- Interactive app startup primes the hidden `wings-pms` BrowserWindow so the session partition is available before the operator asks for a live read.
+- `.env` is not an allowed replacement for Wings PMS login because the live read path depends on the browser session owned by Electron main.
 - Managed recovery runs only when the browser session is offline or unavailable.
 - UI surfaces keep this silent and expose only generic live availability, not recovery logs or session state strings.
 
@@ -71,13 +74,13 @@ These are evidence that operator actions happened in the recorded sessions. They
 
 - Stale documentation previously listed `searchFITInHouse.do`, `searchListInterMemo.do`, `searchListRateByWalkIn.do`, `searchListServiceByWalkIn.do`, `selectAllMenuList.do`, `selectUserInfo.do` as active assumptions.
 - Those endpoints were not observed in the latest official HAR pair, so they are no longer documented as current integration targets.
-- No dead runtime execution path was found for the old reservation-list URL. It remains only as backward-compatible HAR parsing alias in [`normalize.js`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/src/scan/normalize.js).
+- No dead runtime execution path was found for the old reservation-list URL. It remains only as backward-compatible HAR parsing alias in `src/scan/normalize.js`.
 
 ## Next Phase Inputs
 
-- Sanitized endpoint inventory: [`wings_har_endpoint_catalog.json`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/reports/wings_har_endpoint_catalog.json)
-- Human-readable catalog: [`wings_har_endpoint_catalog.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/reports/wings_har_endpoint_catalog.md)
-- Capability matrix: [`wings_capability_matrix_v1.json`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/wings_capability_matrix_v1.json)
+- Sanitized endpoint inventory: `truth_dataset/reports/wings_har_endpoint_catalog.json`
+- Human-readable catalog: `truth_dataset/reports/wings_har_endpoint_catalog.md`
+- Capability matrix: `truth_dataset/wings_capability_matrix_v1.json`
 
 Recommended next step:
 
@@ -113,4 +116,4 @@ Implemented capabilities:
 - `assignable_room_lookup`
 - `assignable_room_type_lookup`
 
-Structured request/response summary is captured in [`wings_live_contract_v2.json`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/truth_dataset/wings_live_contract_v2.json).
+Structured request/response summary is captured in `truth_dataset/wings_live_contract_v2.json`.

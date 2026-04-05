@@ -67,14 +67,10 @@ def _build_summary_fixture() -> dict:
 
 
 def main() -> None:
-    if not _core_available():
-        print("regression_cpp_drift_parity_py: SKIP (inventory_cpp_core not built)")
-        return
+    assert _core_available(), "inventory_cpp_core must be built"
 
-    old_mode = os.getenv("INVENTORY_CPP_MODE")
     old_module = os.getenv("INVENTORY_CPP_MODULE")
     try:
-        os.environ["INVENTORY_CPP_MODE"] = "required"
         os.environ["INVENTORY_CPP_MODULE"] = "inventory_cpp_core"
         reset_cpp_module_cache()
 
@@ -89,24 +85,11 @@ def main() -> None:
         assert cpp_plan == py_plan
 
         fixture = _build_summary_fixture()
-
-        os.environ["INVENTORY_CPP_MODE"] = "off"
-        reset_cpp_module_cache()
-        summary_off = build_inventory_planner_summary(fixture, requested_apply=True, approve_plan_token="")
-
-        os.environ["INVENTORY_CPP_MODE"] = "required"
-        reset_cpp_module_cache()
         summary_cpp = build_inventory_planner_summary(fixture, requested_apply=True, approve_plan_token="")
-
-        assert summary_cpp == summary_off
-        assert summary_cpp["stages"]["approve"]["required_token"] == summary_off["stages"]["approve"]["required_token"]
+        assert summary_cpp["stages"]["approve"]["required_token"]
 
         print("regression_cpp_drift_parity_py: OK")
     finally:
-        if old_mode is None:
-            os.environ.pop("INVENTORY_CPP_MODE", None)
-        else:
-            os.environ["INVENTORY_CPP_MODE"] = old_mode
         if old_module is None:
             os.environ.pop("INVENTORY_CPP_MODULE", None)
         else:

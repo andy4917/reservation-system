@@ -154,7 +154,7 @@ def validate_bundle(bundle: dict[str, Any], room_alias_graph: dict[str, Any]) ->
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--bundle", default=str(ROOT / "truth_dataset" / "fixtures" / "sample_live_capture_bundle.json"))
+    parser.add_argument("--bundle", required=True)
     parser.add_argument("--room-alias-graph", default=str(ROOT / "truth_dataset" / "room_alias_graph_v1.json"))
     args = parser.parse_args()
 

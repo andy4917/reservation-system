@@ -1,6 +1,11 @@
 # 예약 통합관리 앱 제품 정의 및 운영 모델
 
-Last updated: 2026-03-12
+Canonical design authority:
+
+- Top-level design source has moved to [`APP_SINGLE_SOURCE_BLUEPRINT.md`](./APP_SINGLE_SOURCE_BLUEPRINT.md).
+- This document remains valid as product rationale and operating-model background, but it is no longer the single top-level design authority.
+
+Last updated: 2026-04-04
 
 ## 1. 왜 이 앱을 만드는가
 
@@ -14,6 +19,7 @@ Last updated: 2026-03-12
 - 실제 apply보다 먼저 `무엇이 현재 사실인지`, `어디가 불일치인지`, `사람이 무엇을 확인해야 하는지`를 안정적으로 보여주는 표면이 없다.
 
 이 앱은 쓰기 자동화 앱이 아니라, 먼저 `운영 truth 확인 앱`이어야 한다.
+현재 기준에서 apply는 `실제 재고 변경`이 아니라 `OTA 관리 페이지 기준 적용 가능 상태 계산`까지만 제품 범위에 포함한다.
 
 ## 2. 이 앱이 하지 말아야 하는 것
 
@@ -32,6 +38,14 @@ v1은 다음 하나를 완성해야 한다.
 `운영자가 앱 하나에서 지점/기간을 선택하고, 시트/OTA/Wings의 현재 상태를 읽기 전용으로 수집한 뒤, 불일치와 확인 필요 항목을 근거와 함께 볼 수 있다.`
 
 즉 v1의 성공 기준은 `자동 적용`이 아니라 `신뢰 가능한 읽기 + 검증 + 사람 후처리 보조`다.
+
+현재 구현 상태 요약:
+
+- `read-only live bundle` 경로와 `truth-aligned mapping core v1`은 코드 기준으로 구현 완료
+- operator export / search / handoff / 기본 운영 셸 UI도 v1 범위에 포함되어 닫힘
+- 실제 운영 세션 기준 `read-live` 실증은 운영 환경 재검증으로 남아 있다
+- 앱 표면에는 runtime readiness와 source evidence 기반 `실조회 준비 상태` 카드가 올라와 있다
+- write/apply 범위는 현재 `NAVER/STATION inventory apply-possible 계산`으로 한정되었고 실제 write는 비활성이다
 
 ## 4. 사용자와 사용 장면
 
@@ -64,6 +78,7 @@ v1은 다음 하나를 완성해야 한다.
 - 확장 = 브리지
 - HAR = 구조 학습 자산
 - truth dataset = 기준 데이터
+- 예약 관리 내부 IA = `실조회 준비 상태` / `검토 작업` / `수정 정리` / `적용 전 확인` / `운영 출력`
 
 ## 6. 필수 기능과 넣는 이유
 
@@ -303,13 +318,24 @@ HAR를 다음 용도로 쓰면 안 된다.
 
 목표:
 
-- search와 recommendation이 실제 triage 시간을 줄이게 한다.
+- search와 recommendation이 unresolved triage, validation trace, evidence jump를 실제로 줄여 운영자의 다음 행동 결정을 빠르게 만든다.
 
 완료 조건:
 
-- lexical + structured search 완성
-- embedding runtime를 실제 evidence 입력에 연결
-- recommendation acceptance를 측정 가능
+- lexical + structured search가 `unresolved / evidence / validation / audit` line에 대해 실제 jump를 제공
+- recommendation이 `unresolved alias` 또는 `SheetTerm` 후보 triage에만 1차 적용됨
+- recommendation acceptance / reject가 evidence lineage와 함께 측정 가능
+- recommendation이 없어도 `read / compare / search` 경로는 완결됨
+- repo-local verify 결과가 failure classification과 함께 evidence source로 재사용 가능
+
+이번 Stage 3에서 제외:
+
+- broad search runtime 대개편
+- full workerization 선행 착수
+- broad search UI expansion
+- renderer에 raw rows, raw snapshot, 대형 matrix 재도입
+- embedding을 mapping core보다 먼저 주 경로에 연결하는 변경
+- recommendation을 canonical 확정값처럼 보이게 만드는 UI/저장 방식
 
 ### Stage 4. Evidence / Export / Operator Loop 완성
 
@@ -322,6 +348,11 @@ HAR를 다음 용도로 쓰면 안 된다.
 - copy/export format 고정
 - run manifest/evidence lineage 포함
 - branch/date/source coverage 표시
+
+현재 시작점:
+
+- operator export의 main-owned minimal bundle과 measured loop summary는 이미 존재함
+- 다음은 external handoff(file/clipboard)와 operator replay 전달물 포맷을 닫는 단계임
 
 ### Stage 5. Apply 분리 여부 판단
 
@@ -364,11 +395,10 @@ HAR를 다음 용도로 쓰면 안 된다.
 - Stage 0. 기준선 재정렬: `100%`
 - Stage 1. Live Read 최소 경로: `35%`
 - Stage 2. Truth-Aligned Mapping Core: `25%`
-- Stage 3. Audit / Evidence E2E: `40%`
-- Stage 4. Search / Recommendation: `20%`
-- Stage 5. Operator Export / Handoff: `30%`
-- Stage 6. Apply 판단: `0%`
+- Stage 3. Search / Recommendation 실제화: `100%` (좁은 Stage 3 계약 기준)
+- Stage 4. Evidence / Export / Operator Loop: `35%`
+- Stage 5. Apply 판단: `0%`
 
-전체 진행률은 보수적으로 `약 36%`로 본다.
+전체 진행률은 보수적으로 `약 41%`로 본다.
 
 이 수치는 코드량이 아니라 `실제 운영자가 앱으로 업무를 수행할 수 있는 정도`를 기준으로 한다.

@@ -6,7 +6,11 @@ from pathlib import Path
 
 
 def _load_sync_policy_payload() -> dict:
-    source_path = Path(__file__).resolve().parents[1] / "shared" / "syncPolicy.js"
+    candidate_paths = [
+        Path(__file__).resolve().parents[1] / "shared" / "syncPolicy.js",
+        Path(__file__).resolve().parents[2] / "extension" / "src" / "shared" / "syncPolicy.js",
+    ]
+    source_path = next((path for path in candidate_paths if path.exists()), candidate_paths[0])
     source = source_path.read_text(encoding="utf-8")
     match = re.search(r"const POLICY_JSON = `(?P<payload>\{.*?\})`;", source, re.S)
     if not match:
@@ -17,29 +21,29 @@ def _load_sync_policy_payload() -> dict:
 _PAYLOAD = _load_sync_policy_payload()
 
 SHEET_DEFAULTS = dict(_PAYLOAD["sheetDefaults"])
-DEFAULT_SPREADSHEET_ID = str(SHEET_DEFAULTS["spreadsheetId"])
-DEFAULT_SHEET_NAME = str(SHEET_DEFAULTS["sheetName"])
-DEFAULT_SHEET_GID = int(SHEET_DEFAULTS["sheetGid"])
-DEFAULT_START_ROW = int(SHEET_DEFAULTS["startRow"])
-DEFAULT_SHEET_YEAR = int(SHEET_DEFAULTS["year"])
-DEFAULT_GOOGLE_CLIENT_ID = str(SHEET_DEFAULTS["googleClientId"])
-DEFAULT_GOOGLE_SCOPE = str(SHEET_DEFAULTS["googleScope"])
-DEFAULT_REDIRECT_URI = str(SHEET_DEFAULTS["redirectUri"])
-DEFAULT_TOKEN_FILE = str(SHEET_DEFAULTS["tokenFile"])
-DEFAULT_PKCE_FILE = str(SHEET_DEFAULTS["pkceFile"])
+POLICY_SPREADSHEET_ID = str(SHEET_DEFAULTS["spreadsheetId"])
+POLICY_SHEET_NAME = str(SHEET_DEFAULTS["sheetName"])
+POLICY_SHEET_GID = int(SHEET_DEFAULTS["sheetGid"])
+POLICY_START_ROW = int(SHEET_DEFAULTS["startRow"])
+POLICY_SHEET_YEAR = int(SHEET_DEFAULTS["year"])
+POLICY_GOOGLE_CLIENT_ID = str(SHEET_DEFAULTS["googleClientId"])
+POLICY_GOOGLE_SCOPE = str(SHEET_DEFAULTS["googleScope"])
+POLICY_REDIRECT_URI = str(SHEET_DEFAULTS["redirectUri"])
+POLICY_TOKEN_FILE = str(SHEET_DEFAULTS["tokenFile"])
+POLICY_PKCE_FILE = str(SHEET_DEFAULTS["pkceFile"])
 
-DEFAULT_NAVER_BUSINESS_ID = str(_PAYLOAD["defaultNaverBusinessId"])
-DEFAULT_STATION_BRANCH_ID = str(_PAYLOAD["defaultStationBranchId"])
-DEFAULT_NAVER_ROOM_IDS = list(_PAYLOAD["defaultNaverRoomIds"])
-DEFAULT_STATION_ROOM_IDS = list(_PAYLOAD["defaultStationRoomIds"])
+POLICY_NAVER_BUSINESS_ID = str(_PAYLOAD["defaultNaverBusinessId"])
+POLICY_STATION_BRANCH_ID = str(_PAYLOAD["defaultStationBranchId"])
+POLICY_NAVER_ROOM_IDS = list(_PAYLOAD["defaultNaverRoomIds"])
+POLICY_STATION_ROOM_IDS = list(_PAYLOAD["defaultStationRoomIds"])
 
-DEFAULT_STATION_API_BASE = str(_PAYLOAD["defaultStationApiBase"])
-DEFAULT_NAVER_API_BASE = str(_PAYLOAD["defaultNaverApiBase"])
+POLICY_STATION_API_BASE = str(_PAYLOAD["defaultStationApiBase"])
+POLICY_NAVER_API_BASE = str(_PAYLOAD["defaultNaverApiBase"])
 BRIDGE_DEFAULTS = dict(_PAYLOAD["bridge"])
-DEFAULT_BRIDGE_HOST = str(BRIDGE_DEFAULTS["host"])
-DEFAULT_BRIDGE_PORT = int(BRIDGE_DEFAULTS["port"])
-DEFAULT_BRIDGE_UPDATE_PATH = str(BRIDGE_DEFAULTS["updatePath"])
-DEFAULT_BRIDGE_STATE_PATH = str(BRIDGE_DEFAULTS["statePath"])
+POLICY_BRIDGE_HOST = str(BRIDGE_DEFAULTS["host"])
+POLICY_BRIDGE_PORT = int(BRIDGE_DEFAULTS["port"])
+POLICY_BRIDGE_UPDATE_PATH = str(BRIDGE_DEFAULTS["updatePath"])
+POLICY_BRIDGE_STATE_PATH = str(BRIDGE_DEFAULTS["statePath"])
 
 NOTE_CHANNEL_PREFIX = dict(_PAYLOAD["noteChannelPrefix"])
 NOTE_CHANNEL_PREFIX_ENABLED = bool(NOTE_CHANNEL_PREFIX["enabled"])

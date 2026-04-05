@@ -4,7 +4,6 @@
     {
       "branch": "COEX",
       "display_name": "더 코엑스",
-      "sheet_tabs": ["코엑스", "코엑스2"],
       "sheet_scope": {
         "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
         "sheet_name": "2026"
@@ -39,7 +38,6 @@
     {
       "branch": "GANGNAM",
       "display_name": "강남",
-      "sheet_tabs": ["강남"],
       "sheet_scope": {
         "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
         "sheet_name": "2026"
@@ -74,7 +72,40 @@
     {
       "branch": "BRANCH_THE_SEOLLEUNG",
       "display_name": "선릉",
-      "sheet_tabs": [],
+      "sheet_scope": {
+        "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
+        "sheet_name": "2026"
+      },
+      "ota_profiles": {
+        "naver-partner": {
+          "business_id": "",
+          "status": "session-derived"
+        },
+        "admin-station": {
+          "branch_id": "",
+          "status": "session-derived"
+        }
+      },
+      "wings_profiles": [
+        {
+          "property_no": "14",
+          "bsns_code": "14",
+          "preset_key": "wings-reservation-list",
+          "endpoint_path": "/pms/biz/ir04_0200X_V03/searchListRsvn.do",
+          "status": "property-pinned-from-har"
+        },
+        {
+          "property_no": "14",
+          "bsns_code": "14",
+          "preset_key": "wings-global-guest-list",
+          "endpoint_path": "/pms/biz/ir04_0100X/searchListGlobalRsvn_v03.do",
+          "status": "verified-by-har"
+        }
+      ]
+    },
+    {
+      "branch": "BRANCH_THE_SAMSEONG",
+      "display_name": "삼성",
       "sheet_scope": {
         "spreadsheet_id": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
         "sheet_name": "2026"
@@ -86,6 +117,8 @@
   "notes": [
     "Naver/Station IDs are current shared defaults from repo constants and must be replaced with branch-specific verified IDs when sampled live capture starts.",
     "Wings property/bsns codes and current reservation endpoints were validated against 2026-03-12 official COEX/GANGNAM HAR captures.",
-    "Legacy `/pms/biz/ir04_0100X/searchListRsvn.do` is retained only as backward-compatible HAR alias and is not the current default reservation-list path."
+    "Legacy `/pms/biz/ir04_0100X/searchListRsvn.do` is retained only as backward-compatible HAR alias and is not the current default reservation-list path.",
+    "SEOLLEUNG Wings PMS property/bsns codes were pinned from the 2026-03-31 official SL HAR capture; Naver/Station identifiers remain session-derived.",
+    "SAMSUNG remains a truth-mapped preopen branch and is not an active runtime success target."
   ]
 }

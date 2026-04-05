@@ -13,19 +13,19 @@
 
   const POLICY_JSON = `{
     "sheetDefaults": {
-      "spreadsheetId": "1q7mC5p0DKIFboiiOS_aQHoQLzdtszFb76-ntEvOvMj8",
+      "spreadsheetId": "",
       "sheetName": "2026",
       "sheetGid": 1459449957,
       "startRow": 61,
       "year": 2026,
-      "googleClientId": "197214578423-9b9647iri321d86g9bvhpdm8sp73qf3b.apps.googleusercontent.com",
+      "googleClientId": "",
       "googleScope": "https://www.googleapis.com/auth/spreadsheets.readonly",
-      "redirectUri": "http://127.0.0.1:8080",
+      "redirectUri": "",
       "tokenFile": ".google_oauth_token.json",
       "pkceFile": ".google_oauth_pkce.json"
     },
-    "defaultNaverBusinessId": "1356779",
-    "defaultStationBranchId": "18",
+    "defaultNaverBusinessId": "",
+    "defaultStationBranchId": "",
     "defaultNaverRoomIds": ["6556948", "6556938", "7043386"],
     "defaultStationRoomIds": ["62", "59", "258"],
     "defaultStationApiBase": "https://api.admin-stationbyuhc.com",

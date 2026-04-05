@@ -1,0 +1,13 @@
+{
+  "name": "uhs-desktop-app-v2-runner",
+  "private": true,
+  "type": "module",
+  "main": "../dist-app/app_v2/main/main.js",
+  "scripts": {
+    "build": "npm --prefix .. run app:build",
+    "build:main": "npm --prefix .. run app:build:main",
+    "start": "npm run build && node ../scripts/run_electron_with_bridge_secret.mjs .",
+    "check": "npm --prefix .. run app:check"
+  }
+}
+

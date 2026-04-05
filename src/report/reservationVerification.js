@@ -641,7 +641,7 @@
     report.reservationMismatches = [];
 
     const appendReservationIssue = (severity, code, summary, detail, issueOptions = {}) => {
-      const base = summary || issueOptions.fallbackSummary || null;
+      const base = summary || issueOptions.summaryOverride || null;
       const issue = makeVerificationIssue(
         scope,
         normalizeText(base?.checkin || issueOptions?.date || query.startDate) || query.startDate,

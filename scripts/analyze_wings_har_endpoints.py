@@ -42,6 +42,19 @@ CAPABILITY_HINTS = {
     "/pms/biz/comn/sendBookingEngineAPI.do": ("booking_engine_send", "reservation"),
 }
 
+FILENAME_BRANCH_HINTS = (
+    ("seolleung", "BRANCH_THE_SEOLLEUNG"),
+    ("sl", "BRANCH_THE_SEOLLEUNG"),
+    ("coex", "COEX"),
+    ("gangnam", "GANGNAM"),
+)
+
+BRANCH_CODE_MAP = {
+    "13": "COEX",
+    "14": "BRANCH_THE_SEOLLEUNG",
+    "91": "GANGNAM",
+}
+
 
 def _load_har_entries(path: Path) -> List[Dict[str, Any]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -115,7 +128,12 @@ def _classify_endpoint(path: str) -> Tuple[bool, str, str]:
 def analyze_hars(paths: List[Path]) -> Dict[str, Any]:
     endpoints: Dict[str, Dict[str, Any]] = {}
     for har_path in paths:
-        file_branch = "COEX" if "coex" in har_path.name.lower() else "GANGNAM" if "gangnam" in har_path.name.lower() else ""
+        file_branch = ""
+        file_name = har_path.name.lower()
+        for token, branch in FILENAME_BRANCH_HINTS:
+            if token in file_name:
+                file_branch = branch
+                break
         for entry in _load_har_entries(har_path):
             request = entry.get("request") or {}
             response = entry.get("response") or {}
@@ -159,10 +177,9 @@ def analyze_hars(paths: List[Path]) -> Dict[str, Any]:
             endpoint["files"].add(har_path.name)
             if file_branch:
                 endpoint["branches"].add(file_branch)
-            if branch_value == "13":
-                endpoint["branches"].add("COEX")
-            elif branch_value == "91":
-                endpoint["branches"].add("GANGNAM")
+            mapped_branch = BRANCH_CODE_MAP.get(branch_value)
+            if mapped_branch:
+                endpoint["branches"].add(mapped_branch)
             for key in request_keys:
                 endpoint["request_keys"][key] += 1
             for key in top_level_keys:
@@ -190,7 +207,7 @@ def analyze_hars(paths: List[Path]) -> Dict[str, Any]:
         )
 
     return {
-        "har_files": [str(path) for path in paths],
+        "har_files": [path.name for path in paths],
         "endpoint_count": len(normalized),
         "readonly_count": sum(1 for item in normalized if item["read_only"]),
         "mutation_count": sum(1 for item in normalized if not item["read_only"]),

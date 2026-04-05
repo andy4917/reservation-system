@@ -22,9 +22,9 @@ function main() {
   const policy = globalThis.InventorySyncPolicy;
   const constants = globalThis.App?.constants || {};
 
-  assert.equal(policy.sheetDefaults.spreadsheetId, constants.DEFAULT_SPREADSHEET_ID);
-  assert.equal(policy.sheetDefaults.sheetName, constants.DEFAULT_SHEET_NAME);
-  assert.equal(policy.sheetDefaults.startRow, constants.DEFAULT_START_ROW);
+  assert.equal(policy.sheetDefaults.spreadsheetId, constants.POLICY_SPREADSHEET_ID);
+  assert.equal(policy.sheetDefaults.sheetName, constants.POLICY_SHEET_NAME);
+  assert.equal(policy.sheetDefaults.startRow, constants.POLICY_START_ROW);
   assert.deepEqual(policy.roomPresets["admin-station"], constants.ROOM_PRESETS["admin-station"]);
   assert.equal(policy.roomTypeByRoomNo["A1201"], constants.ROOM_TYPE_BY_ROOM_NO["A1201"]);
 

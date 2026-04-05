@@ -2,7 +2,8 @@
 
 기준 문서:
 
-- [`APP_PRODUCT_OPERATING_MODEL.md`](/mnt/c/Users/anise/OneDrive/바탕%20화면/예약%20통합%20관리%20시스템/docs/architecture/APP_PRODUCT_OPERATING_MODEL.md)
+- [`APP_SINGLE_SOURCE_BLUEPRINT.md`](./APP_SINGLE_SOURCE_BLUEPRINT.md)
+- [`APP_V2_OPERATING_CONTRACT.md`](./APP_V2_OPERATING_CONTRACT.md)
 
 이 로드맵은 기능 나열이 아니라 `실제 운영 경로가 성립되는 순서`로 정렬한다.
 
@@ -39,6 +40,13 @@
 - 앱에서 실제 live inventory/audit rows가 보인다.
 - HAR fallback 없이 브라우저 세션 기준 조회가 성공한다.
 
+현재 상태:
+
+- main-owned `LiveReadRunContext`와 `coverage` bundle까지는 구현 완료
+- 현재 환경에서는 `sheet-unconfigured / provider unavailable / wings unavailable`로 `offline-preview`
+- renderer에는 runtime readiness와 source evidence 기반 `실조회 준비 상태` 표면이 올라와 있다
+- 즉 제품 계약은 닫혔고, 남은 것은 운영 환경 smoke 재실행이다
+
 ## Stage 2. Truth-Aligned Mapping Core
 
 목표:
@@ -57,23 +65,13 @@
 - branch-aware join precision을 추적할 수 있다.
 - unresolved mapping이 명시적으로 분리된다.
 
-## Stage 3. Audit / Evidence E2E
+현재 상태:
 
-목표:
+- exact room alias / reservation identity auto binding 구현 완료
+- soft-triage, precision score, precision gate까지 artifact/export/search/UI에 노출 완료
+- mapping core v1은 닫혔고, 후속은 recommendation 고도화 또는 운영 환경 실증이다
 
-- inventory compare와 reservation audit가 실데이터 기준으로 한 run 안에서 닫힌다.
-
-작업:
-
-- evidence lineage 연결
-- audit/anomaly/review 분리
-- export-ready evidence bundle 생성
-
-완료 기준:
-
-- 운영자가 앱 결과만으로 확인/후처리 대상을 식별할 수 있다.
-
-## Stage 4. Search / Recommendation 실제화
+## Stage 3. Search / Recommendation 실제화
 
 목표:
 
@@ -81,31 +79,57 @@
 
 작업:
 
-- lexical + structured search 통합
-- embedding runtime 연결
-- recommendation acceptance 측정 가능화
+- `SearchDocument`를 `unresolved binding`, `saved decision replay trace`, `validation/structural summary`, `inventory compare explanation`, `reservation audit explanation`, `live verify output`, `operator acceptance trace` 중심으로 재분류
+- 각 문서에 `kind`, `runId`, `sectionKey`, `source`, `jumpTarget`, `matchReason`, `candidateBasis`, `score`, `evidenceLineage`를 연결
+- recommendation을 `unresolved alias` / `SheetTerm` 후보 triage에만 연결
+- recommendation acceptance / reject 저장 구조를 추가
+- repo-local verify output을 별도 디버그 출력이 아니라 evidence source 중 하나로 재사용
 
 완료 기준:
 
-- 추천은 evidence 기반으로 설명 가능해야 한다.
-- 추천이 없어도 앱은 완결되며, 추천이 있으면 더 빨라진다.
+- lexical + structured search가 `unresolved / evidence / validation / audit` line에 대해 실제 jump를 제공한다.
+- recommendation이 unresolved triage 보조로 실제 화면에 연결된다.
+- recommendation acceptance / reject가 측정 가능한 형태로 저장된다.
+- recommendation이 없어도 앱의 `read / compare / search` 경로는 완결된다.
+- repo-local verify 결과가 failure classification과 함께 evidence source로 재사용 가능하다.
+- renderer는 계속 `summary + selectedRunId + visibleSlice + query/hits` 중심의 얇은 상태를 유지한다.
 
-## Stage 5. Operator Export / Handoff
+현재 상태:
+
+- bounded search, recommendation trace 저장, evidence jump는 구현 완료
+- 다음 단계는 broad search 확장이 아니라 운영 환경 재검증과 triage 정밀화다
+
+제외 범위:
+
+- broad search runtime 대개편
+- full workerization 선행 착수
+- broad search UI expansion
+- renderer에 raw rows, raw snapshot, 대형 matrix 재도입
+- embedding을 mapping core보다 먼저 주 경로에 연결하는 변경
+- recommendation을 canonical 확정값처럼 보이게 만드는 UI/저장 방식
+
+## Stage 4. Evidence / Export / Operator Loop
 
 목표:
 
-- 사람이 앱 결과를 외부 후처리로 자연스럽게 넘길 수 있다.
+- 사람이 앱 결과만으로 후처리할 수 있게 한다.
 
 작업:
 
 - copy/export format 고정
 - run manifest / branch / date / coverage 포함
+- acceptance 저장과 evidence lineage를 export/operator loop로 넘김
 
 완료 기준:
 
 - 운영자가 앱 화면과 export만으로 업무를 마칠 수 있다.
 
-## Stage 6. Apply 판단
+현재 상태:
+
+- external file/clipboard handoff, operator history, follow-up queue, 전달물 format 고정까지 구현 완료
+- precision / soft-triage summary도 handoff surface에 포함된다
+
+## Stage 5. Apply 판단
 
 목표:
 
@@ -119,6 +143,13 @@
 완료 기준:
 
 - apply가 범위 안인지 범위 밖인지 명시적으로 결정된다.
+
+현재 상태:
+
+- v1 기본 제품 경로는 여전히 read-first / review-first다
+- app_v2 `apply`는 현재 `OTA 적용 가능 확인`으로 한정되어 있다
+- 현재 범위는 시트 기반 NAVER/STATION inventory action scope 계산 + approval boundary 확인까지다
+- 실제 OTA write 실행은 비활성 상태이며 후속 계약 변경 없이는 제품 경로로 승격하지 않는다
 
 ## 검증 원칙
 

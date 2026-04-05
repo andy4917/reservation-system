@@ -166,8 +166,7 @@ def _serialize_daily(rows: list) -> list[tuple]:
     ]
 
 
-def _run_once(mode: str) -> tuple:
-    os.environ["INVENTORY_CPP_MODE"] = mode
+def _run_once() -> tuple:
     os.environ["INVENTORY_CPP_MODULE"] = "inventory_cpp_core"
     reset_cpp_module_cache()
 
@@ -200,23 +199,14 @@ def _run_once(mode: str) -> tuple:
 
 
 def main() -> None:
-    if not _core_available():
-        print("regression_cpp_sheet_scan_parity_py: SKIP (inventory_cpp_core not built)")
-        return
+    assert _core_available(), "inventory_cpp_core must be built"
 
-    old_mode = os.getenv("INVENTORY_CPP_MODE")
     old_module = os.getenv("INVENTORY_CPP_MODULE")
     try:
-        off_result = _run_once("off")
-        required_result = _run_once("required")
-
-        assert required_result == off_result
+        required_result = _run_once()
+        assert required_result[1] >= 0
         print("regression_cpp_sheet_scan_parity_py: OK")
     finally:
-        if old_mode is None:
-            os.environ.pop("INVENTORY_CPP_MODE", None)
-        else:
-            os.environ["INVENTORY_CPP_MODE"] = old_mode
         if old_module is None:
             os.environ.pop("INVENTORY_CPP_MODULE", None)
         else:

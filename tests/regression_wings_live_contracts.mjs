@@ -53,6 +53,20 @@ async function main() {
   const syncConfig = normalize.sanitizeSyncConfig({
     pmsBranchProfiles: [
       {
+        branch: "선릉",
+        pmsPreset: {
+          presetKey: "wings-global-guest-list",
+          propertyNo: "14",
+          bsnsCode: "14",
+          pageId: "IR04_0100X_V03"
+        },
+        pmsAuthBundle: {
+          method: "POST",
+          contentType: "form",
+          requestBody: "PROPERTY_NO=14&BSNS_CODE=14&ARRV_DATE_F=20260301&ARRV_DATE_T=20260307"
+        }
+      },
+      {
         branch: "강남",
         pmsPreset: {
           presetKey: "wings-global-guest-list",
@@ -84,6 +98,7 @@ async function main() {
     const body = String(options.body || "");
     calls.push({ pathname, body });
     if (pathname.endsWith("/searchListGlobalRsvn_v03.do")) {
+      const propertyNo = /PROPERTY_NO=([^&]+)/.exec(body)?.[1] || "";
       return {
         ok: true,
         status: 200,
@@ -91,16 +106,16 @@ async function main() {
           return JSON.stringify({
             rows: [
               {
-                RSVN_NO: "R-GANGNAM",
-                GLOBAL_RSVN_NO: "G-GANGNAM",
+                RSVN_NO: propertyNo === "14" ? "R-SEOLLEUNG" : "R-GANGNAM",
+                GLOBAL_RSVN_NO: propertyNo === "14" ? "G-SEOLLEUNG" : "G-GANGNAM",
                 ARRV_DATE: "20260301",
                 DEPT_DATE: "20260303",
-                ROOM_NO: "0501",
-                ACCOUNT: "부킹닷컴",
-                SOURCE_CODE: "BOOKING",
+                ROOM_NO: propertyNo === "14" ? "1401" : "0501",
+                ACCOUNT: propertyNo === "14" ? "직영" : "부킹닷컴",
+                SOURCE_CODE: propertyNo === "14" ? "DIRECT" : "BOOKING",
                 ROOM_AMT: "100000",
                 RSVN_STATUS_CODE: "RC",
-                PROPERTY_NO: "91"
+                PROPERTY_NO: propertyNo || "91"
               }
             ]
           });
@@ -327,12 +342,26 @@ async function main() {
 
   const reservationLookup = await pmsFetch.fetchWingsLiveContract(
     "admin-station",
-    { capability: "reservation_lookup", startDate: "2026-03-01", endDate: "2026-03-03" },
+    { capability: "reservation_lookup", branch: "GANGNAM", startDate: "2026-03-01", endDate: "2026-03-03" },
     syncConfig
   );
   assert.equal(reservationLookup.capability, "reservation_lookup");
   assert.equal(reservationLookup.records.length, 1);
   assert.equal(reservationLookup.records[0].branch, "GANGNAM");
+
+  const reservationLookupSeolleung = await pmsFetch.fetchWingsLiveContract(
+    "wings-pms",
+    {
+      capability: "reservation_lookup",
+      branch: "BRANCH_THE_SEOLLEUNG",
+      startDate: "2026-03-01",
+      endDate: "2026-03-07"
+    },
+    syncConfig
+  );
+  assert.equal(reservationLookupSeolleung.records.length, 1);
+  assert.equal(reservationLookupSeolleung.records[0].branch, "BRANCH_THE_SEOLLEUNG");
+  assert.equal(reservationLookupSeolleung.records[0].reservationNo, "R-SEOLLEUNG");
 
   const reservationLookupLocal = await pmsFetch.fetchWingsLiveContract(
     "admin-station",
@@ -356,7 +385,7 @@ async function main() {
     { capability: "reservation_summary", startDate: "2026-03-01", endDate: "2026-03-03" },
     syncConfig
   );
-  assert.equal(reservationSummary.items.length, 2);
+  assert.equal(reservationSummary.items.length, 3);
 
   const linkedReservation = await pmsFetch.fetchWingsLiveContract(
     "admin-station",
@@ -371,7 +400,7 @@ async function main() {
     { capability: "room_availability_chart", startDate: "2026-03-01", endDate: "2026-03-03" },
     syncConfig
   );
-  assert.equal(roomAvailability.items.length, 2);
+  assert.equal(roomAvailability.items.length, 3);
   assert.equal(roomAvailability.items[0].roomTypeCode, "FSS");
 
   const nationalityLookup = await pmsFetch.fetchWingsLiveContract(
@@ -379,7 +408,7 @@ async function main() {
     { capability: "nationality_language_lookup", natCode: "USA" },
     syncConfig
   );
-  assert.equal(nationalityLookup.items.length, 2);
+  assert.equal(nationalityLookup.items.length, 3);
   assert.equal(nationalityLookup.items[0].natCode, "USA");
 
   const reservationDetail = await pmsFetch.fetchWingsLiveContract(
@@ -403,6 +432,7 @@ async function main() {
     "admin-station",
     {
       capability: "assigned_room_lookup",
+      branch: "강남",
       reservationNo: "25162205",
       reservationSeqNo: "1",
       arrvDate: "2026-04-11",

@@ -16,8 +16,8 @@ def assert_secret_hygiene(file_path: Path, *, require_embedded_flag: bool = Fals
 
 def main() -> None:
     assert_secret_hygiene(ROOT / "src" / "constants.js", require_embedded_flag=True)
-    assert_secret_hygiene(ROOT / "src" / "extensionBridge.entry.js")
-    assert_secret_hygiene(ROOT / "src" / "background.js")
+    assert_secret_hygiene(ROOT / "extension" / "src" / "extensionBridge.entry.js")
+    assert_secret_hygiene(ROOT / "extension" / "src" / "background.js")
     print("regression_secret_hygiene_py: OK")
 
 

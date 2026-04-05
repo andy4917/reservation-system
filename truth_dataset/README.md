@@ -12,8 +12,6 @@
 - `wings_capability_matrix_v1.json`
 - `wings_live_contract_v2.json`
 - `CAPTURE_SPEC_v1.md`
-- `fixtures/sample_capture_spec.json`
-- `fixtures/sample_live_capture_bundle.json`
 - `reports/current_contract_gap_report.md`
 - `reports/wings_har_endpoint_catalog.md`
 - `reports/wings_har_refresh_audit.md`
@@ -22,15 +20,15 @@
 
 - raw field와 canonical field를 함께 보존한다.
 - 이름, 전화, 쿠키, 토큰은 redaction 또는 hash된 값만 둔다.
-- 샘플 bundle은 읽기 전용 관측을 대표하는 최소 fixture다.
 - 실제 운영 샘플은 같은 schema를 사용하되 별도 비공개 저장소나 로컬 artifact에 둔다.
+- 이 저장소는 예시 fixture를 내장하지 않는다. 검증용 bundle/spec는 호출 시 명시적으로 넘긴다.
 
 ## Validation
 
 ```bash
-python3 scripts/validate_truth_dataset.py --bundle truth_dataset/fixtures/sample_live_capture_bundle.json
-python3 scripts/build_truth_capture_bundle.py --spec truth_dataset/fixtures/sample_capture_spec.json --output /tmp/truth_bundle.json
-python3 scripts/analyze_wings_har_endpoints.py "/mnt/c/Users/anise/OneDrive/바탕 화면/pms.sanhait.com.ACCOUNT coex.har" "/mnt/c/Users/anise/OneDrive/바탕 화면/pms.sanhait.com.ACCOUNT gangnam.har" --json-out truth_dataset/reports/wings_har_endpoint_catalog.json --md-out truth_dataset/reports/wings_har_endpoint_catalog.md
+python3 scripts/validate_truth_dataset.py --bundle truth_dataset/local/truth_bundle.json
+python3 scripts/build_truth_capture_bundle.py --spec truth_dataset/local/capture_spec.json --output truth_dataset/local/truth_bundle.json
+python3 scripts/analyze_wings_har_endpoints.py truth_dataset/local/coex.har truth_dataset/local/gangnam.har --json-out truth_dataset/reports/wings_har_endpoint_catalog.json --md-out truth_dataset/reports/wings_har_endpoint_catalog.md
 python3 scripts/build_wings_capability_matrix.py
 ```
 

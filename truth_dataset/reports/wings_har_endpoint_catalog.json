@@ -1,10 +1,11 @@
 {
   "har_files": [
-    "/mnt/c/Users/anise/OneDrive/바탕 화면/pms.sanhait.com.ACCOUNT coex.har",
-    "/mnt/c/Users/anise/OneDrive/바탕 화면/pms.sanhait.com.ACCOUNT gangnam.har"
+    "pms.sanhait.com.ACCOUNT sl.har",
+    "pms.sanhait.com.ACCOUNT coex.har",
+    "pms.sanhait.com.ACCOUNT gangnam.har"
   ],
-  "endpoint_count": 38,
-  "readonly_count": 34,
+  "endpoint_count": 47,
+  "readonly_count": 43,
   "mutation_count": 4,
   "endpoints": [
     {
@@ -13,18 +14,20 @@
       "capability": "readonly_unknown",
       "group": "misc",
       "methods": {
-        "POST": 8
+        "POST": 13
       },
       "statuses": {
-        "200": 8
+        "200": 13
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "birth",
@@ -50,18 +53,20 @@
       "capability": "nationality_language_lookup",
       "group": "guest",
       "methods": {
-        "POST": 7
+        "POST": 9
       },
       "statuses": {
-        "200": 7
+        "200": 9
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "nat_code",
@@ -88,18 +93,20 @@
       "capability": "readonly_unknown",
       "group": "misc",
       "methods": {
-        "POST": 8
+        "POST": 13
       },
       "statuses": {
-        "200": 8
+        "200": 13
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "custm_no"
@@ -246,18 +253,20 @@
       "capability": "readonly_unknown",
       "group": "misc",
       "methods": {
-        "POST": 6
+        "POST": 10
       },
       "statuses": {
-        "200": 6
+        "200": 10
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "property_no",
@@ -282,18 +291,20 @@
       "capability": "linked_reservation_lookup",
       "group": "reservation",
       "methods": {
-        "POST": 5
+        "POST": 7
       },
       "statuses": {
-        "200": 5
+        "200": 7
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "conn_rsvn_no",
@@ -310,6 +321,286 @@
         "rows"
       ],
       "response_row_keys": []
+    },
+    {
+      "path": "/pms/biz/fd01_0101/searchListRateByWalkIn.do",
+      "read_only": true,
+      "capability": "readonly_unknown",
+      "group": "misc",
+      "methods": {
+        "POST": 1
+      },
+      "statuses": {
+        "200": 1
+      },
+      "branches": [
+        "BRANCH_THE_SEOLLEUNG"
+      ],
+      "files": [
+        "pms.sanhait.com.ACCOUNT sl.har"
+      ],
+      "request_keys": [
+        "arrv_date",
+        "bsns_code",
+        "dept_date",
+        "folio_no",
+        "pp_floating_point",
+        "property_no",
+        "tax_type_code"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "room_fee",
+        "sale_date_desc",
+        "commission_type_code",
+        "dow",
+        "room_type_name",
+        "folio_no",
+        "room_type_code",
+        "std_room_fee",
+        "property_no",
+        "commission_amt",
+        "commision_rate",
+        "dc_rate",
+        "bsns_code",
+        "lodg_date"
+      ]
+    },
+    {
+      "path": "/pms/biz/fd01_0101/searchListServiceByWalkIn.do",
+      "read_only": true,
+      "capability": "readonly_unknown",
+      "group": "misc",
+      "methods": {
+        "POST": 1
+      },
+      "statuses": {
+        "200": 1
+      },
+      "branches": [
+        "BRANCH_THE_SEOLLEUNG"
+      ],
+      "files": [
+        "pms.sanhait.com.ACCOUNT sl.har"
+      ],
+      "request_keys": [
+        "folio_no",
+        "property_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": []
+    },
+    {
+      "path": "/pms/biz/fd01_0201/searchFITInHouse.do",
+      "read_only": true,
+      "capability": "readonly_unknown",
+      "group": "misc",
+      "methods": {
+        "POST": 1
+      },
+      "statuses": {
+        "200": 1
+      },
+      "branches": [
+        "BRANCH_THE_SEOLLEUNG"
+      ],
+      "files": [
+        "pms.sanhait.com.ACCOUNT sl.har"
+      ],
+      "request_keys": [
+        "auth_pass_yn",
+        "folio_no",
+        "page_id",
+        "property_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "intermemocnt",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "custm_no",
+        "rsvn_method_code",
+        "cvc_no",
+        "calc_prog_yn",
+        "visit_cnt",
+        "market_code",
+        "ind_group_code",
+        "no_information_yn",
+        "u_inhs_gest_eng_name",
+        "mobile_no_encoding",
+        "check_in_by",
+        "deposit_amt",
+        "rsvn_gest_tel_no_encoding",
+        "mail_addr",
+        "solar_yn",
+        "comt",
+        "property_name",
+        "deposit_no",
+        "custm_name",
+        "partical_ci_yn",
+        "lang_name",
+        "conn_dept_date",
+        "rsvn_status_name",
+        "mail_no",
+        "nights",
+        "chck_out_proc_prsn_id",
+        "calc_pay_code",
+        "chck_out_time",
+        "config_id",
+        "arrv_date"
+      ]
+    },
+    {
+      "path": "/pms/biz/fd01_0201/searchListLinkdeRoom.do",
+      "read_only": true,
+      "capability": "readonly_unknown",
+      "group": "misc",
+      "methods": {
+        "POST": 1
+      },
+      "statuses": {
+        "200": 1
+      },
+      "branches": [
+        "BRANCH_THE_SEOLLEUNG"
+      ],
+      "files": [
+        "pms.sanhait.com.ACCOUNT sl.har"
+      ],
+      "request_keys": [
+        "conn_folio_no",
+        "folio_no",
+        "rsvn_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": []
+    },
+    {
+      "path": "/pms/biz/fd02_0100/searchCounting.do",
+      "read_only": true,
+      "capability": "readonly_unknown",
+      "group": "misc",
+      "methods": {
+        "POST": 2
+      },
+      "statuses": {
+        "200": 2
+      },
+      "branches": [
+        "BRANCH_THE_SEOLLEUNG"
+      ],
+      "files": [
+        "pms.sanhait.com.ACCOUNT sl.har"
+      ],
+      "request_keys": [
+        "folio_no",
+        "rsvn_no",
+        "status_code"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "cnt_lost_found",
+        "cnt_location",
+        "cnt_luggage",
+        "chk_st_coupon",
+        "cnt_laundry",
+        "chk_pickup",
+        "chk_sub_inform",
+        "chk_group_block",
+        "chk_wakeup",
+        "chk_st_be_mileage",
+        "chk_grp_change_hitory",
+        "cnt_rental",
+        "cnt_room_block_by_acct",
+        "cnt_guest_message",
+        "chk_fit_change_hitory",
+        "cnt_group_deposit",
+        "show_laundry_yn",
+        "cnt_preperfence",
+        "chk_internal_rev",
+        "cnt_linked",
+        "chk_products",
+        "tax_refund_yn",
+        "cnt_deposit",
+        "chk_group_occupancy",
+        "cnt_inter_memo",
+        "cnt_accompany",
+        "chk_special_billing"
+      ]
+    },
+    {
+      "path": "/pms/biz/fd02_0200/searchListAmount.do",
+      "read_only": true,
+      "capability": "readonly_unknown",
+      "group": "misc",
+      "methods": {
+        "POST": 1
+      },
+      "statuses": {
+        "200": 1
+      },
+      "branches": [
+        "BRANCH_THE_SEOLLEUNG"
+      ],
+      "files": [
+        "pms.sanhait.com.ACCOUNT sl.har"
+      ],
+      "request_keys": [
+        "folio_no"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "room_amt",
+        "other_amt",
+        "paid_amt",
+        "balance"
+      ]
     },
     {
       "path": "/pms/biz/fd02_0200/searchListGuestExpressCheckOut.do",
@@ -449,18 +740,20 @@
       "capability": "readonly_unknown",
       "group": "misc",
       "methods": {
-        "POST": 5
+        "POST": 7
       },
       "statuses": {
-        "200": 5
+        "200": 7
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "bsns_code",
@@ -486,18 +779,20 @@
       "capability": "readonly_unknown",
       "group": "misc",
       "methods": {
-        "POST": 7
+        "POST": 10
       },
       "statuses": {
-        "200": 7
+        "200": 10
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "express_cnt",
@@ -545,18 +840,20 @@
       "capability": "reservation_detail",
       "group": "reservation",
       "methods": {
-        "POST": 5
+        "POST": 7
       },
       "statuses": {
-        "200": 5
+        "200": 7
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "auth_pass_yn",
@@ -615,18 +912,20 @@
       "capability": "special_service_lookup",
       "group": "reservation",
       "methods": {
-        "POST": 5
+        "POST": 7
       },
       "statuses": {
-        "200": 5
+        "200": 7
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "adult_cnt",
@@ -677,18 +976,20 @@
       "capability": "reservation_rate_lookup",
       "group": "reservation",
       "methods": {
-        "POST": 5
+        "POST": 7
       },
       "statuses": {
-        "200": 5
+        "200": 7
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "adult_cnt",
@@ -829,16 +1130,18 @@
       "capability": "assigned_room_guest_info",
       "group": "room_assignment",
       "methods": {
-        "POST": 3
+        "POST": 4
       },
       "statuses": {
-        "200": 3
+        "200": 4
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "GANGNAM"
       ],
       "files": [
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "rsvn_no",
@@ -865,16 +1168,18 @@
       "capability": "assigned_room_lookup",
       "group": "room_assignment",
       "methods": {
-        "POST": 3
+        "POST": 4
       },
       "statuses": {
-        "200": 3
+        "200": 4
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "GANGNAM"
       ],
       "files": [
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "arrv_date",
@@ -935,16 +1240,18 @@
       "capability": "assignable_room_lookup",
       "group": "room_assignment",
       "methods": {
-        "POST": 3
+        "POST": 4
       },
       "statuses": {
-        "200": 3
+        "200": 4
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "GANGNAM"
       ],
       "files": [
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "arrv_date",
@@ -1008,16 +1315,18 @@
       "capability": "assignable_room_type_lookup",
       "group": "room_assignment",
       "methods": {
-        "POST": 1
+        "POST": 2
       },
       "statuses": {
-        "200": 1
+        "200": 2
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "GANGNAM"
       ],
       "files": [
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "bsns_code",
@@ -1095,23 +1404,63 @@
       ]
     },
     {
+      "path": "/pms/biz/ir01_0300/searchListContextMenu.do",
+      "read_only": true,
+      "capability": "readonly_unknown",
+      "group": "misc",
+      "methods": {
+        "POST": 1
+      },
+      "statuses": {
+        "200": 1
+      },
+      "branches": [
+        "BRANCH_THE_SEOLLEUNG"
+      ],
+      "files": [
+        "pms.sanhait.com.ACCOUNT sl.har"
+      ],
+      "request_keys": [
+        "pp_bsns_code"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "parent_action_id",
+        "room_status_code",
+        "name_of_value",
+        "seperator",
+        "clean_status_code",
+        "action_id"
+      ]
+    },
+    {
       "path": "/pms/biz/ir01_0300/searchListRoomAvaiable.do",
       "read_only": true,
       "capability": "room_availability_chart",
       "group": "inventory",
       "methods": {
-        "POST": 5
+        "POST": 6
       },
       "statuses": {
-        "200": 5
+        "200": 6
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "date_s",
@@ -1172,18 +1521,20 @@
       "capability": "room_block_chart",
       "group": "inventory",
       "methods": {
-        "POST": 5
+        "POST": 6
       },
       "statuses": {
-        "200": 5
+        "200": 6
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "base_date",
@@ -1287,18 +1638,20 @@
       "capability": "room_availability_summary",
       "group": "inventory",
       "methods": {
-        "POST": 4
+        "POST": 5
       },
       "statuses": {
-        "200": 4
+        "200": 5
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "date_s",
@@ -1381,6 +1734,109 @@
         "resultmsg"
       ],
       "response_row_keys": []
+    },
+    {
+      "path": "/pms/biz/ir02_0101/searchListRoomAvailablebByRoomType.do",
+      "read_only": true,
+      "capability": "readonly_unknown",
+      "group": "misc",
+      "methods": {
+        "POST": 3
+      },
+      "statuses": {
+        "200": 3
+      },
+      "branches": [
+        "BRANCH_THE_SEOLLEUNG"
+      ],
+      "files": [
+        "pms.sanhait.com.ACCOUNT sl.har"
+      ],
+      "request_keys": [
+        "property_no",
+        "room_status_option",
+        "room_type_code",
+        "sale_date",
+        "sale_date_desc",
+        "status_option"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "arrv_date",
+        "ind_group_code",
+        "no_information_yn",
+        "rsvn_room_cnt",
+        "non_smok_cnt",
+        "block_name",
+        "used_rooms",
+        "rsvn_no",
+        "corp_custm_no",
+        "dept_date",
+        "gest_name",
+        "comt",
+        "room_no",
+        "room_type_code",
+        "rate_code",
+        "rsvn_status_code",
+        "property_no",
+        "room_block_no",
+        "nights",
+        "bsns_code",
+        "corp_custm_name"
+      ]
+    },
+    {
+      "path": "/pms/biz/ir02_0101/searchRoomSummaryByRoomType.do",
+      "read_only": true,
+      "capability": "readonly_unknown",
+      "group": "misc",
+      "methods": {
+        "POST": 3
+      },
+      "statuses": {
+        "200": 3
+      },
+      "branches": [
+        "BRANCH_THE_SEOLLEUNG"
+      ],
+      "files": [
+        "pms.sanhait.com.ACCOUNT sl.har"
+      ],
+      "request_keys": [
+        "property_no",
+        "room_status_option",
+        "room_type_code",
+        "sale_date",
+        "sale_date_desc",
+        "status_option"
+      ],
+      "response_top_level_keys": [
+        "api_url",
+        "bos_url",
+        "bwi_url",
+        "pms_url",
+        "resultcd",
+        "resultmsg",
+        "rows"
+      ],
+      "response_row_keys": [
+        "available",
+        "house_use",
+        "day_use",
+        "reserved",
+        "out_of_order",
+        "expected",
+        "total_rooms",
+        "stay"
+      ]
     },
     {
       "path": "/pms/biz/ir04/searchListMarket.do",
@@ -1614,18 +2070,20 @@
       "capability": "reservation_lookup",
       "group": "reservation",
       "methods": {
-        "POST": 3
+        "POST": 5
       },
       "statuses": {
-        "200": 3
+        "200": 5
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "auth_pass_yn",
@@ -1708,18 +2166,20 @@
       "capability": "reservation_summary",
       "group": "reservation",
       "methods": {
-        "POST": 3
+        "POST": 5
       },
       "statuses": {
-        "200": 3
+        "200": 5
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [
         "accompany",
@@ -1974,18 +2434,20 @@
       "capability": "readonly_unknown",
       "group": "misc",
       "methods": {
-        "POST": 5
+        "POST": 8
       },
       "statuses": {
-        "200": 5
+        "200": 8
       },
       "branches": [
+        "BRANCH_THE_SEOLLEUNG",
         "COEX",
         "GANGNAM"
       ],
       "files": [
         "pms.sanhait.com.ACCOUNT coex.har",
-        "pms.sanhait.com.ACCOUNT gangnam.har"
+        "pms.sanhait.com.ACCOUNT gangnam.har",
+        "pms.sanhait.com.ACCOUNT sl.har"
       ],
       "request_keys": [],
       "response_top_level_keys": [
@@ -2003,7 +2465,9 @@
         "wacom100_yn",
         "socket_server",
         "socket_version",
-        "btn_name"
+        "btn_name",
+        "dowhat_e_regi_url",
+        "dowhat_e_regi_use_yn"
       ]
     }
   ]

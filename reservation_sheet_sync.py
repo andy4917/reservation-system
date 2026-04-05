@@ -23,12 +23,12 @@ from requests.adapters import HTTPAdapter
 from src.domain.sync_policy import (
     APPLY_BLOCKING_STATION_WARNING_CODES,
     APPLY_BLOCKING_VALIDATION_WARN_CODES,
-    DEFAULT_NAVER_API_BASE,
-    DEFAULT_NAVER_BUSINESS_ID,
-    DEFAULT_NAVER_ROOM_IDS,
-    DEFAULT_STATION_API_BASE,
-    DEFAULT_STATION_BRANCH_ID,
-    DEFAULT_STATION_ROOM_IDS,
+    POLICY_NAVER_API_BASE,
+    POLICY_NAVER_BUSINESS_ID,
+    POLICY_NAVER_ROOM_IDS,
+    POLICY_STATION_API_BASE,
+    POLICY_STATION_BRANCH_ID,
+    POLICY_STATION_ROOM_IDS,
     PROVIDER_TARGET_MAX,
 )
 from src.domain.inventory_planner import build_inventory_planner_summary
@@ -118,17 +118,17 @@ def parse_optional_iso_date(value: str) -> Optional[dt.date]:
     return parse_iso_date(text)
 
 
-def parse_id_list(value: str, fallback: List[str]) -> List[str]:
+def parse_id_list(value: str, default_ids: List[str]) -> List[str]:
     text = str(value or "").strip()
     if not text:
-        return list(fallback)
+        return list(default_ids)
     out = []
     for token in text.split(","):
         token = token.strip()
         if token:
             out.append(token)
     if not out:
-        return list(fallback)
+        return list(default_ids)
     return out
 
 
@@ -867,11 +867,7 @@ def summarize_station_actual_units_by_date(
     station_rows: List[Dict[str, Any]],
     room_ids: List[str],
 ) -> Dict[str, int]:
-    return bridge_summarize_station_actual_units_by_date(
-        station_rows,
-        room_ids,
-        fallback=_summarize_station_actual_units_by_date_py,
-    )
+    return bridge_summarize_station_actual_units_by_date(station_rows, room_ids)
 
 
 def _summarize_naver_actual_units_by_date_py(
@@ -900,11 +896,7 @@ def summarize_naver_actual_units_by_date(
     current_by_room: Dict[str, Dict[str, Dict[str, Any]]],
     room_ids: List[str],
 ) -> Dict[str, int]:
-    return bridge_summarize_naver_actual_units_by_date(
-        current_by_room,
-        room_ids,
-        fallback=_summarize_naver_actual_units_by_date_py,
-    )
+    return bridge_summarize_naver_actual_units_by_date(current_by_room, room_ids)
 
 
 def summarize_station_action_stats_by_date(actions: List[Dict[str, Any]]) -> Dict[str, Dict[str, int]]:
@@ -1021,13 +1013,7 @@ def build_provider_reconciliation(
     actual_units_by_date: Dict[str, int],
     action_stats_by_date: Dict[str, Dict[str, int]],
 ) -> Dict[str, Any]:
-    return bridge_build_provider_reconciliation(
-        provider_key,
-        desired_units_by_date,
-        actual_units_by_date,
-        action_stats_by_date,
-        fallback=_build_provider_reconciliation_py,
-    )
+    return bridge_build_provider_reconciliation(provider_key, desired_units_by_date, actual_units_by_date, action_stats_by_date)
 
 
 def compute_reconciliation_fingerprint(summary: Dict[str, Any]) -> str:
@@ -1350,8 +1336,8 @@ def resolve_inventory_maximum(inv: Any, provider_key: str) -> Optional[int]:
     maximum = getattr(inv, "maximum", None)
     if isinstance(maximum, int):
         return max(maximum, 0)
-    fallback = provider_default_max(provider_key)
-    return max(fallback, 0) if isinstance(fallback, int) else None
+    default_max = provider_default_max(provider_key)
+    return max(default_max, 0) if isinstance(default_max, int) else None
 
 
 def inventory_value_to_target_units(inv: Any, mode: str, provider_key: str) -> Optional[int]:
@@ -1514,12 +1500,7 @@ def allocate_room_units(
     current_stock_by_room: Dict[str, int],
     target_units: int,
 ) -> Dict[str, int]:
-    return bridge_allocate_room_units(
-        room_ids,
-        current_stock_by_room,
-        target_units,
-        fallback=_allocate_room_units_py,
-    )
+    return bridge_allocate_room_units(room_ids, current_stock_by_room, target_units)
 
 
 def _allocate_room_units_flexible_py(
@@ -1559,12 +1540,7 @@ def allocate_room_units_flexible(
     current_stock_by_room: Dict[str, int],
     target_units: int,
 ) -> Dict[str, int]:
-    return bridge_allocate_room_units_flexible(
-        room_ids,
-        current_stock_by_room,
-        target_units,
-        fallback=_allocate_room_units_flexible_py,
-    )
+    return bridge_allocate_room_units_flexible(room_ids, current_stock_by_room, target_units)
 
 
 def fetch_station_calendar(
@@ -1968,8 +1944,8 @@ def command_sync_inventory(args: argparse.Namespace) -> int:
     provider = args.provider
     mode = args.sheet_stock_mode
     auth_bundle_payload = load_auth_bundle_payload(args.auth_bundle, args.auth_bundle_file)
-    station_room_ids = parse_id_list(args.station_room_ids, DEFAULT_STATION_ROOM_IDS)
-    naver_room_ids = parse_id_list(args.naver_room_ids, DEFAULT_NAVER_ROOM_IDS)
+    station_room_ids = parse_id_list(args.station_room_ids, POLICY_STATION_ROOM_IDS)
+    naver_room_ids = parse_id_list(args.naver_room_ids, POLICY_NAVER_ROOM_IDS)
 
     ensure_provider_inventory_rows(snapshot, provider)
     target_plan = build_sync_targets(snapshot, provider, mode)
@@ -2227,15 +2203,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--auth-bundle", default="")
     parser.add_argument("--auth-bundle-file", default="")
 
-    parser.add_argument("--station-api-base", default=DEFAULT_STATION_API_BASE)
-    parser.add_argument("--station-branch-id", default=DEFAULT_STATION_BRANCH_ID)
-    parser.add_argument("--station-room-ids", default=",".join(DEFAULT_STATION_ROOM_IDS))
+    parser.add_argument("--station-api-base", default=POLICY_STATION_API_BASE)
+    parser.add_argument("--station-branch-id", default=POLICY_STATION_BRANCH_ID)
+    parser.add_argument("--station-room-ids", default=",".join(POLICY_STATION_ROOM_IDS))
     parser.add_argument("--station-token", default="")
     parser.add_argument("--station-har", default="")
 
-    parser.add_argument("--naver-api-base", default=DEFAULT_NAVER_API_BASE)
-    parser.add_argument("--naver-business-id", default=DEFAULT_NAVER_BUSINESS_ID)
-    parser.add_argument("--naver-room-ids", default=",".join(DEFAULT_NAVER_ROOM_IDS))
+    parser.add_argument("--naver-api-base", default=POLICY_NAVER_API_BASE)
+    parser.add_argument("--naver-business-id", default=POLICY_NAVER_BUSINESS_ID)
+    parser.add_argument("--naver-room-ids", default=",".join(POLICY_NAVER_ROOM_IDS))
     parser.add_argument("--naver-har", default="")
     parser.add_argument("--naver-cookie", default="")
     parser.add_argument("--naver-csrf-token", default="")
