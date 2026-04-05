@@ -15,9 +15,11 @@ function main() {
   const logo = read(root, "app_v2/renderer/assets/uh-suite-logo.svg");
 
   assert.match(appSource, /UH 작업관리자/);
-  assert.match(appSource, /클리닝/);
+  assert.match(appSource, /보조 작업/);
+  assert.match(appSource, /재고 관리/);
+  assert.match(appSource, /오류 관리/);
   assert.match(appSource, /오더리스트/);
-  assert.match(appSource, /어라이벌 리스트/);
+  assert.match(appSource, /어라이벌/);
   assert.doesNotMatch(appSource, /Dashboard/);
   assert.match(appSource, /platformColorMap|channelColorMap/);
   assert.match(appSource, /아고다|부킹닷컴|트립닷컴|익스피디아|에어비앤비|네이버|야놀자|여기어때|쿠팡트래블|스테이션|디다트레블/);

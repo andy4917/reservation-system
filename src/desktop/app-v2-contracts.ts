@@ -14,6 +14,12 @@ export const APP_SHELL_MODULES = [
   "settings"
 ] as const;
 export const APP_RESERVATION_ACTIONS = ["compare", "validate", "reconcile", "edit", "apply", "order-list", "arrival"] as const;
+export const APP_RESERVATION_MANAGEMENT_VIEWS = ["inventory-management", "error-management"] as const;
+export const APP_INVENTORY_BOARD_MODES = ["sheet", "ota", "combined"] as const;
+export const APP_OTA_MODES = ["naver", "station"] as const;
+export const APP_COEX_WINGS = ["A", "B"] as const;
+export const APP_ISSUE_STATUSES = ["normal", "error", "needs-review", "resolved"] as const;
+export const APP_ERROR_PANEL_TABS = ["error", "needs-review"] as const;
 export const APP_READ_SOURCES = ["pms", "ota", "sheet"] as const;
 export const DEFAULT_APP_REPORT_WINDOW_DAYS = 5;
 export const DEFAULT_APP_BGE_MODEL_ID = DEFAULT_APP_BGE_MODEL_ID_POLICY;
@@ -25,6 +31,12 @@ export type AppBranch = (typeof APP_BRANCHES)[number];
 export type AppBranchAvailability = "active" | "inactive";
 export type AppShellModule = (typeof APP_SHELL_MODULES)[number];
 export type AppReservationAction = (typeof APP_RESERVATION_ACTIONS)[number];
+export type AppReservationManagementView = (typeof APP_RESERVATION_MANAGEMENT_VIEWS)[number];
+export type AppInventoryBoardMode = (typeof APP_INVENTORY_BOARD_MODES)[number];
+export type AppOtaMode = (typeof APP_OTA_MODES)[number];
+export type AppCoexWing = (typeof APP_COEX_WINGS)[number];
+export type AppIssueStatus = (typeof APP_ISSUE_STATUSES)[number];
+export type AppErrorPanelTab = (typeof APP_ERROR_PANEL_TABS)[number];
 export type AppReadSource = (typeof APP_READ_SOURCES)[number];
 export type AppProviderWindowState = "hidden" | "visible" | "closed";
 export type AppProviderPageState = "idle" | "loading" | "loaded" | "error";
@@ -354,6 +366,25 @@ export interface AppReservationActionSnapshot {
   requiresApproval?: boolean;
   applyAllowed?: boolean;
   opsView?: AppOpsViewSnapshot | null;
+}
+
+export interface AppInventoryWorkbenchState {
+  view: AppReservationManagementView;
+  rowLimit: number;
+  boardMode: AppInventoryBoardMode;
+  editMode: boolean;
+  otaMode: AppOtaMode;
+  coexWing: AppCoexWing;
+  hoveredDiffId: string | null;
+  motionKey: number;
+}
+
+export interface AppErrorWorkbenchState {
+  panelTab: AppErrorPanelTab | null;
+  selectedIssueId: string | null;
+  resolvedIssueIds: string[];
+  quickScanPassedIds: string[];
+  decisionMap: Record<string, AppIssueStatus>;
 }
 
 export interface AppWingsLoginAttemptSnapshot {

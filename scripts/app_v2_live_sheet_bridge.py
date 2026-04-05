@@ -381,7 +381,7 @@ def build_block_preview_items(blocks: List[Any]) -> List[Dict[str, Any]]:
                 "noteHead": note_head,
             }
         )
-    return preview_rows[:24]
+    return preview_rows[:21]
 
 
 def build_review_candidates(blocks: List[Any]) -> List[Dict[str, str]]:

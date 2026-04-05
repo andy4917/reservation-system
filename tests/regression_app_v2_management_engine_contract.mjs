@@ -26,9 +26,9 @@ function main() {
   assert.match(runner, /engineStatus/);
   assert.match(runner, /planToken/);
   assert.doesNotMatch(appSource, /plan token/i);
-  assert.match(appSource, /실제 OTA 재고 반영은 비활성입니다/);
-  assert.match(appSource, /OTA 적용 가능 상태/);
-  assert.match(appSource, /적용 가능/);
+  assert.match(appSource, /예약 시트 재고 작업대/);
+  assert.match(appSource, /OTA WRITE/);
+  assert.match(appSource, /WRITE 가능|동기화/);
   assert.match(shellState, /실제 결과만 표시합니다/);
 
   console.log("regression_app_v2_management_engine_contract: OK");

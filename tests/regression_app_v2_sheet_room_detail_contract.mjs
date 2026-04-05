@@ -21,6 +21,7 @@ function main() {
   assert.match(contracts, /checkin\?: string/);
   assert.match(contracts, /checkout\?: string/);
   assert.match(contracts, /nightCount\?: number/);
+  assert.match(contracts, /noteHead\?: string/);
 
   assert.match(liveBridge, /"roomType":/);
   assert.match(liveBridge, /"roomNo":/);
@@ -28,10 +29,21 @@ function main() {
   assert.match(liveBridge, /"reservationNo":/);
   assert.match(liveBridge, /"checkin":/);
   assert.match(liveBridge, /"checkout":/);
+  assert.match(liveBridge, /"noteHead":/);
+  assert.match(liveBridge, /"channel":/);
+  assert.match(liveBridge, /"packageMarkers":/);
+  assert.match(liveBridge, /"roomChangeBlocker":/);
+  assert.match(liveBridge, /return preview_rows\[:\d+\]/);
+
+  const previewCapMatch = liveBridge.match(/return preview_rows\[:(\d+)\]/);
+  assert.equal(previewCapMatch?.[1], "21", "sheet room preview cap should be 21 rows");
 
   assert.match(appSource, /room-detail/i);
   assert.match(appSource, /시트 기준/);
   assert.match(appSource, /roomType|roomNo|guestName/);
+  assert.match(appSource, /room-detail-item/);
+  assert.match(appSource, /setSelectedRoomDetailId/);
+  assert.match(appSource, /room-block/);
 
   console.log("regression_app_v2_sheet_room_detail_contract: OK");
 }

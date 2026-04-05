@@ -4,12 +4,20 @@ import type {
   AppOpsArrivalRow,
   AppOpsOrderRow,
   AppBranch,
+  AppCoexWing,
+  AppErrorWorkbenchState,
+  AppErrorPanelTab,
+  AppInventoryBoardMode,
+  AppInventoryWorkbenchState,
+  AppIssueStatus,
   AppLiveReadPreviewItem,
   AppLiveReadSnapshot,
+  AppOtaMode,
   AppPreflightSnapshot,
   AppProvider,
   AppProviderBrowserState,
   AppReservationAction,
+  AppReservationManagementView,
   AppReservationActionRow,
   AppReservationActionSnapshot,
   AppRuntimeVerifySnapshot,
@@ -26,10 +34,7 @@ import {
 } from "../../src/desktop/app-v2-contracts.js";
 import {
   buildActionOutputRows,
-  buildActionSteps,
-  buildPreviewItems,
   buildResultSummary,
-  buildReviewQueue,
   BRANCH_OPTIONS,
   createIdleRead,
   deriveReservationActionAvailability,
@@ -46,9 +51,6 @@ const MODULE_LABELS: Record<Exclude<AppShellModule, "settings">, string> = {
 
 type WorkspacePhase = "idle" | "working" | "result";
 type AppReadSource = "pms" | "ota" | "sheet";
-type ManagementActionGroupKey = "review" | "edit" | "apply";
-type ApplyInventoryMode = "sheet" | "ota";
-
 const channelColorMap: Record<string, { label: string; bg: string; fg: string; accent: string }> = {
   AGODA: { label: "아고다", bg: "#EA9999", fg: "#1f1111", accent: "#c35f5f" },
   BOOKING: { label: "부킹닷컴", bg: "#6D9EEB", fg: "#111827", accent: "#3f6eb6" },
@@ -68,6 +70,10 @@ const channelColorMap: Record<string, { label: string; bg: string; fg: string; a
 
 function toDateInputValue(value: Date) {
   return value.toISOString().slice(0, 10);
+}
+
+function nowIso() {
+  return new Date().toISOString();
 }
 
 function addDays(value: string, days: number) {
@@ -93,10 +99,6 @@ function formatDateTime(value: string | null) {
 
 function providerLabel(provider: AppProvider) {
   return getAppProviderOption(provider).shortLabel;
-}
-
-function authModeLabel(mode: AppAuthRequirement["authMode"]) {
-  return mode === "config-auth" ? ".env / 설정" : "브라우저 세션";
 }
 
 function authStatusLabel(status: AppAuthRequirement["status"]) {
@@ -359,6 +361,138 @@ function classifyArrivalCellTone(text: string) {
   return getOpsTaskTone("ARRIVAL");
 }
 
+interface InventoryBoardCell {
+  id: string;
+  dayIso: string;
+  baseValue: string;
+  nextValue: string;
+  previousValue: string;
+  changed: boolean;
+  occupied: boolean;
+}
+
+interface InventoryBoardRow {
+  id: string;
+  roomLabel: string;
+  roomType: string;
+  guestLabel: string;
+  issueStatus: AppIssueStatus;
+  sourceItem: AppLiveReadPreviewItem;
+  cells: InventoryBoardCell[];
+}
+
+interface ErrorWorkbenchIssue {
+  id: string;
+  roomLabel: string;
+  roomType: string;
+  guestLabel: string;
+  date: string;
+  summary: string;
+  detail: string;
+  guidance: string;
+  status: AppIssueStatus;
+}
+
+interface InventoryProviderDraftState {
+  syncedAt: string | null;
+  copiedAt: string | null;
+  writeRequestedAt: string | null;
+}
+
+function matchesReservationActionRow(item: AppLiveReadPreviewItem, row: AppReservationActionRow) {
+  const haystack = [row.primary, row.secondary, row.detail, row.statusLabel].join(" ").toLowerCase();
+  return [item.roomNo, item.roomType, item.guestName, item.reservationNo].some((value) => Boolean(value && haystack.includes(String(value).toLowerCase())));
+}
+
+function inferReservationIssueStatus(
+  item: AppLiveReadPreviewItem,
+  rows: AppReservationActionRow[],
+  decisionMap: Record<string, AppIssueStatus> = {},
+) {
+  const manual = decisionMap[item.id];
+  if (manual) return manual;
+  const matchedRow = rows.find((row) => matchesReservationActionRow(item, row));
+  const matchedText = [matchedRow?.statusLabel, matchedRow?.detail, matchedRow?.secondary].join(" ").toLowerCase();
+  if (
+    matchedText.includes("error") ||
+    matchedText.includes("warn") ||
+    matchedText.includes("mismatch") ||
+    matchedText.includes("blocked")
+  ) {
+    return "error" as const;
+  }
+  if (!item.guestName || !item.reservationNo || !item.roomType || !item.channel || Boolean(item.noteHead)) {
+    return "needs-review" as const;
+  }
+  return "normal" as const;
+}
+
+function toIssueSortDistance(date: string) {
+  const parsed = parseIsoDate(date);
+  if (!parsed) return Number.MAX_SAFE_INTEGER;
+  return Math.abs(parsed.getTime() - new Date().setHours(0, 0, 0, 0));
+}
+
+function buildErrorWorkbenchIssues(
+  items: AppLiveReadPreviewItem[],
+  rows: AppReservationActionRow[],
+  decisionMap: Record<string, AppIssueStatus> = {},
+) {
+  return items
+    .map((item) => {
+      const status = inferReservationIssueStatus(item, rows, decisionMap);
+      const matchedRow = rows.find((row) => matchesReservationActionRow(item, row));
+      return {
+        id: item.id,
+        roomLabel: item.roomNo || "-",
+        roomType: item.roomType || "객실 미확인",
+        guestLabel: item.guestName || item.reservationNo || item.title,
+        date: item.checkin || "",
+        summary: matchedRow?.primary || `${item.roomNo || "-"} PMS 비교`,
+        detail: matchedRow?.secondary || item.subtitle || "현재 비교 정보가 없습니다.",
+        guidance: [item.checkin || "-", item.guestName || "이름 미기입", item.roomType || "객실타입 미기입"].join(" / "),
+        status,
+      } satisfies ErrorWorkbenchIssue;
+    })
+    .sort((a, b) => toIssueSortDistance(a.date) - toIssueSortDistance(b.date));
+}
+
+function buildInventoryBoardRows(
+  items: AppLiveReadPreviewItem[],
+  days: Array<{ iso: string; label: string; weekday: string }>,
+  synced: boolean,
+  otaMode: AppOtaMode,
+  decisionMap: Record<string, AppIssueStatus> = {},
+) {
+  return items.map((item) => {
+    const issueStatus = inferReservationIssueStatus(item, [], decisionMap);
+    const cells = days.map((day) => {
+      const occupied = matchesStayDay(item, day.iso);
+      const changed = synced && occupied;
+      const nextValue = changed ? "닫음" : occupied ? "예약" : "열림";
+      const previousValue = occupied ? "예약" : "열림";
+      return {
+        id: `${item.id}:${otaMode}:${day.iso}`,
+        dayIso: day.iso,
+        baseValue: occupied ? "예약" : "열림",
+        nextValue,
+        previousValue,
+        changed,
+        occupied,
+      } satisfies InventoryBoardCell;
+    });
+    return {
+      id: item.id,
+      roomLabel: item.roomNo || "-",
+      roomType: item.roomType || "객실",
+      guestLabel: item.guestName || item.reservationNo || item.title,
+      issueStatus,
+      sourceItem: item,
+      cells,
+    } satisfies InventoryBoardRow;
+  });
+}
+
 export default function App() {
   const [authRequirements, setAuthRequirements] = useState<AppAuthRequirement[]>([]);
   const [settingsSnapshot, setSettingsSnapshot] = useState<AppSettingsSnapshot | null>(null);
@@ -379,6 +513,7 @@ export default function App() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<AppBranch>("COEX");
   const [activeModule, setActiveModule] = useState<AppShellModule>("reservation-management");
+  const [activeManagementView, setActiveManagementView] = useState<AppReservationManagementView>("inventory-management");
   const [activeSource, setActiveSource] = useState<AppReadSource>("sheet");
   const [activeReservationAction, setActiveReservationAction] = useState<AppReservationAction>("validate");
   const [workspacePhase, setWorkspacePhase] = useState<WorkspacePhase>("idle");
@@ -387,18 +522,38 @@ export default function App() {
   const [windowEnd, setWindowEnd] = useState(buildDefaultWindow().end);
   const [reads, setReads] = useState(buildInitialReads("COEX"));
   const [reservationResult, setReservationResult] = useState<AppReservationActionSnapshot | null>(null);
-  const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [selectedRoomDetailId, setSelectedRoomDetailId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [opsBoardDate, setOpsBoardDate] = useState("");
   const [opsApplySummary, setOpsApplySummary] = useState("");
   const [wingsLoginSummary, setWingsLoginSummary] = useState("WINGS 공용 계정을 아직 가져오지 않았습니다.");
-  const [applyInventoryMode, setApplyInventoryMode] = useState<ApplyInventoryMode>("sheet");
+  const [inventoryWorkbench, setInventoryWorkbench] = useState<AppInventoryWorkbenchState>({
+    view: "inventory-management",
+    rowLimit: 21,
+    boardMode: "sheet",
+    editMode: false,
+    otaMode: "naver",
+    coexWing: "A",
+    hoveredDiffId: null,
+    motionKey: 0,
+  });
+  const [inventoryProviderDrafts, setInventoryProviderDrafts] = useState<Record<AppOtaMode, InventoryProviderDraftState>>({
+    naver: { syncedAt: null, copiedAt: null, writeRequestedAt: null },
+    station: { syncedAt: null, copiedAt: null, writeRequestedAt: null },
+  });
+  const [errorWorkbench, setErrorWorkbench] = useState<AppErrorWorkbenchState>({
+    panelTab: null,
+    selectedIssueId: null,
+    resolvedIssueIds: [],
+    quickScanPassedIds: [],
+    decisionMap: {},
+  });
   const previousModuleRef = useRef<AppShellModule>("reservation-management");
   const previousActionRef = useRef<AppReservationAction>("validate");
   const autoOpenedProvidersRef = useRef<Set<AppProvider>>(new Set());
   const autoWingsLoginAttemptedRef = useRef(false);
+  const errorPanelRef = useRef<HTMLDivElement | null>(null);
 
   const api = window.desktopApp;
   const activeBranchSheetNames = useMemo(() => (sheetName ? [sheetName] : []), [sheetName]);
@@ -480,10 +635,31 @@ export default function App() {
     setWorkspacePhase("idle");
     setWorkspaceMessage(`${selectedBranch} 작업을 준비했습니다.`);
     setReservationResult(null);
-    setSelectedReviewId(null);
     setSelectedRoomDetailId(null);
     setActiveSource("sheet");
     setOpsApplySummary("");
+    setActiveManagementView("inventory-management");
+    setInventoryWorkbench({
+      view: "inventory-management",
+      rowLimit: 21,
+      boardMode: "sheet",
+      editMode: false,
+      otaMode: "naver",
+      coexWing: "A",
+      hoveredDiffId: null,
+      motionKey: 0,
+    });
+    setInventoryProviderDrafts({
+      naver: { syncedAt: null, copiedAt: null, writeRequestedAt: null },
+      station: { syncedAt: null, copiedAt: null, writeRequestedAt: null },
+    });
+    setErrorWorkbench({
+      panelTab: null,
+      selectedIssueId: null,
+      resolvedIssueIds: [],
+      quickScanPassedIds: [],
+      decisionMap: {},
+    });
     autoWingsLoginAttemptedRef.current = false;
   }, [selectedBranch]);
 
@@ -643,7 +819,6 @@ export default function App() {
             : await api.runSheetRead({ branch: selectedBranch, startDate: windowStart, endDate: windowEnd });
       startTransition(() => {
         setReads((current) => ({ ...current, [source]: result }));
-        setSelectedReviewId(result.items[0]?.id ?? null);
         if (source === "sheet") {
           setSelectedRoomDetailId(result.items.find((item) => isReservationBlockItem(item))?.id ?? null);
           setActiveSource("sheet");
@@ -659,25 +834,31 @@ export default function App() {
     }
   }
 
-  async function executeReservationAction() {
-    setBusyKey(`reservation:${activeReservationAction}`);
+  async function executeReservationAction(
+    actionOverride?: AppReservationAction,
+    options?: { approvePlanToken?: string; executeApply?: boolean },
+  ) {
+    const action = actionOverride ?? activeReservationAction;
+    setBusyKey(`reservation:${action}`);
     setWorkspacePhase("working");
-    setWorkspaceMessage(`${RESERVATION_ACTION_LABELS[activeReservationAction]} 작업을 진행 중입니다.`);
+    setWorkspaceMessage(`${RESERVATION_ACTION_LABELS[action]} 작업을 진행 중입니다.`);
     try {
       if (api?.runReservationAction) {
         const result = await api.runReservationAction({
-          action: activeReservationAction,
+          action,
           branch: selectedBranch,
           startDate: windowStart,
           endDate: windowEnd,
           excludeRoomMakeup,
           flagContinuationCandidates,
+          approvePlanToken: options?.approvePlanToken,
+          executeApply: options?.executeApply,
         });
         startTransition(() => {
+          setActiveReservationAction(action);
           setReservationResult(result);
           setWorkspacePhase("result");
           setWorkspaceMessage(result.summary);
-          setSelectedReviewId(result.rows[0]?.id ?? selectedReviewId);
         });
         return;
       }
@@ -689,16 +870,24 @@ export default function App() {
   }
 
   async function copyApplyInventoryBoard() {
-    if (activeReservationAction !== "apply") return;
+    if (activeReservationAction !== "apply" && activeManagementView !== "inventory-management") return;
     setBusyKey("copy-apply-board");
     try {
-      if (applyInventoryMode === "ota") {
+      if (inventoryWorkbench.boardMode === "ota") {
         if (!reads.ota.copyText) throw new Error("OTA 원본 조회 결과가 아직 없습니다.");
         await copyTextToClipboard(reads.ota.copyText);
+        setInventoryProviderDrafts((current) => ({
+          ...current,
+          [inventoryWorkbench.otaMode]: { ...current[inventoryWorkbench.otaMode], copiedAt: nowIso() },
+        }));
         setWorkspaceMessage("OTA 원본 재고값을 클립보드에 복사했습니다.");
       } else {
         if (actionOutputRows.length === 0) throw new Error("복사할 시트 기준 재고표가 없습니다.");
         await copyTextToClipboard(buildApplyInventoryCopyText(actionOutputRows, branchOption.label, windowStart, windowEnd));
+        setInventoryProviderDrafts((current) => ({
+          ...current,
+          [inventoryWorkbench.otaMode]: { ...current[inventoryWorkbench.otaMode], copiedAt: nowIso() },
+        }));
         setWorkspaceMessage("시트 기준 재고표를 클립보드에 복사했습니다.");
       }
     } catch (error) {
@@ -706,6 +895,88 @@ export default function App() {
     } finally {
       setBusyKey(null);
     }
+  }
+
+  function handleManagementViewChange(view: AppReservationManagementView) {
+    setActiveModule("reservation-management");
+    setActiveManagementView(view);
+    setInventoryWorkbench((current) => ({ ...current, view }));
+    setWorkspacePhase("idle");
+    setWorkspaceMessage(view === "inventory-management" ? "재고 관리 화면을 준비했습니다." : "오류 관리 화면을 준비했습니다.");
+    if (view === "inventory-management") {
+      setActiveReservationAction("apply");
+    } else {
+      setActiveReservationAction("validate");
+    }
+  }
+
+  async function syncInventoryBoard() {
+    setInventoryWorkbench((current) => ({
+      ...current,
+      boardMode: "combined",
+      editMode: true,
+      motionKey: current.motionKey + 1,
+    }));
+    await executeReservationAction("apply");
+    setInventoryProviderDrafts((current) => ({
+      ...current,
+      [inventoryWorkbench.otaMode]: { ...current[inventoryWorkbench.otaMode], syncedAt: nowIso() },
+    }));
+  }
+
+  async function executeInventoryWrite() {
+    if (!reservationResult?.applyAllowed || !reservationResult.planToken) {
+      setWorkspaceMessage("실제 반영 전에 동기화 결과와 승인 토큰이 필요합니다.");
+      return;
+    }
+    setInventoryProviderDrafts((current) => ({
+      ...current,
+      [inventoryWorkbench.otaMode]: { ...current[inventoryWorkbench.otaMode], writeRequestedAt: nowIso() },
+    }));
+    await executeReservationAction("apply", {
+      approvePlanToken: reservationResult.planToken,
+      executeApply: true,
+    });
+  }
+
+  function handleInventoryBoardMode(mode: AppInventoryBoardMode) {
+    setInventoryWorkbench((current) => ({
+      ...current,
+      boardMode: mode,
+      editMode: mode === "combined" ? true : current.editMode && mode !== "sheet",
+    }));
+  }
+
+  function handleInventoryOtaModeChange(mode: AppOtaMode) {
+    setInventoryWorkbench((current) => ({
+      ...current,
+      otaMode: mode,
+      motionKey: current.motionKey + 1,
+    }));
+    setWorkspaceMessage(mode === "naver" ? "네이버 재고 작업으로 전환했습니다." : "스테이션 재고 작업으로 전환했습니다.");
+  }
+
+  function updateIssueDecision(issueId: string, status: AppIssueStatus) {
+    setErrorWorkbench((current) => ({
+      ...current,
+      selectedIssueId: issueId,
+      decisionMap: { ...current.decisionMap, [issueId]: status },
+    }));
+  }
+
+  function openIssuePanel(tab: AppErrorPanelTab) {
+    setActiveManagementView("error-management");
+    setInventoryWorkbench((current) => ({ ...current, view: "error-management" }));
+    setErrorWorkbench((current) => ({ ...current, panelTab: tab }));
+  }
+
+  function completeIssue(issueId: string) {
+    setErrorWorkbench((current) => ({
+      ...current,
+      resolvedIssueIds: Array.from(new Set([...current.resolvedIssueIds, issueId])),
+      quickScanPassedIds: Array.from(new Set([...current.quickScanPassedIds, issueId])),
+    }));
+    setWorkspaceMessage("선택한 오류 건을 부분 점검했고 결과 보드에 반영했습니다.");
   }
 
   function handleModuleChange(module: AppShellModule) {
@@ -719,7 +990,6 @@ export default function App() {
     setActiveModule(module);
     setWorkspacePhase("idle");
     setReservationResult(null);
-    setSelectedReviewId(null);
     setOpsApplySummary("");
   }
 
@@ -742,13 +1012,6 @@ export default function App() {
 
   const branchOption = useMemo(() => getAppBranchOption(selectedBranch), [selectedBranch]);
   const reservationAvailability = useMemo(() => deriveReservationActionAvailability(reads, selectedBranch), [reads, selectedBranch]);
-  const activeRead = reads[activeSource];
-  const reviewItems = useMemo(
-    () => buildReviewQueue(selectedBranch, activeReservationAction, reads, reservationResult, windowStart, windowEnd),
-    [activeReservationAction, reads, reservationResult, selectedBranch, windowEnd, windowStart],
-  );
-  const selectedReview = reviewItems.find((item) => item.id === selectedReviewId) ?? reviewItems[0] ?? null;
-  const previewItems = buildPreviewItems(activeRead, selectedBranch);
   const actionOutputRows = buildActionOutputRows(activeReservationAction, selectedBranch, windowStart, windowEnd, reservationResult);
   const orderedProviders = ["wings-pms", "naver-partner", "admin-station"]
     .map((provider) => providers.find((candidate) => candidate.provider === provider))
@@ -847,7 +1110,6 @@ export default function App() {
     if (runtimeReadiness.blockingSources.length === 0) return "실조회 준비 상태를 다시 확인해 주세요.";
     return `현재 실조회 전에 ${runtimeReadiness.blockingSources.length}개 항목을 먼저 준비해야 합니다.`;
   }, [runtimeReadiness]);
-  const reservationSteps = buildActionSteps(activeReservationAction, selectedBranch);
   const sheetReservationItems = useMemo(
     () =>
       reads.sheet.items.filter((item) => {
@@ -1031,6 +1293,47 @@ export default function App() {
       ? reads.ota.items.find((item) => [item.title, item.subtitle].join(" ").includes(selectedRoomDetail.roomNo ?? ""))
       : null;
   const selectedChannelVisual = getChannelVisual(selectedRoomDetail?.channel);
+  const inventoryPreviewItems = useMemo(() => {
+    const capped = sheetReservationItems.slice(0, inventoryWorkbench.rowLimit);
+    if (selectedBranch !== "COEX") return capped;
+    return capped.filter((item) => String(item.roomNo || "").toUpperCase().startsWith(inventoryWorkbench.coexWing));
+  }, [inventoryWorkbench.coexWing, inventoryWorkbench.rowLimit, selectedBranch, sheetReservationItems]);
+  const activeInventoryDraft = inventoryProviderDrafts[inventoryWorkbench.otaMode];
+  const inventoryBoardRows = useMemo(
+    () =>
+      buildInventoryBoardRows(
+        inventoryPreviewItems,
+        windowDays,
+        Boolean(activeInventoryDraft.syncedAt) || inventoryWorkbench.editMode,
+        inventoryWorkbench.otaMode,
+        errorWorkbench.decisionMap,
+      ),
+    [activeInventoryDraft.syncedAt, errorWorkbench.decisionMap, inventoryPreviewItems, inventoryWorkbench.editMode, inventoryWorkbench.otaMode, windowDays],
+  );
+  const inventoryBoardRowMap = useMemo(
+    () => new Map(inventoryBoardRows.map((row) => [row.id, row] as const)),
+    [inventoryBoardRows],
+  );
+  const errorIssues = useMemo(
+    () => buildErrorWorkbenchIssues(inventoryPreviewItems, actionOutputRows, errorWorkbench.decisionMap),
+    [actionOutputRows, errorWorkbench.decisionMap, inventoryPreviewItems],
+  );
+  const errorCounts = useMemo(
+    () => ({
+      normal: errorIssues.filter((issue) => issue.status === "normal" || errorWorkbench.resolvedIssueIds.includes(issue.id)).length,
+      error: errorIssues.filter((issue) => issue.status === "error" && !errorWorkbench.resolvedIssueIds.includes(issue.id)).length,
+      "needs-review": errorIssues.filter((issue) => issue.status === "needs-review" && !errorWorkbench.resolvedIssueIds.includes(issue.id)).length,
+    }),
+    [errorIssues, errorWorkbench.resolvedIssueIds],
+  );
+  const visibleErrorIssues = useMemo(() => {
+    if (!errorWorkbench.panelTab) return [];
+    return errorIssues.filter((issue) => issue.status === errorWorkbench.panelTab && !errorWorkbench.resolvedIssueIds.includes(issue.id));
+  }, [errorIssues, errorWorkbench.panelTab, errorWorkbench.resolvedIssueIds]);
+  const selectedErrorIssue =
+    errorIssues.find((issue) => issue.id === errorWorkbench.selectedIssueId) ??
+    visibleErrorIssues[0] ??
+    null;
 
   useEffect(() => {
     const nextProvider = sessionAuthRequirements.find(
@@ -1054,6 +1357,13 @@ export default function App() {
   }, [selectedRoomDetailId, sheetReservationItems]);
 
   useEffect(() => {
+    if (inventoryPreviewItems.length === 0) return;
+    if (!inventoryPreviewItems.some((item) => item.id === selectedRoomDetailId)) {
+      setSelectedRoomDetailId(inventoryPreviewItems[0]?.id ?? null);
+    }
+  }, [inventoryPreviewItems, selectedRoomDetailId]);
+
+  useEffect(() => {
     if (opsAvailableDates.length === 0) {
       setOpsBoardDate("");
       return;
@@ -1075,6 +1385,16 @@ export default function App() {
     autoWingsLoginAttemptedRef.current = true;
     void runStoredWingsLogin();
   }, [busyKey, importedWingsCredential, sessionAuthRequirements]);
+
+  useEffect(() => {
+    if (!errorWorkbench.panelTab) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (errorPanelRef.current?.contains(event.target as Node)) return;
+      setErrorWorkbench((current) => ({ ...current, panelTab: null, selectedIssueId: null }));
+    };
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [errorWorkbench.panelTab]);
 
   return (
     <div className="end-user-shell">
@@ -1110,21 +1430,30 @@ export default function App() {
             <button
               type="button"
               className={`sidebar-button ${activeModule === "reservation-management" ? "active" : ""}`}
-              onClick={() => handleModuleChange("reservation-management")}
+              onClick={() => handleManagementViewChange(activeManagementView)}
             >
               예약 관리
             </button>
-            <button
-              type="button"
-              className={`sidebar-button ${activeModule === "reservation-management" ? "active" : ""}`}
-              onClick={() => handleModuleChange("reservation-management")}
-            >
-              예약 관리
-            </button>
+            <div className="submenu">
+              <button
+                type="button"
+                className={`submenu-button ${activeModule === "reservation-management" && activeManagementView === "inventory-management" ? "active" : ""}`}
+                onClick={() => handleManagementViewChange("inventory-management")}
+              >
+                재고 관리
+              </button>
+              <button
+                type="button"
+                className={`submenu-button ${activeModule === "reservation-management" && activeManagementView === "error-management" ? "active" : ""}`}
+                onClick={() => handleManagementViewChange("error-management")}
+              >
+                오류 관리
+              </button>
+            </div>
           </div>
 
           <div className="sidebar-block">
-            <p className="eyebrow">클리닝</p>
+            <p className="eyebrow">보조 작업</p>
             <div className="submenu">
               {([
                 ["order-list", "오더리스트"],
@@ -1640,13 +1969,13 @@ export default function App() {
                   ) : <div className="detail-panel">어라이벌을 실행하면 실제 일정판이 여기에 표시됩니다.</div>}
                 </article>
               </>
-            ) : (
+            ) : activeManagementView === "inventory-management" ? (
               <>
-                <article className="hero-card reservation-summary-card">
-                  <p className="eyebrow">{buildActionSurfaceEyebrow(activeReservationAction)}</p>
-                  <h3>{buildManagementTitle(activeReservationAction)}</h3>
-                  <p className="support-copy">{buildResultSummary(activeReservationAction, reservationResult)}</p>
-                  <div className="detail-panel">{branchOption.label} · {windowStart} ~ {windowEnd}</div>
+                <article className="hero-card reservation-summary-card inventory-summary-card">
+                  <p className="eyebrow">재고 관리</p>
+                  <h3>예약 시트 재고 작업대</h3>
+                  <p className="support-copy">조회한 시점의 예약 시트 스냅샷을 기준으로 재고표를 정리하고, OTA 반영 전 차이를 먼저 확인합니다.</p>
+                  <div className="detail-panel small-label">{branchOption.label} · {windowStart} ~ {windowEnd} · 최대 {inventoryWorkbench.rowLimit}행</div>
                   <div className="reservation-toolbar">
                     <label className="compact-field">
                       <span>시작일</span>
@@ -1657,155 +1986,200 @@ export default function App() {
                       <input type="date" value={windowEnd} onChange={(event) => setWindowEnd(event.target.value)} />
                     </label>
                   </div>
+                  {selectedBranch === "COEX" ? (
+                    <div className="step-chip-row">
+                      {(["A", "B"] as AppCoexWing[]).map((wing) => (
+                        <button
+                          key={wing}
+                          type="button"
+                          className={`step-chip-button ${inventoryWorkbench.coexWing === wing ? "active" : ""}`}
+                          onClick={() => setInventoryWorkbench((current) => ({ ...current, coexWing: wing }))}
+                        >
+                          {wing}동
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="availability-note">{workspaceMessage}</div>
-                  <div className="step-chip-row">
-                    {(Object.keys(RESERVATION_ACTION_LABELS) as AppReservationAction[]).map((action) => (
-                      <button
-                        key={action}
-                        type="button"
-                        className={`step-chip-button ${activeReservationAction === action ? "active" : ""}`}
-                        onClick={() => handleReservationAction(action, true)}
-                        disabled={!reservationAvailability[action].enabled || busyKey !== null || branchOption.availability !== "active"}
-                      >
-                        {RESERVATION_ACTION_LABELS[action]}
-                      </button>
-                    ))}
-                  </div>
                   <div className="button-row">
                     <button
                       type="button"
-                      onClick={() => void executeReservationAction()}
-                      disabled={!reservationAvailability[activeReservationAction].enabled || busyKey !== null || branchOption.availability !== "active"}
+                      onClick={() => void syncInventoryBoard()}
+                      disabled={busyKey !== null || !reservationAvailability.apply.enabled || branchOption.availability !== "active"}
                     >
-                      {RESERVATION_ACTION_LABELS[activeReservationAction]} 실행
+                      동기화
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() =>
+                        setInventoryWorkbench((current) => ({
+                          ...current,
+                          boardMode: "combined",
+                          editMode: !current.editMode,
+                        }))
+                      }
+                      disabled={busyKey !== null}
+                    >
+                      수정 모드
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => void executeInventoryWrite()}
+                      disabled={busyKey !== null || !reservationResult?.applyAllowed || !reservationResult?.planToken}
+                    >
+                      OTA WRITE
                     </button>
                   </div>
-                  {activeReservationAction === "apply" ? (
-                    <div className="apply-contract-banner">
-                      실제 OTA 재고 반영은 비활성입니다. 현재는 네이버·스테이션 대상의 적용 가능 상태만 계산합니다.
+                  {activeInventoryDraft.syncedAt ? (
+                    <div className="detail-panel small-label">
+                      {inventoryWorkbench.otaMode === "naver" ? "NAVER" : "STATION"} 작업 상태를 임시 저장했습니다. 마지막 동기화 {formatDateTime(activeInventoryDraft.syncedAt)}
                     </div>
                   ) : null}
                 </article>
 
-                {activeReservationAction === "apply" ? (
-                  <article className="review-card apply-contract-card">
-                    <div className="ops-panel-header">
-                      <div className="apply-header-main">
-                        <p className="eyebrow">적용 범위</p>
-                        <div className="apply-header-title-row">
-                          <h3>OTA 적용 가능 상태</h3>
-                          <div className="inventory-mode-icon-row" aria-label="재고표 모드 선택">
-                            <button
-                              type="button"
-                              className={`ghost-button inventory-mode-icon-button ${applyInventoryMode === "ota" ? "active" : ""}`}
-                              onClick={() => setApplyInventoryMode("ota")}
-                              disabled={reads.ota.status !== "done" || !reads.ota.copyText}
-                              aria-label="OTA 재고표 모드"
-                              title="OTA 재고표 모드"
-                            >
-                              <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M4 6h16v3H4z" />
-                                <path d="M4 11h16v3H4z" />
-                                <path d="M4 16h10v3H4z" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              className={`ghost-button inventory-mode-icon-button ${applyInventoryMode === "sheet" ? "active" : ""}`}
-                              onClick={() => setApplyInventoryMode("sheet")}
-                              aria-label="시트 재고표 모드"
-                              title="시트 재고표 모드"
-                            >
-                              <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M4 5h16v14H4z" />
-                                <path d="M9 5v14" />
-                                <path d="M15 5v14" />
-                                <path d="M4 10h16" />
-                                <path d="M4 14h16" />
-                              </svg>
-                            </button>
-                          </div>
+                <article className="review-card inventory-workbench">
+                  <div className="ops-panel-header">
+                    <div className="apply-header-main">
+                      <p className="eyebrow">재고표</p>
+                      <div className="apply-header-title-row">
+                        <h3>객실 상세</h3>
+                        <div className="inventory-mode-icon-row" aria-label="재고표 모드 선택">
+                          <button
+                            type="button"
+                            className={`ghost-button inventory-mode-icon-button ${inventoryWorkbench.otaMode === "naver" ? "active" : ""}`}
+                            onClick={() => handleInventoryOtaModeChange("naver")}
+                            aria-label="NAVER 재고 작업"
+                            title="NAVER 재고 작업"
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M6 18V6l12 12V6" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className={`ghost-button inventory-mode-icon-button ${inventoryWorkbench.otaMode === "station" ? "active" : ""}`}
+                            onClick={() => handleInventoryOtaModeChange("station")}
+                            aria-label="STATION 재고 작업"
+                            title="STATION 재고 작업"
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M5 12h14" />
+                              <path d="M12 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className={`ghost-button inventory-mode-icon-button ${inventoryWorkbench.boardMode === "sheet" ? "active" : ""}`}
+                            onClick={() => handleInventoryBoardMode("sheet")}
+                            aria-label="시트 재고표 모드"
+                            title="시트 재고표 모드"
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M4 5h16v14H4z" />
+                              <path d="M9 5v14" />
+                              <path d="M15 5v14" />
+                              <path d="M4 10h16" />
+                              <path d="M4 14h16" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className={`ghost-button inventory-mode-icon-button ${inventoryWorkbench.boardMode === "ota" ? "active" : ""}`}
+                            onClick={() => handleInventoryBoardMode("ota")}
+                            disabled={reads.ota.status !== "done" || !reads.ota.copyText}
+                            aria-label="OTA 재고표 모드"
+                            title="OTA 재고표 모드"
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M4 6h16v3H4z" />
+                              <path d="M4 11h16v3H4z" />
+                              <path d="M4 16h10v3H4z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className={`ghost-button inventory-mode-icon-button ${inventoryWorkbench.boardMode === "combined" ? "active" : ""}`}
+                            onClick={() => handleInventoryBoardMode("combined")}
+                            aria-label="동시 표기 모드"
+                            title="동시 표기 모드"
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M4 6h7v12H4z" />
+                              <path d="M13 6h7v12h-7z" />
+                            </svg>
+                          </button>
                         </div>
-                        <p className="support-copy">시트 기준 재고값을 네이버와 스테이션 OTA 관리 페이지 기준으로 적용 후보 계산합니다.</p>
                       </div>
-                      <div className="ops-panel-actions">
-                        <div className="detail-panel">{actionOutputRows.length}개 action</div>
-                        <button
-                          type="button"
-                          className="ghost-button copy-icon-button"
-                          onClick={() => void copyApplyInventoryBoard()}
-                          disabled={busyKey !== null || (applyInventoryMode === "ota" ? !reads.ota.copyText : actionOutputRows.length === 0)}
-                          aria-label={applyInventoryMode === "ota" ? "OTA 원본 복사" : "재고표 복사"}
-                          title={applyInventoryMode === "ota" ? "OTA 원본 복사" : "재고표 복사"}
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M9 9h9v11H9z" />
-                            <path d="M6 5h9v2H8v9H6z" />
-                          </svg>
-                        </button>
+                      <p className="support-copy">시트 기준 재고값을 {inventoryWorkbench.otaMode === "naver" ? "NAVER" : "STATION"} OTA 관리 기준과 겹쳐 보고, 수정 모드에서는 위 시트 / 아래 OTA 순서로 확인합니다.</p>
+                    </div>
+                    <div className="ops-panel-actions">
+                      <div className="detail-panel small-label">{inventoryPreviewItems.length}개 예약 블록</div>
+                      <button
+                        type="button"
+                        className="ghost-button copy-icon-button"
+                        onClick={() => void copyApplyInventoryBoard()}
+                        disabled={busyKey !== null || (inventoryWorkbench.boardMode === "ota" ? !reads.ota.copyText : actionOutputRows.length === 0)}
+                        aria-label={inventoryWorkbench.boardMode === "ota" ? "OTA 원본 복사" : "재고표 복사"}
+                        title={inventoryWorkbench.boardMode === "ota" ? "OTA 원본 복사" : "재고표 복사"}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M9 9h9v11H9z" />
+                          <path d="M6 5h9v2H8v9H6z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="apply-contract-grid compact-contract-grid">
+                    <article className="ops-side-card">
+                      <p className="section-title">결과</p>
+                      <div className="ops-count-list">
+                        <div className="ops-count-row"><span>STATION</span><strong>{applyContractSummary.stationCount}건</strong></div>
+                        <div className="ops-count-row"><span>NAVER</span><strong>{applyContractSummary.naverCount}건</strong></div>
                       </div>
-                    </div>
-                    <div className="apply-contract-grid">
-                      <article className="ops-side-card">
-                        <p className="section-title">Provider 범위</p>
-                        <div className="ops-count-list">
-                          <div className="ops-count-row"><span>Station</span><strong>{applyContractSummary.stationCount}건</strong></div>
-                          <div className="ops-count-row"><span>Naver</span><strong>{applyContractSummary.naverCount}건</strong></div>
+                    </article>
+                    <article className="ops-side-card">
+                      <p className="section-title">작업</p>
+                      <div className="ops-count-list">
+                        <div className="ops-count-row"><span>승인 필요</span><strong>{applyContractSummary.requiresApproval ? "예" : "아니오"}</strong></div>
+                        <div className="ops-count-row"><span>WRITE 가능</span><strong>{applyContractSummary.applyAllowed ? "가능" : "대기"}</strong></div>
+                      </div>
+                    </article>
+                    <article className="ops-side-card">
+                      <p className="section-title">안내</p>
+                      <div className="ops-special-list compact">
+                        <div className="arrival-note-line">
+                          <strong>실조회 기준</strong>
+                          <span>실시간이 아니라 조회한 상태 기준으로만 재고표를 유지합니다.</span>
                         </div>
-                      </article>
-                      <article className="ops-side-card">
-                        <p className="section-title">승인 경계</p>
-                        <div className="ops-count-list">
-                          <div className="ops-count-row"><span>승인 필요</span><strong>{applyContractSummary.requiresApproval ? "예" : "아니오"}</strong></div>
-                          <div className="ops-count-row"><span>토큰 준비</span><strong>{applyContractSummary.planReady ? "준비됨" : "미생성"}</strong></div>
-                          <div className="ops-count-row"><span>적용 가능</span><strong>{applyContractSummary.applyAllowed ? "가능" : "대기"}</strong></div>
+                        <div className="arrival-note-line">
+                          <strong>자동 마감</strong>
+                          <span>시트 기준으로 닫혀야 하는 셀만 `닫음` 후보로 강조합니다.</span>
                         </div>
-                      </article>
-                      <article className="ops-side-card">
-                        <p className="section-title">실행 정책</p>
-                        <div className="ops-special-list compact">
-                          <div className="arrival-note-line">
-                            <strong>실제 write 비활성</strong>
-                            <span>OTA 페이지에 값을 쓰지 않고 적용 가능 상태만 계산합니다.</span>
-                          </div>
-                          <div className="arrival-note-line">
-                            <strong>대상 한정</strong>
-                            <span>시트의 네이버, 스테이션 재고 대상만 계산 범위에 포함합니다.</span>
-                          </div>
-                        </div>
-                      </article>
-                    </div>
-                  </article>
-                ) : (
-                <article className="review-card room-detail">
-                  <div className="room-detail-header">
-                    <div>
-                      <p className="eyebrow">{buildActionSurfaceEyebrow(activeReservationAction)}</p>
-                      <h3>객실 상세</h3>
-                      <p className="support-copy">
-                        {activeReservationAction === "edit"
-                          ? "실제 수정에 들어가기 전에 시트 기준 객실 정보와 참고값을 함께 확인합니다."
-                          : "시트 기준 객실 정보에 PMS와 OTA 참고값을 붙여서 검토합니다."}
-                      </p>
-                    </div>
-                    <div className="detail-panel">{sheetReservationItems.length}개 객실 예약</div>
+                      </div>
+                    </article>
                   </div>
 
                   <div className="room-detail-layout">
                     <div className="room-detail-list">
-                      {sheetReservationItems.length > 0 ? (
-                        sheetReservationItems.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className={`room-detail-item ${selectedRoomDetail?.id === item.id ? "active" : ""}`}
-                            onClick={() => setSelectedRoomDetailId(item.id)}
-                          >
-                            <strong>{item.roomNo} / {item.roomType || "객실"}</strong>
-                            <span>{item.guestName || item.reservationNo || item.title}</span>
-                            <small>{formatStayRange(item)}</small>
-                          </button>
-                        ))
+                      {inventoryPreviewItems.length > 0 ? (
+                        inventoryPreviewItems.map((item) => {
+                          const issueStatus = inventoryBoardRowMap.get(item.id)?.issueStatus ?? "normal";
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={`room-detail-item room-detail-item-${issueStatus} ${selectedRoomDetail?.id === item.id ? "active" : ""}`}
+                              onClick={() => setSelectedRoomDetailId(item.id)}
+                            >
+                              <strong>{item.roomNo} / {item.roomType || "객실"}</strong>
+                              <span>{item.guestName || item.reservationNo || item.title}</span>
+                              <small>{formatStayRange(item)}</small>
+                            </button>
+                          );
+                        })
                       ) : (
                         <div className="detail-panel">시트 데이터를 먼저 읽어 오면 실제 지점과 룸타입이 여기 표시됩니다.</div>
                       )}
@@ -1821,6 +2195,9 @@ export default function App() {
                               <p className="support-copy">
                                 {selectedRoomDetail.guestName || "예약자 미기입"} · {selectedRoomDetail.reservationNo || "예약번호 미기입"} · {selectedRoomDetail.channel || "채널 미기입"}
                               </p>
+                              {(inventoryBoardRowMap.get(selectedRoomDetail.id)?.issueStatus ?? "normal") === "error" ? (
+                                <div className="room-detail-alert">오류 예약일시 강조 · {formatStayRange(selectedRoomDetail)}</div>
+                              ) : null}
                             </div>
                             <div className="stay-summary-card">
                               <strong>{selectedRoomDetail.nightCount || 0}박</strong>
@@ -1851,7 +2228,7 @@ export default function App() {
                                 <div key={day.iso} className="room-block-cell">
                                   {matchesStayDay(selectedRoomDetail, day.iso) ? (
                                     <div
-                                      className="room-block"
+                                      className={`room-block ${(inventoryBoardRowMap.get(selectedRoomDetail.id)?.issueStatus ?? "normal") === "error" ? "room-block-error" : ""}`}
                                       data-channel={String(selectedRoomDetail.channel || "UNKNOWN").toUpperCase()}
                                       style={
                                         {
@@ -1868,6 +2245,39 @@ export default function App() {
                                 </div>
                               ))}
                             </div>
+                          </div>
+
+                          <div className={`inventory-board-stack inventory-board-motion-${inventoryWorkbench.motionKey % 2}`}>
+                            <article className="detail-compare-card inventory-board-layer">
+                              <p className="eyebrow">시트 재고표</p>
+                              <strong>{selectedRoomDetail.roomNo} / {selectedRoomDetail.roomType || "객실"}</strong>
+                              <div className="inventory-cell-strip">
+                                {(inventoryBoardRowMap.get(selectedRoomDetail.id)?.cells ?? []).map((cell) => (
+                                  <div key={cell.id} className="inventory-cell-block">
+                                    <span>{cell.nextValue}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </article>
+                            {inventoryWorkbench.boardMode !== "sheet" ? (
+                              <article className="detail-compare-card inventory-board-layer emphasized">
+                                <p className="eyebrow">OTA 재고표</p>
+                                <strong>{inventoryWorkbench.otaMode === "naver" ? "NAVER" : "STATION"} 작업면</strong>
+                                <div className="inventory-cell-strip">
+                                  {(inventoryBoardRowMap.get(selectedRoomDetail.id)?.cells ?? []).map((cell) => (
+                                    <div
+                                      key={`${cell.id}:ota`}
+                                      className={`inventory-cell-block ${cell.changed ? "changed" : ""}`}
+                                      data-prev={cell.previousValue}
+                                      onMouseEnter={() => setInventoryWorkbench((current) => ({ ...current, hoveredDiffId: cell.id }))}
+                                      onMouseLeave={() => setInventoryWorkbench((current) => ({ ...current, hoveredDiffId: current.hoveredDiffId === cell.id ? null : current.hoveredDiffId }))}
+                                    >
+                                      <span>{cell.changed ? "닫음" : cell.baseValue}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </article>
+                            ) : null}
                           </div>
 
                           <div className="detail-compare-grid">
@@ -1892,7 +2302,6 @@ export default function App() {
                     </div>
                   </div>
                 </article>
-                )}
 
                 <article className="progress-card">
                   <p className="section-title">실행 결과</p>
@@ -1908,6 +2317,163 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+                </article>
+              </>
+            ) : (
+              <>
+                <article className="hero-card reservation-summary-card error-summary-card">
+                  <p className="eyebrow">오류 관리</p>
+                  <h3>PMS 비교 보드</h3>
+                  <p className="support-copy">PMS `room available` 기준으로 예약 시트와 다른 부분을 찾고, 오류와 확인필요 항목을 같은 화면에서 빠르게 점검합니다.</p>
+                  <div className="detail-panel small-label">{branchOption.label} · {windowStart} ~ {windowEnd}</div>
+                  <div className="reservation-toolbar">
+                    <label className="compact-field">
+                      <span>시작일</span>
+                      <input type="date" value={windowStart} onChange={(event) => setWindowStart(event.target.value)} />
+                    </label>
+                    <label className="compact-field">
+                      <span>종료일</span>
+                      <input type="date" value={windowEnd} onChange={(event) => setWindowEnd(event.target.value)} />
+                    </label>
+                  </div>
+                  <div className="button-row">
+                    <button
+                      type="button"
+                      onClick={() => void executeReservationAction("validate")}
+                      disabled={busyKey !== null || !reservationAvailability.validate.enabled}
+                    >
+                      오류 점검
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => void executeReservationAction("reconcile")}
+                      disabled={busyKey !== null || !reservationAvailability.reconcile.enabled}
+                    >
+                      PMS 대조
+                    </button>
+                  </div>
+                  <div className="availability-note">{workspaceMessage}</div>
+                </article>
+
+                <article className="review-card error-management-shell">
+                  <div className="ops-panel-header">
+                    <div>
+                      <p className="eyebrow">PMS 메인 보드</p>
+                      <h3>오류 관리</h3>
+                      <p className="support-copy">하단 요약 셀을 눌러 우측 패널에서 가까운 날짜순으로 확인합니다.</p>
+                    </div>
+                    <div className="detail-panel small-label">{errorIssues.length}개 비교 대상</div>
+                  </div>
+
+                  <div className="error-main-layout">
+                    <div className="error-visual-board">
+                      {errorIssues.slice(0, 12).map((issue) => (
+                        <button
+                          key={issue.id}
+                          type="button"
+                          className={`error-visual-cell status-${issue.status} ${errorWorkbench.quickScanPassedIds.includes(issue.id) ? "verified" : ""}`}
+                          onClick={() => {
+                            setErrorWorkbench((current) => ({ ...current, selectedIssueId: issue.id }));
+                            if (issue.status === "error" || issue.status === "needs-review") {
+                              openIssuePanel(issue.status === "error" ? "error" : "needs-review");
+                            }
+                          }}
+                        >
+                          <strong>{issue.roomLabel}</strong>
+                          <span>{issue.guestLabel}</span>
+                          <small>{issue.date || "일자 미기입"}</small>
+                        </button>
+                      ))}
+                    </div>
+
+                    <aside ref={errorPanelRef} className={`error-side-panel ${errorWorkbench.panelTab ? "open" : ""}`}>
+                      <div className="error-side-panel-head">
+                        <strong>{errorWorkbench.panelTab === "error" ? "오류 리스트" : errorWorkbench.panelTab === "needs-review" ? "확인필요 리스트" : "사이드 패널"}</strong>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => setErrorWorkbench((current) => ({ ...current, panelTab: null, selectedIssueId: null }))}
+                        >
+                          닫기
+                        </button>
+                      </div>
+                      <div className="error-side-list">
+                        {visibleErrorIssues.map((issue) => (
+                          <div key={issue.id} className={`error-side-item ${errorWorkbench.selectedIssueId === issue.id ? "active" : ""}`}>
+                            <button
+                              type="button"
+                              className="error-side-item-button"
+                              onClick={() => setErrorWorkbench((current) => ({ ...current, selectedIssueId: issue.id }))}
+                            >
+                              <strong>{issue.summary}</strong>
+                              <span>{issue.date || "일자 미기입"} · {issue.guestLabel}</span>
+                            </button>
+                            {errorWorkbench.selectedIssueId === issue.id ? (
+                              <div className="error-side-popup">
+                                <strong>{issue.roomLabel} / {issue.roomType}</strong>
+                                <p>{issue.detail}</p>
+                                <div className="detail-panel small-label">{issue.guidance}</div>
+                                {errorWorkbench.panelTab === "needs-review" ? (
+                                  <div className="step-chip-row">
+                                    {(["normal", "error", "needs-review"] as AppIssueStatus[]).map((status) => (
+                                      <button
+                                        key={status}
+                                        type="button"
+                                        className={`step-chip-button ${errorWorkbench.decisionMap[issue.id] === status ? "active" : ""}`}
+                                        onClick={() => updateIssueDecision(issue.id, status)}
+                                      >
+                                        {status === "normal" ? "정상" : status === "error" ? "오류" : "미확인"}
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : null}
+                                <div className="button-row">
+                                  <button type="button" onClick={() => completeIssue(issue.id)}>완료</button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </aside>
+                  </div>
+
+                  <div className="error-summary-strip">
+                    <button type="button" className="summary-status-card normal" onClick={() => setErrorWorkbench((current) => ({ ...current, panelTab: null }))}>
+                      <span>정상</span>
+                      <strong>{errorCounts.normal}</strong>
+                    </button>
+                    <button type="button" className="summary-status-card error" onClick={() => openIssuePanel("error")}>
+                      <span>오류</span>
+                      <strong>{errorCounts.error}</strong>
+                    </button>
+                    <button type="button" className="summary-status-card needs-review" onClick={() => openIssuePanel("needs-review")}>
+                      <span>확인필요</span>
+                      <strong>{errorCounts["needs-review"]}</strong>
+                    </button>
+                  </div>
+                </article>
+
+                <article className="progress-card">
+                  <p className="section-title">실행 결과</p>
+                  <div className="action-output-list">
+                    {actionOutputRows.map((row) => (
+                      <div key={row.id} className="list-row">
+                        <div>
+                          <strong>{row.primary}</strong>
+                          <span>{row.secondary}</span>
+                          {row.detail ? <small>{row.detail}</small> : null}
+                        </div>
+                        <em>{row.statusLabel}</em>
+                      </div>
+                    ))}
+                  </div>
+                  {selectedErrorIssue ? (
+                    <div className="detail-panel small-label">
+                      수정 안내 · {selectedErrorIssue.guidance}
+                    </div>
+                  ) : null}
                 </article>
               </>
             )}

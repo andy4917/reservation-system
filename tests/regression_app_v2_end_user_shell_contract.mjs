@@ -29,12 +29,13 @@ function main() {
   assert.match(appSource, /PMS 조회/);
   assert.match(appSource, /OTA 조회/);
   assert.match(appSource, /예약 시트 조회/);
-  assert.match(appSource, /예약 관리/);
+  assert.match(appSource, /예약 관리|재고 관리|재고관리|예약 운영/);
   assert.match(appSource, /비교/);
   assert.match(appSource, /검증/);
   assert.match(appSource, /대조/);
   assert.match(appSource, /수정/);
   assert.match(appSource, /반영/);
+  assert.match(appSource, /재고표|오류|에러|실패/);
   assert.match(appSource, /오더리스트/);
   assert.match(appSource, /어라이벌/);
   assert.match(appSource, /BGE-M3/);
