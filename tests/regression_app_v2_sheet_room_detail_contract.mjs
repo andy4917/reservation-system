@@ -33,10 +33,8 @@ function main() {
   assert.match(liveBridge, /"channel":/);
   assert.match(liveBridge, /"packageMarkers":/);
   assert.match(liveBridge, /"roomChangeBlocker":/);
-  assert.match(liveBridge, /return preview_rows\[:\d+\]/);
-
-  const previewCapMatch = liveBridge.match(/return preview_rows\[:(\d+)\]/);
-  assert.equal(previewCapMatch?.[1], "21", "sheet room preview cap should be 21 rows");
+  assert.match(liveBridge, /return preview_rows/);
+  assert.doesNotMatch(liveBridge, /return preview_rows\[:\d+\]/);
 
   assert.match(appSource, /room-detail/i);
   assert.match(appSource, /시트 기준/);
@@ -44,6 +42,8 @@ function main() {
   assert.match(appSource, /room-detail-item/);
   assert.match(appSource, /setSelectedRoomDetailId/);
   assert.match(appSource, /room-block/);
+  assert.match(appSource, /rowLimit:\s*21/);
+  assert.match(appSource, /sheetReservationItems\.slice\(0,\s*inventoryWorkbench\.rowLimit\)/);
 
   console.log("regression_app_v2_sheet_room_detail_contract: OK");
 }

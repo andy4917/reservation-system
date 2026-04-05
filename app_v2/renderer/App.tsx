@@ -1315,8 +1315,8 @@ export default function App() {
     [inventoryBoardRows],
   );
   const errorIssues = useMemo(
-    () => buildErrorWorkbenchIssues(inventoryPreviewItems, actionOutputRows, errorWorkbench.decisionMap),
-    [actionOutputRows, errorWorkbench.decisionMap, inventoryPreviewItems],
+    () => buildErrorWorkbenchIssues(sheetReservationItems, actionOutputRows, errorWorkbench.decisionMap),
+    [actionOutputRows, errorWorkbench.decisionMap, sheetReservationItems],
   );
   const errorCounts = useMemo(
     () => ({
