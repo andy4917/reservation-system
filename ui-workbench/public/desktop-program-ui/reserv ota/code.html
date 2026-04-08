@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reservation Management - Clean Enterprise</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;family=Caveat:wght@400;700&amp;family=DM+Sans:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        body { font-family: 'DM Sans', sans-serif; }
+        .font-display { font-family: 'Caveat', cursive; }
+        .font-headline { font-family: 'Plus Jakarta Sans', sans-serif; }
+        
+        /* Custom scrollbar for the editorial grid */
+        .grid-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
+        .grid-scroll::-webkit-scrollbar-track { background: transparent; }
+        .grid-scroll::-webkit-scrollbar-thumb { background: #d9e4ea; border-radius: 10px; }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary-fixed-variant": "#006b61",
+                      "on-background": "#2a3439",
+                      "outline-variant": "#a9b4b9",
+                      "primary-container": "#d9e3f9",
+                      "on-error-container": "#752121",
+                      "secondary-fixed": "#ffdad6",
+                      "surface-tint": "#555f71",
+                      "on-tertiary-container": "#006056",
+                      "on-secondary-fixed": "#7b1a18",
+                      "error": "#9f403d",
+                      "tertiary-fixed-dim": "#71eedc",
+                      "on-primary-fixed": "#364051",
+                      "error-container": "#fe8983",
+                      "surface": "#f7f9fb",
+                      "surface-dim": "#cfdce3",
+                      "surface-container-lowest": "#ffffff",
+                      "primary": "#555f71",
+                      "inverse-primary": "#dee8ff",
+                      "tertiary-dim": "#005e54",
+                      "on-primary-fixed-variant": "#525c6e",
+                      "surface-container": "#e8eff3",
+                      "tertiary": "#006b61",
+                      "primary-dim": "#495365",
+                      "on-tertiary-fixed": "#004c44",
+                      "inverse-on-surface": "#9a9d9f",
+                      "on-tertiary": "#e2fff8",
+                      "error-dim": "#4e0309",
+                      "secondary-fixed-dim": "#ffc7c1",
+                      "on-error": "#fff7f6",
+                      "on-secondary-container": "#942d28",
+                      "on-secondary-fixed-variant": "#a13731",
+                      "secondary-dim": "#962e29",
+                      "secondary-container": "#ffdad6",
+                      "surface-variant": "#d9e4ea",
+                      "on-primary-container": "#485264",
+                      "primary-fixed": "#d9e3f9",
+                      "primary-fixed-dim": "#cbd5eb",
+                      "surface-container-low": "#f0f4f7",
+                      "outline": "#717c82",
+                      "on-secondary": "#fff7f6",
+                      "surface-container-high": "#e1e9ee",
+                      "on-surface": "#2a3439",
+                      "inverse-surface": "#0b0f10",
+                      "background": "#f7f9fb",
+                      "surface-container-highest": "#d9e4ea",
+                      "tertiary-fixed": "#80fdea",
+                      "on-primary": "#f6f7ff",
+                      "on-surface-variant": "#566166",
+                      "tertiary-container": "#80fdea",
+                      "secondary": "#a63a34",
+                      "surface-bright": "#f7f9fb"
+              },
+              "borderRadius": {
+                      "DEFAULT": "8px",
+                      "lg": "12px",
+                      "xl": "16px",
+                      "full": "9999px"
+              },
+              "fontFamily": {
+                      "headline": ["Plus Jakarta Sans"],
+                      "body": ["DM Sans"],
+                      "label": ["Plus Jakarta Sans"]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-container">
+<!-- SideNavBar Shell -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-slate-100 flex flex-col py-6 px-4 font-['Plus_Jakarta_Sans'] antialiased z-50 border-r border-slate-200/60">
+<div class="flex items-center gap-3 mb-10 px-2">
+<div class="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg">
+<span class="material-symbols-outlined" data-icon="hotel">hotel</span>
+</div>
+<div>
+<h1 class="text-lg font-bold text-slate-800 leading-none">Clean Enterprise</h1>
+<p class="text-[10px] text-slate-500 font-medium tracking-widest uppercase mt-1">PMS Workspace</p>
+</div>
+</div>
+<nav class="space-y-6 flex-1">
+<!-- Group 1: Overview -->
+<div>
+<p class="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Overview</p>
+<div class="space-y-1">
+<a class="flex items-center gap-3 py-2.5 px-4 text-slate-500 hover:bg-slate-200/50 transition-colors rounded-lg group transition-all duration-150 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="dashboard">dashboard</span>
+<span class="text-sm font-medium">Dashboard</span>
+</a>
+</div>
+</div>
+<!-- Group 2: Operations (Primary Workspace) -->
+<div>
+<p class="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Operations</p>
+<div class="space-y-1">
+<a class="flex items-center gap-3 py-2.5 px-4 bg-slate-800 text-white shadow-md shadow-slate-300 rounded-lg font-semibold transition-all duration-150 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="calendar_month">calendar_month</span>
+<span class="text-sm font-medium">Reservation Management</span>
+</a>
+<a class="flex items-center gap-3 py-2.5 px-4 text-slate-500 hover:bg-slate-200/50 transition-colors rounded-lg group transition-all duration-150 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="analytics">analytics</span>
+<span class="text-sm font-medium">Reports</span>
+</a>
+</div>
+</div>
+<!-- Group 3: System -->
+<div>
+<p class="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">System</p>
+<div class="space-y-1">
+<a class="flex items-center gap-3 py-2.5 px-4 text-slate-500 hover:bg-slate-200/50 transition-colors rounded-lg group transition-all duration-150 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="settings">settings</span>
+<span class="text-sm font-medium">Settings</span>
+</a>
+</div>
+</div>
+</nav>
+<div class="mt-auto p-4 bg-white/50 rounded-xl border border-slate-200/50">
+<div class="flex items-center gap-3">
+<img alt="User" class="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm" data-alt="professional portrait of a hotel manager in a sharp suit with a friendly and authoritative expression" src="https://lh3.googleusercontent.com/aida-public/AB6AXuARGYUlJL48cbbUzQ9ez18cx6ftXXiJJT0rVYe1Iw319kdn-hLrjwxAH-mRhOQ6xIKBJildfT0Zn3ZSwkuXlglPA7RON2F3BQZi_cdt8Fl5A-PRZ0s8v4CqkKPcZ7AFhSM-O6z5gFo7MPFYuvCRWkQaObQ8IsVcTWe-H63cj0KYkw-BNZnsZ3-ibKpnsldKZLqpCiTwjjEgFrjvr4N08RZ9luPKYl0VLlIGNsIFdH7CeD-1WT6-15Sty2Vzt2G8I9alqoSsvokb8mXL"/>
+<div class="overflow-hidden">
+<p class="text-xs font-bold text-slate-800 truncate">Alex Sterling</p>
+<p class="text-[10px] text-slate-500 truncate">General Manager</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Workspace -->
+<main class="ml-64 min-h-screen">
+<!-- TopNavBar Shell -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-16 glass-panel z-40 flex justify-between items-center px-8 shadow-sm shadow-slate-200/50">
+<div class="flex items-center gap-6">
+<h2 class="text-xl font-semibold text-slate-900 font-headline tracking-tight">The Gangnam Reservation Sheet</h2>
+<!-- Date Range Selector -->
+<div class="flex items-center gap-2 bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200">
+<span class="material-symbols-outlined text-slate-400 text-[18px]" data-icon="calendar_today">calendar_today</span>
+<span class="text-xs font-bold text-slate-700">Oct 24, 2024 — Oct 31, 2024</span>
+<button class="material-symbols-outlined text-slate-400 text-[18px] ml-1 hover:text-slate-600" data-icon="expand_more">expand_more</button>
+</div>
+<div class="relative group">
+<div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+<span class="material-symbols-outlined scale-75" data-icon="search">search</span>
+</div>
+<input class="bg-surface-container-highest border-none rounded-full py-1.5 pl-10 pr-4 text-sm w-48 focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Quick find..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-all text-slate-600 active:opacity-70">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="flex items-center gap-2 pl-2 pr-1 py-1 rounded-full border border-slate-200 hover:border-slate-300 transition-all active:opacity-70">
+<span class="text-xs font-semibold text-slate-700 px-1">PMS v4.2</span>
+<span class="material-symbols-outlined text-slate-600" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Content Canvas -->
+<div class="pt-20 px-8 pb-32">
+<!-- Spreadsheet Grid Section (Moved Up) -->
+<section class="bg-surface-container-lowest rounded-2xl overflow-hidden border border-slate-200/50 shadow-sm relative mb-8">
+<div class="p-6 border-b border-slate-100 flex justify-between items-end">
+<div>
+<h3 class="text-2xl font-bold font-headline text-on-surface">Weekly Planner</h3>
+<p class="text-slate-500 text-sm">Seoul Gangnam District • Detailed Occupancy Grid</p>
+</div>
+<div class="flex gap-2">
+<button class="px-4 py-2 bg-slate-800 rounded-lg text-xs font-bold text-white shadow-sm">WEEKLY</button>
+<button class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-400 hover:bg-slate-50">MONTHLY</button>
+</div>
+</div>
+<div class="grid-scroll overflow-x-auto">
+<div class="min-w-[1200px]">
+<!-- Grid Header -->
+<div class="grid grid-cols-[240px_repeat(8,1fr)] bg-surface-container-low border-b border-slate-200">
+<div class="p-4 font-bold text-xs text-slate-500 uppercase tracking-widest border-r border-slate-200">Room Details</div>
+<div class="p-4 text-center border-r border-slate-200 bg-primary-container/30">
+<p class="text-[10px] font-bold text-primary">TODAY</p>
+<p class="text-lg font-bold text-on-surface">24 Oct</p>
+</div>
+<div class="p-4 text-center border-r border-slate-200">
+<p class="text-[10px] font-bold text-slate-400">FRI</p>
+<p class="text-lg font-bold text-slate-700">25 Oct</p>
+</div>
+<div class="p-4 text-center border-r border-slate-200">
+<p class="text-[10px] font-bold text-slate-400">SAT</p>
+<p class="text-lg font-bold text-slate-700">26 Oct</p>
+</div>
+<div class="p-4 text-center border-r border-slate-200">
+<p class="text-[10px] font-bold text-slate-400">SUN</p>
+<p class="text-lg font-bold text-slate-700">27 Oct</p>
+</div>
+<div class="p-4 text-center border-r border-slate-200">
+<p class="text-[10px] font-bold text-slate-400">MON</p>
+<p class="text-lg font-bold text-slate-700">28 Oct</p>
+</div>
+<div class="p-4 text-center border-r border-slate-200">
+<p class="text-[10px] font-bold text-slate-400">TUE</p>
+<p class="text-lg font-bold text-slate-700">29 Oct</p>
+</div>
+<div class="p-4 text-center border-r border-slate-200">
+<p class="text-[10px] font-bold text-slate-400">WED</p>
+<p class="text-lg font-bold text-slate-700">30 Oct</p>
+</div>
+<div class="p-4 text-center">
+<p class="text-[10px] font-bold text-slate-400">THU</p>
+<p class="text-lg font-bold text-slate-700">31 Oct</p>
+</div>
+</div>
+<!-- Grid Rows -->
+<!-- Row 1 -->
+<div class="grid grid-cols-[240px_repeat(8,1fr)] group hover:bg-slate-50 transition-colors">
+<div class="p-4 border-r border-b border-slate-100 flex flex-col justify-center">
+<span class="text-sm font-bold text-on-surface">401 Grand City Spa</span>
+<span class="text-[10px] text-slate-400 uppercase font-semibold">King Bed • Floor 4</span>
+</div>
+<div class="p-2 border-r border-b border-slate-100 relative h-24 bg-primary-container/10">
+<div class="absolute inset-2 bg-tertiary-container rounded-lg border-l-4 border-tertiary p-2 shadow-sm cursor-pointer hover:brightness-95 transition-all">
+<p class="text-[10px] font-bold text-on-tertiary-container truncate uppercase">KWON JISOO</p>
+<p class="text-xs font-black text-on-tertiary-container mt-1">963,016</p>
+</div>
+</div>
+<div class="p-2 border-r border-b border-slate-100 relative h-24">
+<div class="absolute inset-y-2 -left-2 right-2 bg-tertiary-container rounded-lg border-l-4 border-tertiary p-2 z-10">
+<p class="text-[10px] font-bold text-on-tertiary-container truncate">KWON JISOO (Cont.)</p>
+</div>
+</div>
+<div class="p-2 border-r border-b border-slate-100 h-24"></div>
+<div class="p-2 border-r border-b border-slate-100 h-24 relative">
+<div class="absolute inset-2 bg-[#F6D2E0] rounded-lg border-l-4 border-[#C14E7C] p-2 shadow-sm">
+<p class="text-[10px] font-bold text-[#712B48] truncate uppercase">OTA BLOCK: 1202</p>
+<p class="text-xs font-black text-[#712B48] mt-1">840,000</p>
+</div>
+</div>
+<div class="p-2 border-r border-b border-slate-100 h-24"></div>
+<div class="p-2 border-r border-b border-slate-100 h-24"></div>
+<div class="p-2 border-r border-b border-slate-100 h-24"></div>
+<div class="p-2 border-b border-slate-100 h-24"></div>
+</div>
+<!-- Row 2 -->
+<div class="grid grid-cols-[240px_repeat(8,1fr)] group hover:bg-slate-50 transition-colors">
+<div class="p-4 border-r border-b border-slate-100 flex flex-col justify-center">
+<span class="text-sm font-bold text-on-surface">501 Presidential Suite</span>
+<span class="text-[10px] text-slate-400 uppercase font-semibold">Penthouse • Floor 5</span>
+</div>
+<div class="p-2 border-r border-b border-slate-100 h-24 bg-primary-container/10"></div>
+<div class="p-2 border-r border-b border-slate-100 h-24"></div>
+<div class="p-2 border-r border-b border-slate-100 h-24 relative">
+<div class="absolute inset-2 bg-secondary-container rounded-lg border-l-4 border-secondary p-2 shadow-sm">
+<p class="text-[10px] font-bold text-on-secondary-container truncate uppercase">MR. PARK S.</p>
+<p class="text-xs font-black text-on-secondary-container mt-1">1,240,000</p>
+</div>
+</div>
+<div class="p-2 border-r border-b border-slate-100 h-24 relative">
+<div class="absolute inset-y-2 -left-2 right-2 bg-secondary-container rounded-lg border-l-4 border-secondary p-2 z-10"></div>
+</div>
+<div class="p-2 border-r border-b border-slate-100 h-24 relative">
+<div class="absolute inset-y-2 -left-2 right-2 bg-secondary-container rounded-lg border-l-4 border-secondary p-2 z-10"></div>
+</div>
+<div class="p-2 border-r border-b border-slate-100 h-24"></div>
+<div class="p-2 border-r border-b border-slate-100 h-24"></div>
+<div class="p-2 border-b border-slate-100 h-24"></div>
+</div>
+<!-- Row 3 -->
+<div class="grid grid-cols-[240px_repeat(8,1fr)] group hover:bg-slate-50 transition-colors">
+<div class="p-4 border-r border-b border-slate-100 flex flex-col justify-center">
+<span class="text-sm font-bold text-on-surface">601 Executive Double</span>
+<span class="text-[10px] text-slate-400 uppercase font-semibold">City View • Floor 6</span>
+</div>
+<div class="p-2 border-r border-b border-slate-100 h-24 bg-primary-container/10"></div>
+<div class="p-2 border-r border-b border-slate-100 h-24"></div>
+<div class="p-2 border-r border-b border-slate-100 h-24"></div>
+<div class="p-2 border-r border-b border-slate-100 h-24"></div>
+<div class="p-2 border-r border-b border-slate-100 h-24 relative">
+<div class="absolute inset-2 bg-[#E1F2FB] rounded-lg border-l-4 border-[#3D8F9F] p-2 shadow-sm">
+<p class="text-[10px] font-bold text-[#1E4A52] truncate uppercase">LEE MIN-HO</p>
+<p class="text-xs font-black text-[#1E4A52] mt-1">792,000</p>
+</div>
+</div>
+<div class="p-2 border-r border-b border-slate-100 h-24 relative">
+<div class="absolute inset-y-2 -left-2 right-2 bg-[#E1F2FB] rounded-lg border-l-4 border-[#3D8F9F] p-2 z-10"></div>
+</div>
+<div class="p-2 border-r border-b border-slate-100 h-24"></div>
+<div class="p-2 border-b border-slate-100 h-24"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom Table Structure (Replacement for Stat Blocks & Placeholders) -->
+<section class="bg-surface-container-lowest rounded-2xl border border-slate-200/50 shadow-sm overflow-hidden">
+<div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-400 text-[20px]" data-icon="inventory_2">inventory_2</span>
+<h4 class="text-sm font-bold uppercase tracking-widest text-slate-500">Live Inventory Status (STATION &amp; NAVER)</h4>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase">
+<span class="w-2 h-2 rounded-full bg-slate-900"></span> Station
+                        </div>
+<div class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase">
+<span class="w-2 h-2 rounded-full bg-[#3FB470]"></span> Naver
+                        </div>
+</div>
+</div>
+<div class="overflow-x-auto grid-scroll">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+<th class="px-6 py-3 border-r border-slate-100 w-32">Channel</th>
+<th class="px-6 py-3 border-r border-slate-100">Room Type</th>
+<th class="px-3 py-3 border-r border-slate-100 text-center">24 Oct</th>
+<th class="px-3 py-3 border-r border-slate-100 text-center">25 Oct</th>
+<th class="px-3 py-3 border-r border-slate-100 text-center">26 Oct</th>
+<th class="px-3 py-3 border-r border-slate-100 text-center">27 Oct</th>
+<th class="px-3 py-3 border-r border-slate-100 text-center">28 Oct</th>
+<th class="px-3 py-3 border-r border-slate-100 text-center">29 Oct</th>
+<th class="px-3 py-3 border-r border-slate-100 text-center">30 Oct</th>
+<th class="px-3 py-3 text-center">31 Oct</th>
+</tr>
+</thead>
+<tbody class="text-sm font-medium">
+<!-- Station Data -->
+<tr class="border-b border-slate-50 bg-slate-900/5">
+<td class="px-6 py-4 font-bold text-slate-800 bg-slate-900 text-white" rowspan="3">STATION</td>
+<td class="px-6 py-4 border-r border-slate-100 text-xs font-bold text-slate-700">Urban Spa Suite</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-primary font-bold">1/2</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-primary font-bold">0/1</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-primary font-bold">0/1</td>
+<td class="px-3 py-4 text-center text-[10px] text-slate-400">CLOSED</td>
+</tr>
+<tr class="border-b border-slate-50 bg-slate-900/5">
+<td class="px-6 py-4 border-r border-slate-100 text-xs font-bold text-slate-700">Double Twin Spa</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-primary font-bold">0/1</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-primary font-bold">0/1</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-primary font-bold">0/1</td>
+<td class="px-3 py-4 text-center text-[10px] text-slate-400">CLOSED</td>
+</tr>
+<tr class="border-b border-slate-200 bg-slate-900/5">
+<td class="px-6 py-4 border-r border-slate-100 text-xs font-bold text-slate-700">Grand Spa Suite 8</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 text-center text-[10px] text-slate-400">CLOSED</td>
+</tr>
+<!-- Naver Data -->
+<tr class="border-b border-slate-50 bg-[#3FB470]/5">
+<td class="px-6 py-4 font-bold bg-[#3FB470] text-white" rowspan="3">NAVER</td>
+<td class="px-6 py-4 border-r border-slate-100 text-xs font-bold text-slate-700">Urban Spa Suite</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[#3FB470] font-bold">0/2</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[#3FB470] font-bold">0/1</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[#3FB470] font-bold">0/2</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[#3FB470] font-bold">0/1</td>
+<td class="px-3 py-4 text-center text-[10px] text-slate-400">CLOSED</td>
+</tr>
+<tr class="border-b border-slate-50 bg-[#3FB470]/5">
+<td class="px-6 py-4 border-r border-slate-100 text-xs font-bold text-slate-700">Double Twin Spa</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[#3FB470] font-bold">1/1</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[#3FB470] font-bold">0/2</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[#3FB470] font-bold">0/4</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[#3FB470] font-bold">0/3</td>
+<td class="px-3 py-4 text-center text-[#3FB470] font-bold">0/4</td>
+</tr>
+<tr class="bg-[#3FB470]/5">
+<td class="px-6 py-4 border-r border-slate-100 text-xs font-bold text-slate-700">Grand Spa Suite 8</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 border-r border-slate-100 text-center text-[10px] text-slate-400">CLOSED</td>
+<td class="px-3 py-4 text-center text-[10px] text-slate-400">CLOSED</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+<!-- Selected Reservation Side Panel (Implicit Interaction UI) -->
+<div class="fixed right-6 bottom-6 w-96 glass-panel border border-slate-200/50 rounded-2xl shadow-2xl p-6 z-50 transform translate-y-0 transition-transform duration-300">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h5 class="text-lg font-bold font-headline text-on-surface">Reservation Details</h5>
+<p class="text-xs font-medium text-slate-500">ID: #RES-9428-SK</p>
+</div>
+<button class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined" data-icon="close">close</span></button>
+</div>
+<div class="space-y-6">
+<div class="flex items-center gap-4 p-4 bg-primary/5 rounded-xl border border-primary/10">
+<div class="w-12 h-12 rounded-full overflow-hidden">
+<img alt="Guest" class="w-full h-full object-cover" data-alt="headshot of a stylish young korean woman with elegant makeup and a soft smile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB4PzFgw5Hbs6ybHksZ81UynDK7ZHK1CeWH2P8Tfjn7GCYDFN7wnXxezQQiHG2-O0Gc3fH8kv43FVPJ89BV9TZCDQU6iTX1zwFcU5VAiahWG99n_5J_TjHs4fVWDHfgds8Xl47rethE4zJ8PgUCF_nYxTeE8E_jshVr38zXqgW_bpJ3NigNNg7ueW_f-EMl_7dpyifPOzSz2TyO5yU3bwER3Q532B7Lyl-RfQ5Ul3h09MXT6B7FwQGiFObZkez_CdLUuEl_J-P66x0L"/>
+</div>
+<div>
+<p class="text-sm font-bold text-slate-800 uppercase tracking-tight">KWON JISOO</p>
+<p class="text-[10px] text-primary font-bold uppercase tracking-widest">VIP • Regular Guest</p>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="p-3 bg-surface-container rounded-lg">
+<p class="text-[10px] font-bold text-slate-400 uppercase">Check In</p>
+<p class="text-xs font-bold text-slate-700">Oct 24, 14:00</p>
+</div>
+<div class="p-3 bg-surface-container rounded-lg">
+<p class="text-[10px] font-bold text-slate-400 uppercase">Check Out</p>
+<p class="text-xs font-bold text-slate-700">Oct 26, 11:00</p>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between text-xs">
+<span class="text-slate-500">Nightly Rate (2 Nights)</span>
+<span class="font-bold text-slate-700">₩481,508</span>
+</div>
+<div class="flex justify-between text-xs">
+<span class="text-slate-500">Early Check-in Fee</span>
+<span class="font-bold text-slate-700">₩0</span>
+</div>
+<div class="pt-3 border-t border-slate-200 flex justify-between items-baseline">
+<span class="text-sm font-bold text-slate-800">Total Charged</span>
+<span class="text-xl font-bold text-primary font-headline">₩963,016</span>
+</div>
+</div>
+<button class="w-full py-3 bg-slate-800 text-white rounded-lg font-bold text-sm shadow-lg shadow-slate-200 hover:brightness-110 active:scale-95 transition-all">
+                    Process Check-In
+                </button>
+</div>
+</div>
+</main>
+<!-- Contextual FAB -->
+<button class="fixed bottom-8 left-[18rem] bg-white text-primary flex items-center gap-2 px-6 py-4 rounded-full shadow-xl shadow-slate-200/50 border border-slate-100 hover:shadow-2xl transition-all group active:scale-95 z-40">
+<span class="material-symbols-outlined text-primary" data-icon="add_circle">add_circle</span>
+<span class="text-sm font-bold tracking-tight">New Reservation</span>
+</button>
+</body></html>

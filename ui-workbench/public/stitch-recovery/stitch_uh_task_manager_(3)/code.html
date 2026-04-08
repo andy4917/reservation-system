@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Work Schedule Planner - UH Task Manager</title>
+<!-- Fonts: Manrope & Pretendard -->
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-tint": "#555f71",
+                        "on-error": "#fff7f6",
+                        "tertiary-fixed-dim": "#e3e6e8",
+                        "inverse-surface": "#090f12",
+                        "surface": "#f5faff",
+                        "on-tertiary-fixed": "#464a4c",
+                        "on-primary-fixed-variant": "#525c6e",
+                        "on-secondary-fixed": "#33414f",
+                        "inverse-on-surface": "#989ea2",
+                        "tertiary": "#5c6062",
+                        "secondary-container": "#d6e4f7",
+                        "outline-variant": "#a2b4c1",
+                        "background": "#f5faff",
+                        "secondary-fixed": "#d6e4f7",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#9f403d",
+                        "on-primary": "#f6f7ff",
+                        "surface-container-low": "#ecf5fc",
+                        "surface-container": "#e4eff8",
+                        "on-secondary": "#f7f9ff",
+                        "secondary-fixed-dim": "#c8d6e9",
+                        "on-primary-fixed": "#364051",
+                        "surface-bright": "#f5faff",
+                        "on-surface": "#23353f",
+                        "tertiary-container": "#f1f4f6",
+                        "surface-dim": "#c7ddec",
+                        "primary": "#555f71",
+                        "secondary": "#536070",
+                        "on-background": "#23353f",
+                        "inverse-primary": "#dee8ff",
+                        "on-secondary-fixed-variant": "#4f5d6d",
+                        "error-dim": "#4e0309",
+                        "on-surface-variant": "#50616c",
+                        "on-tertiary-container": "#585c5e",
+                        "primary-container": "#d9e3f9",
+                        "error-container": "#fe8983",
+                        "tertiary-fixed": "#f1f4f6",
+                        "on-tertiary": "#f6f9fb",
+                        "secondary-dim": "#475464",
+                        "on-secondary-container": "#455363",
+                        "surface-container-high": "#dbeaf5",
+                        "outline": "#6b7d89",
+                        "tertiary-dim": "#505456",
+                        "on-tertiary-fixed-variant": "#636769",
+                        "primary-fixed": "#d9e3f9",
+                        "on-primary-container": "#485264",
+                        "surface-variant": "#d3e5f2",
+                        "primary-dim": "#495365",
+                        "primary-fixed-dim": "#cbd5eb",
+                        "on-error-container": "#752121",
+                        "surface-container-highest": "#d3e5f2"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope", "sans-serif"],
+                        "body": ["Pretendard", "sans-serif"],
+                        "label": ["Pretendard", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Pretendard', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .editorial-canvas {
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5eb transparent;
+        }
+        /* Status Washes */
+        .status-wash-pink { background-color: #ffe4e6; color: #9f1239; }
+        .status-wash-blue { background-color: #e0e7ff; color: #3730a3; }
+        .status-wash-yellow { background-color: #fef9c3; color: #854d0e; }
+        .status-wash-cyan { background-color: #cffafe; color: #0e7490; }
+        .status-wash-mint { background-color: #ccfbf1; color: #0f766e; }
+        .status-wash-gray { background-color: #f1f5f9; color: #475569; }
+    </style>
+</head>
+<body class="bg-background text-on-surface antialiased overflow-hidden">
+<!-- SideNavBar Component -->
+<aside class="bg-slate-100 dark:bg-slate-900 font-manrope antialiased tracking-tight h-screen w-64 fixed left-0 top-0 flex flex-col p-4 z-50">
+<div class="mb-8 px-2 flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined" data-icon="account_tree" style="">account_tree</span>
+</div>
+<div>
+<h1 class="text-lg font-bold text-slate-800 dark:text-slate-100" style="">UH Task Manager</h1>
+<p class="text-[10px] uppercase tracking-widest text-on-surface-variant" style="">THE GANGNAM</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl scale-95 active:scale-100 duration-200" href="#" style="">
+<span class="material-symbols-outlined" data-icon="dashboard" style="">dashboard</span>
+<span class="text-sm font-medium" style="">예약 관리</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl scale-95 active:scale-100 duration-200" href="#" style="">
+<span class="material-symbols-outlined" data-icon="account_tree" style="">account_tree</span>
+<span class="text-sm font-medium" style="">NAVER 재고 관리</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl scale-95 active:scale-100 duration-200" href="#" style="">
+<span class="material-symbols-outlined" data-icon="group" style="">group</span>
+<span class="text-sm font-medium" style="">STATION 재고 관리</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl shadow-sm scale-95 active:scale-100 duration-200" href="#" style="">
+<span class="material-symbols-outlined" data-icon="calendar_today" style="">calendar_today</span>
+<span class="text-sm font-semibold" style="">오더리스트 관리</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl scale-95 active:scale-100 duration-200" href="#" style="">
+<span class="material-symbols-outlined" data-icon="inventory_2" style="">inventory_2</span>
+<span class="text-sm font-medium" style="">어라이벌 관리</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 space-y-1">
+<button class="w-full bg-primary text-on-primary py-3 rounded-xl mb-4 flex items-center justify-center gap-2 font-semibold shadow-md hover:opacity-90 transition-opacity" style="">
+<span class="material-symbols-outlined" data-icon="add" style="">add</span>
+                New Task
+            </button>
+<a class="flex items-center gap-3 px-4 py-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50/50 transition-colors rounded-xl" href="#" style="">
+<span class="material-symbols-outlined" data-icon="settings" style="">settings</span>
+<span class="text-sm" style="">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50/50 transition-colors rounded-xl" href="#" style="">
+<span class="material-symbols-outlined" data-icon="help_outline" style="">help_outline</span>
+<span class="text-sm" style="">Support</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar Component -->
+<header class="fixed top-0 right-0 left-64 h-16 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md flex justify-between items-center px-8 z-40 shadow-sm font-pretendard font-medium">
+<div class="flex items-center gap-6 w-1/2">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm" style="">search</span>
+<input class="w-full bg-surface-container-highest border-none rounded-xl pl-10 pr-4 py-2 text-sm focus:ring-0 focus:bg-surface-container-lowest transition-all" placeholder="Search tasks, rooms, or assignees..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-slate-700 dark:text-slate-200 hover:text-slate-800 transition-all" style="">
+<span class="material-symbols-outlined" data-icon="notifications" style="">notifications</span>
+</button>
+<button class="p-2 text-slate-700 dark:text-slate-200 hover:text-slate-800 transition-all" style="">
+<span class="material-symbols-outlined" data-icon="history" style="">history</span>
+</button>
+<button class="p-2 text-slate-700 dark:text-slate-200 hover:text-slate-800 transition-all" style="">
+<span class="material-symbols-outlined" data-icon="chat_bubble" style="">chat_bubble</span>
+</button>
+<div class="h-8 w-px bg-outline-variant/20 mx-2"></div>
+<div class="flex items-center gap-3 pl-2">
+<span class="text-sm font-semibold text-slate-900" style="">Alex Rivera</span>
+<img alt="User Avatar" class="w-8 h-8 rounded-full border-2 border-primary-container" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB033oiDVap6XSTxNwfbgHMiLPXvQNZSpK4kvNMTLWN6S3bYfH-0Muqx4su4h321xk2yXV1eMyvewf3kU3wWWB9BvVun2YB5BcddmK8oDICs1wg11dTPWJG5B_QBBGzTIrddo4SZzeWV2d2qnWawXYTs9Y-62vvjDTrtu-WLGGzGTubxLGkqmUAsFtZDkJw5aOBBGJtCWjOl62gm4ERZ31fcoL-O9lLwpmr_Je87kGhC2MowxANgVT2yg7YFZ8XCZFgXtAMI19UlA" style=""/>
+</div>
+<button class="ml-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold shadow-sm hover:opacity-90 transition-all" style="">
+                Create
+            </button>
+</div>
+</header>
+<!-- Main Canvas Area -->
+<main class="ml-64 mt-16 p-8 h-[calc(100vh-64px)] overflow-y-auto editorial-canvas bg-surface-container-low font-body">
+<div class="max-w-7xl mx-auto">
+<!-- Header Section -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-headline text-4xl font-extrabold tracking-tight text-on-surface" style="">Cleaning Schedule Planner</h2>
+<p class="text-on-surface-variant mt-2" style="">Daily Operational Grid &amp; Turnover Summary</p>
+</div>
+<div class="flex gap-3">
+<div class="px-5 py-2.5 bg-surface-container-lowest rounded-xl text-sm font-semibold flex items-center gap-2 border border-outline-variant/10" style="">
+<span class="material-symbols-outlined text-sm" style="">calendar_today</span>
+                        2023. 10. 24 (Tuesday)
+                    </div>
+<button class="px-5 py-2.5 bg-surface-container-high text-on-surface rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-surface-container transition-colors" style="">
+<span class="material-symbols-outlined text-sm">add_circle</span>
+    어라이벌 생성 (Create Arrival)
+</button><button class="px-5 py-2.5 bg-slate-800 text-white rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-slate-900 transition-colors" style="">
+<span class="material-symbols-outlined text-sm" style="">print</span>
+                        Print Grid
+                    </button>
+</div>
+</div>
+<!-- High-Density Grid Structure -->
+<div class="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm overflow-hidden mb-8">
+<div class="grid grid-cols-12 gap-x-px text-[11px] uppercase tracking-widest font-bold text-on-surface-variant/70 border-b border-outline-variant/10 pb-4 mb-4">
+<div class="col-span-1 px-4" style="">Building B</div>
+<div class="col-span-2 px-4 text-center" style="">Departure (C.O)</div>
+<div class="col-span-3 px-4 text-center" style="">Arrival (C.I)</div>
+<div class="col-span-1 px-4 border-l border-outline-variant/10" style="">Building A</div>
+<div class="col-span-2 px-4 text-center" style="">Departure (C.O)</div>
+<div class="col-span-3 px-4 text-center" style="">Arrival (C.I)</div>
+</div>
+<div class="space-y-1">
+<!-- Row 1 -->
+<div class="grid grid-cols-12 items-center group py-1.5 hover:bg-surface-container-low/50 rounded-lg transition-colors">
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant" style="">B201</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-pink" style="">전체청소</div>
+</div>
+<div class="col-span-3 px-2"></div>
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant border-l border-outline-variant/10" style="">A301</div>
+<div class="col-span-2 px-2"></div>
+<div class="col-span-3 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-blue" style="">재실</div>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="grid grid-cols-12 items-center group py-1.5 hover:bg-surface-container-low/50 rounded-lg transition-colors">
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant" style="">B202</div>
+<div class="col-span-2 px-2"></div>
+<div class="col-span-3 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-blue" style="">재실</div>
+</div>
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant border-l border-outline-variant/10" style="">A302</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-pink" style="">전체청소</div>
+</div>
+<div class="col-span-3 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-yellow" style="">VIP 의전</div>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="grid grid-cols-12 items-center group py-1.5 hover:bg-surface-container-low/50 rounded-lg transition-colors">
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant" style="">B203</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-pink" style="">전체청소</div>
+</div>
+<div class="col-span-3 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-yellow" style="">중국 2박</div>
+</div>
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant border-l border-outline-variant/10" style="">A303</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-blue" style="">재실</div>
+</div>
+<div class="col-span-3 px-2"></div>
+</div>
+<!-- Row 4 -->
+<div class="grid grid-cols-12 items-center group py-1.5 hover:bg-surface-container-low/50 rounded-lg transition-colors">
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant" style="">B301</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-blue" style="">재실</div>
+</div>
+<div class="col-span-3 px-2"></div>
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant border-l border-outline-variant/10" style="">A401</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-pink" style="">전체청소</div>
+</div>
+<div class="col-span-3 px-2"></div>
+</div>
+<!-- Row 5 -->
+<div class="grid grid-cols-12 items-center group py-1.5 hover:bg-surface-container-low/50 rounded-lg transition-colors">
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant" style="">B302</div>
+<div class="col-span-2 px-2"></div>
+<div class="col-span-3 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-mint" style="">퇴실예정</div>
+</div>
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant border-l border-outline-variant/10" style="">A402</div>
+<div class="col-span-2 px-2"></div>
+<div class="col-span-3 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-blue" style="">재실</div>
+</div>
+</div>
+<!-- Row 6 -->
+<div class="grid grid-cols-12 items-center group py-1.5 hover:bg-surface-container-low/50 rounded-lg transition-colors">
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant" style="">B401</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-pink" style="">전체청소</div>
+</div>
+<div class="col-span-3 px-2"></div>
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant border-l border-outline-variant/10" style="">A403</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-pink" style="">전체청소</div>
+</div>
+<div class="col-span-3 px-2"></div>
+</div>
+<!-- Row 7 -->
+<div class="grid grid-cols-12 items-center group py-1.5 hover:bg-surface-container-low/50 rounded-lg transition-colors">
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant" style="">B402</div>
+<div class="col-span-2 px-2"></div>
+<div class="col-span-3 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-blue" style="">재실</div>
+</div>
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant border-l border-outline-variant/10" style="">A501</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-yellow" style="">얼리 C.I</div>
+</div>
+<div class="col-span-3 px-2"></div>
+</div>
+<!-- Row 8 -->
+<div class="grid grid-cols-12 items-center group py-1.5 hover:bg-surface-container-low/50 rounded-lg transition-colors">
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant" style="">B501</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-blue" style="">재실</div>
+</div>
+<div class="col-span-3 px-2"></div>
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant border-l border-outline-variant/10" style="">A502</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-pink" style="">전체청소</div>
+</div>
+<div class="col-span-3 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-mint" style="">퇴실예정</div>
+</div>
+</div>
+<!-- Row 9 -->
+<div class="grid grid-cols-12 items-center group py-1.5 hover:bg-surface-container-low/50 rounded-lg transition-colors">
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant" style="">B502</div>
+<div class="col-span-2 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-yellow" style="">장기투숙</div>
+</div>
+<div class="col-span-3 px-2"></div>
+<div class="col-span-1 px-4 text-sm font-medium text-on-surface-variant border-l border-outline-variant/10" style="">A503</div>
+<div class="col-span-2 px-2"></div>
+<div class="col-span-3 px-2">
+<div class="py-1.5 px-3 rounded-lg text-xs font-bold text-center status-wash-blue" style="">재실</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Widgets Row -->
+<div class="grid grid-cols-3 gap-6">
+<!-- Operational Counts -->
+<div class="bg-surface-container-lowest rounded-[1.5rem] p-6 shadow-sm">
+<h3 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant/70 mb-4" style="">Operational Counts</h3>
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<span class="text-sm font-semibold" style="">Check-In (입실)</span>
+<span class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold" style="">12 Rooms</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-sm font-semibold" style="">Check-Out (퇴실)</span>
+<span class="px-3 py-1 bg-rose-100 text-rose-700 rounded-lg text-xs font-bold" style="">14 Rooms</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-sm font-semibold" style="">Stay-Overs (재실)</span>
+<span class="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold" style="">28 Rooms</span>
+</div>
+</div>
+</div>
+<!-- Special Instructions -->
+<div class="bg-surface-container-lowest rounded-[1.5rem] p-6 shadow-sm">
+<h3 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant/70 mb-4" style="">ROOM CLEANING</h3>
+<div class="space-y-3">
+<div class="p-3 bg-mint-50/50 rounded-lg border-l-4 border-teal-500 bg-teal-50/30">
+<p class="text-xs font-bold text-teal-800" style="">A302 - 전체 청소</p>
+</div>
+<div class="p-3 bg-rose-50/50 rounded-lg border-l-4 border-rose-500 bg-rose-50/30">
+<p class="text-xs font-bold text-rose-800" style="">B502 - 전체 청소</p>
+</div>
+<div class="p-3 bg-slate-50/50 rounded-lg border-l-4 border-slate-400 bg-slate-100/50">
+<p class="text-xs font-bold text-slate-700" style=""><br/></p>
+</div>
+</div>
+</div>
+<!-- Cleaning Progress -->
+<div class="bg-surface-container-lowest rounded-[1.5rem] p-6 shadow-sm flex flex-col"><h3 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant/70 mb-4" style="">Status Palette</h3>
+<div class="space-y-2 w-full">
+<div class="py-2 px-4 rounded-lg text-xs font-bold text-center bg-[#f87171] text-white cursor-move shadow-sm">공실 (Empty)</div>
+<div class="py-2 px-4 rounded-lg text-xs font-bold text-center bg-[#60a5fa] text-white cursor-move shadow-sm">재실 (Occupied)</div>
+<div class="py-2 px-4 rounded-lg text-xs font-bold text-center bg-[#a78bfa] text-white cursor-move shadow-sm">전체청소 (Full Clean)</div>
+<div class="py-2 px-4 rounded-lg text-xs font-bold text-center bg-[#f472b6] text-white cursor-move shadow-sm">체크아웃 요청사항 (Checkout Request)</div>
+<div class="py-2 px-4 rounded-lg text-xs font-bold text-center bg-[#4ade80] text-white cursor-move shadow-sm">체크인 요청사항 (Check-in Request)</div>
+<div class="py-2 px-4 rounded-lg text-xs font-bold text-center bg-slate-400 text-white cursor-move shadow-sm">O.O.O</div>
+</div></div>
+</div>
+</div>
+</main>
+</body></html>

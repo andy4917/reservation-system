@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Clean Enterprise - Unified Reservation &amp; Inventory Workspace</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f7f9fb;
+            color: #2a3439;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Linen & Slate Editorial Style: Using tonal backgrounds instead of 1px borders */
+        .tonal-row:nth-child(even) {
+            background-color: #f0f4f7;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary-dim": "#495365",
+                      "inverse-surface": "#0b0f10",
+                      "surface-dim": "#cfdce3",
+                      "on-background": "#2a3439",
+                      "on-tertiary": "#e2fff8",
+                      "secondary-container": "#ffdad6",
+                      "secondary": "#a63a34",
+                      "surface-container-lowest": "#ffffff",
+                      "primary-fixed": "#d9e3f9",
+                      "primary-container": "#d9e3f9",
+                      "on-primary": "#f6f7ff",
+                      "inverse-primary": "#dee8ff",
+                      "on-tertiary-container": "#006056",
+                      "on-surface": "#2a3439",
+                      "outline": "#717c82",
+                      "error-dim": "#4e0309",
+                      "tertiary": "#006b61",
+                      "surface-container-low": "#f0f4f7",
+                      "tertiary-container": "#80fdea",
+                      "on-tertiary-fixed-variant": "#006b61",
+                      "surface-variant": "#d9e4ea",
+                      "on-primary-fixed-variant": "#525c6e",
+                      "surface": "#f7f9fb",
+                      "secondary-dim": "#962e29",
+                      "on-primary-fixed": "#364051",
+                      "tertiary-fixed-dim": "#71eedc",
+                      "on-secondary-container": "#942d28",
+                      "surface-container-high": "#e1e9ee",
+                      "on-secondary": "#fff7f6",
+                      "error": "#9f403d",
+                      "secondary-fixed": "#ffdad6",
+                      "surface-bright": "#f7f9fb",
+                      "surface-container-highest": "#d9e4ea",
+                      "secondary-fixed-dim": "#ffc7c1",
+                      "on-tertiary-fixed": "#004c44",
+                      "error-container": "#fe8983",
+                      "on-secondary-fixed": "#7b1a18",
+                      "on-surface-variant": "#566166",
+                      "on-secondary-fixed-variant": "#a13731",
+                      "inverse-on-surface": "#9a9d9f",
+                      "outline-variant": "#a9b4b9",
+                      "primary": "#555f71",
+                      "on-primary-container": "#485264",
+                      "primary-fixed-dim": "#cbd5eb",
+                      "on-error-container": "#752121",
+                      "background": "#f7f9fb",
+                      "on-error": "#fff7f6",
+                      "tertiary-fixed": "#80fdea",
+                      "surface-container": "#e8eff3",
+                      "surface-tint": "#555f71",
+                      "tertiary-dim": "#005e54"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              }
+            }
+          }
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface min-h-screen flex">
+<!-- SideNavBar (Persisted Navigation) -->
+<aside class="fixed left-0 top-0 h-full w-64 bg-[#f0f4f7] flex flex-col p-6 space-y-2 z-50">
+<div class="flex items-center gap-3 mb-8">
+<div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined">cleaning_services</span>
+</div>
+<div>
+<h1 class="text-xl font-bold text-[#2a3439] leading-none">Clean Enterprise</h1>
+<p class="text-[0.6875rem] font-bold text-primary tracking-wider uppercase mt-1">Premium PMS</p>
+</div>
+</div>
+<div class="space-y-8">
+<!-- Section: Overview -->
+<div>
+<p class="px-4 text-[0.6875rem] font-bold text-outline uppercase tracking-[0.1em] mb-3">Overview</p>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 text-[#555f71]/80 px-4 py-3 hover:bg-[#e8eff3] rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-medium text-[0.875rem]">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 bg-[#e8eff3] text-[#555f71] rounded-xl px-4 py-3 font-semibold scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="font-medium text-[0.875rem]">Reservations</span>
+</a>
+</nav>
+</div>
+<!-- Section: Operations -->
+<div>
+<p class="px-4 text-[0.6875rem] font-bold text-outline uppercase tracking-[0.1em] mb-3">Operations</p>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 text-[#555f71]/80 px-4 py-3 hover:bg-[#e8eff3] rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">cleaning_services</span>
+<span class="font-medium text-[0.875rem]">Housekeeping</span>
+</a>
+<a class="flex items-center gap-3 text-[#555f71]/80 px-4 py-3 hover:bg-[#e8eff3] rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">desk</span>
+<span class="font-medium text-[0.875rem]">Front Desk</span>
+</a>
+</nav>
+</div>
+<!-- Section: System -->
+<div>
+<p class="px-4 text-[0.6875rem] font-bold text-outline uppercase tracking-[0.1em] mb-3">System</p>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 text-[#555f71]/80 px-4 py-3 hover:bg-[#e8eff3] rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-medium text-[0.875rem]">Settings</span>
+</a>
+<a class="flex items-center gap-3 text-[#555f71]/80 px-4 py-3 hover:bg-[#e8eff3] rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">database</span>
+<span class="font-medium text-[0.875rem]">Logs</span>
+</a>
+</nav>
+</div>
+</div>
+<div class="mt-auto pt-6 space-y-1">
+<button class="w-full bg-gradient-to-br from-primary to-primary-dim text-white rounded-xl py-3 px-4 font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/10 hover:scale-[1.02] transition-all mb-4">
+<span class="material-symbols-outlined text-sm">add</span>
+                New Reservation
+            </button>
+<a class="flex items-center gap-3 text-[#555f71]/80 px-4 py-3 hover:bg-[#e8eff3] rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-medium text-[0.875rem]">Support</span>
+</a>
+<a class="flex items-center gap-3 text-[#555f71]/80 px-4 py-3 hover:bg-[#e8eff3] rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-medium text-[0.875rem]">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-64 flex-1 flex flex-col min-w-0">
+<!-- TopAppBar -->
+<header class="h-16 w-full flex justify-between items-center px-8 bg-[#f7f9fb] sticky top-0 z-40">
+<div class="flex items-center gap-6">
+<h2 class="text-lg font-bold text-[#2a3439] tracking-tight">The Gangnam Reservation Sheet</h2>
+<!-- Prominent Date Range Picker -->
+<div class="flex items-center gap-2 bg-surface-container-high px-5 py-2 rounded-xl cursor-pointer hover:bg-surface-dim transition-colors ring-1 ring-black/5">
+<span class="material-symbols-outlined text-[1.2rem] text-primary">calendar_today</span>
+<span class="text-sm font-bold">May 24 — May 31, 2024</span>
+<span class="material-symbols-outlined text-[1rem] text-outline">expand_more</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline">search</span>
+<input class="bg-surface-container-highest border-none rounded-xl pl-10 pr-4 py-2 text-sm w-64 focus:ring-2 focus:ring-primary focus:bg-white transition-all" placeholder="Search reservations..." type="text"/>
+</div>
+<div class="flex items-center gap-3 pl-6 border-l border-outline-variant/20">
+<div class="text-right">
+<p class="text-sm font-semibold text-on-surface leading-none">Manager Profile</p>
+<p class="text-[0.6875rem] text-outline mt-1 font-medium">Shift Lead • Floor 4</p>
+</div>
+<img alt="Manager" class="w-10 h-10 rounded-xl object-cover ring-2 ring-surface-container-highest" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfbitSOUKyCQvNdOSv5ump-maDmx2aLWDi_9lVPYyU3BlLG9BokR7WnUiSzxJYxt1NgLFwHYBY8PzXh4Ae5LuV6nvTYhzMEp85o_eyghZLibTqIu79Bh8jgNBGFnSq_OQ4TBeF5Q__XTo_exi-DFTllD1_05aI6-ActSV0JWkLPbR3Vg8kCitaiogIQcaAUNm8y-QwSvNX4USwT31oMu4GUJb_YfE_FSd5fQSBwudF12H3rUlCaZUL-3KRtA1XnZsqb7f5lBcWMjjS"/>
+</div>
+</div>
+</header>
+<!-- Content Area -->
+<div class="p-8 space-y-12 max-w-[1600px] mx-auto w-full">
+<!-- Section 1: Reservation Sheet (Weekly Planner) -->
+<section class="space-y-6">
+<div class="flex justify-between items-end">
+<div>
+<h3 class="text-2xl font-extrabold text-on-surface tracking-tight">Weekly Reservation Planner</h3>
+<p class="text-outline font-medium text-sm">Real-time occupancy for Gangnam District</p>
+</div>
+<div class="flex gap-2">
+<button class="p-2.5 rounded-xl bg-surface-container-low text-primary hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="p-2.5 rounded-xl bg-surface-container-low text-primary hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+<div class="bg-white rounded-3xl overflow-hidden shadow-[0_32px_64px_-24px_rgba(42,52,57,0.08)]">
+<!-- Spreadsheet Grid -->
+<div class="grid grid-cols-[220px_repeat(8,1fr)]">
+<!-- Header Row -->
+<div class="p-6 bg-surface-container-low flex items-center">
+<span class="text-[0.6875rem] font-bold text-outline uppercase tracking-widest">Room / Date</span>
+</div>
+<div class="p-6 bg-primary-container/20 flex flex-col items-center">
+<span class="text-[0.625rem] font-extrabold text-primary uppercase tracking-[0.2em]">Today</span>
+<span class="text-xl font-bold">24</span>
+</div>
+<div class="p-6 flex flex-col items-center">
+<span class="text-[0.625rem] font-bold text-outline uppercase tracking-[0.15em]">Sat</span>
+<span class="text-xl font-bold text-outline">25</span>
+</div>
+<div class="p-6 flex flex-col items-center">
+<span class="text-[0.625rem] font-bold text-outline uppercase tracking-[0.15em]">Sun</span>
+<span class="text-xl font-bold text-outline">26</span>
+</div>
+<div class="p-6 flex flex-col items-center">
+<span class="text-[0.625rem] font-bold text-outline uppercase tracking-[0.15em]">Mon</span>
+<span class="text-xl font-bold text-outline">27</span>
+</div>
+<div class="p-6 flex flex-col items-center">
+<span class="text-[0.625rem] font-bold text-outline uppercase tracking-[0.15em]">Tue</span>
+<span class="text-xl font-bold text-outline">28</span>
+</div>
+<div class="p-6 flex flex-col items-center">
+<span class="text-[0.625rem] font-bold text-outline uppercase tracking-[0.15em]">Wed</span>
+<span class="text-xl font-bold text-outline">29</span>
+</div>
+<div class="p-6 flex flex-col items-center">
+<span class="text-[0.625rem] font-bold text-outline uppercase tracking-[0.15em]">Thu</span>
+<span class="text-xl font-bold text-outline">30</span>
+</div>
+<div class="p-6 flex flex-col items-center">
+<span class="text-[0.625rem] font-bold text-outline uppercase tracking-[0.15em]">Fri</span>
+<span class="text-xl font-bold text-outline">31</span>
+</div>
+<!-- Rows (Tonal background for separation) -->
+<!-- Row 1 -->
+<div class="p-6 flex flex-col justify-center bg-surface-container-low/50">
+<span class="text-sm font-bold">401</span>
+<span class="text-[0.625rem] text-outline font-bold uppercase tracking-wider">Grand City Spa</span>
+</div>
+<div class="col-span-8 grid grid-cols-8 relative bg-white">
+<div class="col-start-1 col-span-3 m-2.5">
+<div class="h-full bg-tertiary-container/40 border-l-[6px] border-tertiary rounded-2xl p-4 cursor-pointer hover:brightness-95 transition-all flex flex-col justify-center">
+<div class="flex justify-between items-center mb-1">
+<p class="text-[0.8125rem] font-bold text-tertiary-dim">Kwon Jisoo</p>
+<span class="material-symbols-outlined text-sm text-tertiary-dim">check_circle</span>
+</div>
+<p class="text-[0.625rem] text-tertiary-dim/70 font-semibold uppercase tracking-wider">3 Nights • VIP Member</p>
+</div>
+</div>
+<div class="col-start-5 col-span-2 m-2.5">
+<div class="h-full bg-surface-container-low rounded-2xl flex items-center justify-center border-2 border-dashed border-outline-variant/30 hover:border-primary/50 transition-colors">
+<span class="material-symbols-outlined text-outline/40">add</span>
+</div>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="p-6 flex flex-col justify-center bg-white">
+<span class="text-sm font-bold">501</span>
+<span class="text-[0.625rem] text-outline font-bold uppercase tracking-wider">Presidential Suite</span>
+</div>
+<div class="col-span-8 grid grid-cols-8 relative bg-surface-container-low/30">
+<div class="col-start-3 col-span-2 m-2.5">
+<div class="h-full bg-[#f3e8ff] border-l-[6px] border-[#a855f7] rounded-2xl p-4 cursor-pointer hover:brightness-95 transition-all flex flex-col justify-center">
+<p class="text-[0.8125rem] font-bold text-[#6b21a8] mb-1">Lee Minho</p>
+<p class="text-[0.625rem] text-[#6b21a8]/70 font-semibold uppercase tracking-wider">2 Nights • Business</p>
+</div>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="p-6 flex flex-col justify-center bg-surface-container-low/50">
+<span class="text-sm font-bold">302</span>
+<span class="text-[0.625rem] text-outline font-bold uppercase tracking-wider">Urban Deluxe</span>
+</div>
+<div class="col-span-8 grid grid-cols-8 relative bg-white">
+<div class="col-start-1 col-span-2 m-2.5">
+<div class="h-full bg-secondary-container/40 border-l-[6px] border-secondary rounded-2xl p-4 cursor-pointer hover:brightness-95 transition-all flex flex-col justify-center">
+<p class="text-[0.8125rem] font-bold text-secondary-dim mb-1">Park Sora</p>
+<p class="text-[0.625rem] text-secondary-dim/70 font-semibold uppercase tracking-wider">Check-out pending</p>
+</div>
+</div>
+<div class="col-start-3 col-span-1 m-2.5">
+<div class="h-full bg-surface-container-high/60 rounded-2xl flex flex-col items-center justify-center gap-1">
+<span class="material-symbols-outlined text-outline" data-icon="cleaning_services">cleaning_services</span>
+<span class="text-[0.5rem] font-bold text-outline uppercase tracking-tighter">Cleaning</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: Live Inventory Status -->
+<section class="space-y-6">
+<div class="flex items-end justify-between">
+<div>
+<h3 class="text-2xl font-extrabold text-on-surface tracking-tight">Live Inventory Status</h3>
+<p class="text-sm text-outline font-medium">Channel sync across Naver &amp; Station platforms</p>
+</div>
+<div class="flex items-center gap-3 bg-tertiary-container/20 px-4 py-2 rounded-full">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="text-xs font-bold text-tertiary uppercase tracking-widest">System Sync: Active</span>
+</div>
+</div>
+<div class="bg-white rounded-3xl overflow-hidden shadow-[0_32px_64px_-24px_rgba(42,52,57,0.08)]">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low">
+<th class="px-10 py-5 text-[0.6875rem] font-extrabold text-outline uppercase tracking-[0.15em]">Sales Channel</th>
+<th class="px-8 py-5 text-[0.6875rem] font-extrabold text-outline uppercase tracking-[0.15em]">Urban Spa Suite</th>
+<th class="px-8 py-5 text-[0.6875rem] font-extrabold text-outline uppercase tracking-[0.15em]">Double Twin Spa</th>
+<th class="px-8 py-5 text-[0.6875rem] font-extrabold text-outline uppercase tracking-[0.15em]">Grand Spa Suite (8P)</th>
+<th class="px-8 py-5 text-[0.6875rem] font-extrabold text-outline uppercase tracking-[0.15em]">Suite (6P)</th>
+<th class="px-8 py-5 text-[0.6875rem] font-extrabold text-outline uppercase tracking-[0.15em]">Suite (4P)</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<!-- Channel: STATION -->
+<tr class="group hover:bg-surface-container-low/30 transition-colors">
+<td class="px-10 py-8">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-inverse-surface flex items-center justify-center text-white shadow-sm">
+<span class="material-symbols-outlined text-[1.2rem]">hub</span>
+</div>
+<div>
+<span class="font-extrabold text-[0.9375rem] text-on-surface">STATION</span>
+<p class="text-[0.625rem] text-outline font-bold uppercase tracking-tighter">Direct Global API</p>
+</div>
+</div>
+</td>
+<td class="px-8 py-8">
+<span class="px-4 py-2 bg-surface-container-low text-on-surface-variant rounded-xl text-xs font-bold ring-1 ring-black/5">1 / 2</span>
+</td>
+<td class="px-8 py-8">
+<span class="px-4 py-2 bg-secondary-container/40 text-secondary-dim rounded-xl text-xs font-bold uppercase tracking-wide">Closed</span>
+</td>
+<td class="px-8 py-8">
+<span class="px-4 py-2 bg-secondary-container/40 text-secondary-dim rounded-xl text-xs font-bold uppercase tracking-wide">Closed</span>
+</td>
+<td class="px-8 py-8">
+<span class="px-4 py-2 bg-surface-container-low text-on-surface-variant rounded-xl text-xs font-bold ring-1 ring-black/5">0 / 1</span>
+</td>
+<td class="px-8 py-8">
+<span class="px-4 py-2 bg-secondary-container/40 text-secondary-dim rounded-xl text-xs font-bold uppercase tracking-wide">Closed</span>
+</td>
+</tr>
+<!-- Channel: NAVER -->
+<tr class="group hover:bg-surface-container-low/30 transition-colors bg-tertiary-container/[0.03]">
+<td class="px-10 py-8">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-[#03c75a] flex items-center justify-center text-white shadow-sm">
+<span class="material-symbols-outlined text-[1.2rem]">captive_portal</span>
+</div>
+<div>
+<span class="font-extrabold text-[0.9375rem] text-on-surface uppercase">Naver</span>
+<p class="text-[0.625rem] text-outline font-bold uppercase tracking-tighter">Regional Partner</p>
+</div>
+</div>
+</td>
+<td class="px-8 py-8">
+<span class="px-4 py-2 bg-secondary-container/40 text-secondary-dim rounded-xl text-xs font-bold uppercase tracking-wide">Closed</span>
+</td>
+<td class="px-8 py-8">
+<span class="px-4 py-2 bg-tertiary-container/30 text-tertiary-dim rounded-xl text-xs font-bold ring-1 ring-tertiary/10">1 / 1</span>
+</td>
+<td class="px-8 py-8">
+<span class="px-4 py-2 bg-surface-container-low text-on-surface-variant rounded-xl text-xs font-bold ring-1 ring-black/5">0 / 2</span>
+</td>
+<td class="px-8 py-8">
+<span class="px-4 py-2 bg-surface-container-low text-on-surface-variant rounded-xl text-xs font-bold ring-1 ring-black/5">0 / 4</span>
+</td>
+<td class="px-8 py-8">
+<span class="px-4 py-2 bg-surface-container-low text-on-surface-variant rounded-xl text-xs font-bold ring-1 ring-black/5">0 / 4</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</main>
+</body></html>

@@ -105,6 +105,25 @@ npm start
 
 Windows에서 WSL 경로로 앱을 띄울 때는 `scripts/run-app-windows.cmd`를 사용합니다.
 
+## UI Workbench 복구 작업면
+
+`2026-04-06` 프론트 재작업 산출물은 `ui-workbench/` 아래에 복구용 작업면으로 다시 모아뒀습니다.
+
+- Windows 실행:
+  - `scripts/ui_workbench_dev.cmd`
+  - `scripts/ui_workbench_storybook.cmd`
+  - `scripts/ui_workbench_storybook_build.cmd`
+- WSL 실행:
+
+```bash
+npm --prefix ui-workbench install
+npm run ui:workbench:storybook
+```
+
+주의:
+- 현재 복구된 `ui-workbench/`는 살아남은 HTML/PNG/Stitch 산출물을 기준으로 재구성한 작업면입니다.
+- `2026-04-07` reset backup 안의 원본 `ui-workbench/`와 완전히 동일하다고 아직 증명되지는 않았습니다.
+
 ## 확장 브리지 설치
 
 직접 로드할 폴더는 `extension/` 입니다.

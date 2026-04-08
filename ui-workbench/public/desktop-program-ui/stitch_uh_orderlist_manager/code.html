@@ -1,0 +1,336 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Work Schedule Planner - UH Task Manager</title>
+<!-- Fonts: Manrope & Pretendard (via local-like naming or standard alternatives) -->
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-tint": "#555f71",
+                        "on-error": "#fff7f6",
+                        "tertiary-fixed-dim": "#e3e6e8",
+                        "inverse-surface": "#090f12",
+                        "surface": "#f5faff",
+                        "on-tertiary-fixed": "#464a4c",
+                        "on-primary-fixed-variant": "#525c6e",
+                        "on-secondary-fixed": "#33414f",
+                        "inverse-on-surface": "#989ea2",
+                        "tertiary": "#5c6062",
+                        "secondary-container": "#d6e4f7",
+                        "outline-variant": "#a2b4c1",
+                        "background": "#f5faff",
+                        "secondary-fixed": "#d6e4f7",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#9f403d",
+                        "on-primary": "#f6f7ff",
+                        "surface-container-low": "#ecf5fc",
+                        "surface-container": "#e4eff8",
+                        "on-secondary": "#f7f9ff",
+                        "secondary-fixed-dim": "#c8d6e9",
+                        "on-primary-fixed": "#364051",
+                        "surface-bright": "#f5faff",
+                        "on-surface": "#23353f",
+                        "tertiary-container": "#f1f4f6",
+                        "surface-dim": "#c7ddec",
+                        "primary": "#555f71",
+                        "secondary": "#536070",
+                        "on-background": "#23353f",
+                        "inverse-primary": "#dee8ff",
+                        "on-secondary-fixed-variant": "#4f5d6d",
+                        "error-dim": "#4e0309",
+                        "on-surface-variant": "#50616c",
+                        "on-tertiary-container": "#585c5e",
+                        "primary-container": "#d9e3f9",
+                        "error-container": "#fe8983",
+                        "tertiary-fixed": "#f1f4f6",
+                        "on-tertiary": "#f6f9fb",
+                        "secondary-dim": "#475464",
+                        "on-secondary-container": "#455363",
+                        "surface-container-high": "#dbeaf5",
+                        "outline": "#6b7d89",
+                        "tertiary-dim": "#505456",
+                        "on-tertiary-fixed-variant": "#636769",
+                        "primary-fixed": "#d9e3f9",
+                        "on-primary-container": "#485264",
+                        "surface-variant": "#d3e5f2",
+                        "primary-dim": "#495365",
+                        "primary-fixed-dim": "#cbd5eb",
+                        "on-error-container": "#752121",
+                        "surface-container-highest": "#d3e5f2"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope", "sans-serif"],
+                        "body": ["Pretendard", "sans-serif"],
+                        "label": ["Pretendard", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Pretendard', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .editorial-canvas {
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5eb transparent;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface antialiased overflow-hidden">
+<!-- SideNavBar Component -->
+<aside class="bg-slate-100 dark:bg-slate-900 font-manrope antialiased tracking-tight h-screen w-64 fixed left-0 top-0 flex flex-col h-full p-4 z-50">
+<div class="mb-8 px-2 flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined" data-icon="account_tree" style="">account_tree</span>
+</div>
+<div>
+<h1 class="text-lg font-bold text-slate-800 dark:text-slate-100" style="">UH Task Manager</h1>
+<p class="text-[10px] uppercase tracking-widest text-on-surface-variant" style="">THE GANGNAM</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl scale-95 active:scale-100 duration-200" href="#" style="">
+<span class="material-symbols-outlined" data-icon="dashboard" style="">dashboard</span>
+<span class="text-sm font-medium" style="">예약 관리</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl scale-95 active:scale-100 duration-200" href="#" style="">
+<span class="material-symbols-outlined" data-icon="account_tree" style="">account_tree</span>
+<span class="text-sm font-medium" style="">NAVER 재고 관리</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl scale-95 active:scale-100 duration-200" href="#" style="">
+<span class="material-symbols-outlined" data-icon="group" style="">group</span>
+<span class="text-sm font-medium" style="">STATION 재고 관리</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl shadow-sm scale-95 active:scale-100 duration-200" href="#" style="">
+<span class="material-symbols-outlined" data-icon="calendar_today" style="">calendar_today</span>
+<span class="text-sm font-semibold" style="">오더리스트 관리</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl scale-95 active:scale-100 duration-200" href="#" style="">
+<span class="material-symbols-outlined" data-icon="inventory_2" style="">inventory_2</span>
+<span class="text-sm font-medium" style="">어라이벌 관리</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 space-y-1">
+<button class="w-full bg-primary text-on-primary py-3 rounded-xl mb-4 flex items-center justify-center gap-2 font-semibold shadow-md hover:opacity-90 transition-opacity" style="">
+<span class="material-symbols-outlined" data-icon="add" style="">add</span>
+                New Task
+            </button>
+<a class="flex items-center gap-3 px-4 py-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50/50 transition-colors rounded-xl" href="#" style="">
+<span class="material-symbols-outlined" data-icon="settings" style="">settings</span>
+<span class="text-sm" style="">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50/50 transition-colors rounded-xl" href="#" style="">
+<span class="material-symbols-outlined" data-icon="help_outline" style="">help_outline</span>
+<span class="text-sm" style="">Support</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar Component -->
+<header class="fixed top-0 right-0 left-64 h-16 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md flex justify-between items-center px-8 w-full z-40 shadow-sm dark:shadow-none font-pretendard font-medium">
+<div class="flex items-center gap-6 w-1/2">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm" style="">search</span>
+<input class="w-full bg-surface-container-highest border-none rounded-xl pl-10 pr-4 py-2 text-sm focus:ring-0 focus:bg-surface-container-lowest transition-all" placeholder="Search tasks, rooms, or assignees..." type="text">
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-slate-700 dark:text-slate-200 hover:text-slate-800 transition-all" style="">
+<span class="material-symbols-outlined" data-icon="notifications" style="">notifications</span>
+</button>
+<button class="p-2 text-slate-700 dark:text-slate-200 hover:text-slate-800 transition-all" style="">
+<span class="material-symbols-outlined" data-icon="history" style="">history</span>
+</button>
+<button class="p-2 text-slate-700 dark:text-slate-200 hover:text-slate-800 transition-all" style="">
+<span class="material-symbols-outlined" data-icon="chat_bubble" style="">chat_bubble</span>
+</button>
+<div class="h-8 w-px bg-outline-variant/20 mx-2"></div>
+<div class="flex items-center gap-3 pl-2">
+<span class="text-sm font-semibold text-slate-900" style="">Alex Rivera</span>
+<img alt="User Avatar" class="w-8 h-8 rounded-full border-2 border-primary-container" data-alt="professional portrait of a manager in a modern office setting with soft natural light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB033oiDVap6XSTxNwfbgHMiLPXvQNZSpK4kvNMTLWN6S3bYfH-0Muqx4su4h321xk2yXV1eMyvewf3kU3wWWB9BvVun2YB5BcddmK8oDICs1wg11dTPWJG5B_QBBGzTIrddo4SZzeWV2d2qnWawXYTs9Y-62vvjDTrtu-WLGGzGTubxLGkqmUAsFtZDkJw5aOBBGJtCWjOl62gm4ERZ31fcoL-O9lLwpmr_Je87kGhC2MowxANgVT2yg7YFZ8XCZFgXtAMI19UlA" style="">
+</div>
+<button class="ml-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold shadow-sm hover:opacity-90 transition-all" style="">
+                Create
+            </button>
+</div>
+</header>
+<!-- Main Canvas Area -->
+<main class="ml-64 mt-16 p-8 h-[calc(100vh-64px)] overflow-y-auto editorial-canvas bg-surface-container-low">
+<div class="max-w-7xl mx-auto">
+<!-- Header Section -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-headline text-4xl font-extrabold tracking-tight text-on-surface" style="">ORDER LIST&nbsp; - GangNam</h2>
+<p class="text-on-surface-variant font-body mt-2" style="">Managing housekeeping and facility maintenance for October 24, 2023</p>
+</div>
+<div class="flex gap-3">
+<button class="px-5 py-2.5 bg-surface-container-lowest rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-surface-container transition-colors" style="">
+<span class="material-symbols-outlined text-sm" style="">filter_list</span>
+                        Filter
+                    </button>
+<button class="px-5 py-2.5 bg-surface-container-lowest rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-surface-container transition-colors" style="">
+<span class="material-symbols-outlined text-sm" style="">download</span>
+                        Export
+                    </button>
+</div>
+</div>
+<!-- Spreadsheet / Data Table -->
+<div class="bg-surface-container-lowest rounded-[2rem] p-4 shadow-sm">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="text-on-surface-variant text-[11px] uppercase tracking-[0.1em] font-semibold border-b border-outline-variant/15">
+<th class="px-6 py-5" style="">Request Date</th>
+<th class="px-6 py-5" style="">Room No</th>
+<th class="px-6 py-5" style="">Task Type</th>
+<th class="px-6 py-5" style="">Status</th>
+<th class="px-6 py-5" style="">Assignee</th>
+<th class="px-6 py-5" style="">Comments</th>
+<th class="px-4 py-5 text-center" style="">Actions</th>
+</tr>
+</thead>
+<tbody class="text-sm font-body">
+<!-- Row 1: Emergency -->
+<tr class="group hover:bg-surface-container-low transition-all cursor-pointer border-b border-outline-variant/15">
+<td class="px-6 py-6 font-medium" style="">Oct 24, 09:15 AM</td>
+<td class="px-6 py-6" style="">
+<span class="font-bold text-slate-900" style="">402-A</span>
+</td>
+<td class="px-6 py-6" style="">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-6 bg-error rounded-full"></div>
+<span class="font-semibold text-error" style="">Emergency</span>
+</div>
+</td>
+<td class="px-6 py-6" style="">
+<div class="inline-flex items-center px-3 py-1 bg-error/10 text-on-surface rounded-full text-xs font-bold border border-error/5" style="">
+                                    Critical
+                                </div>
+</td>
+<td class="px-6 py-6" style="">
+<div class="flex items-center gap-2 group/assignee">
+<img alt="Assignee" class="w-6 h-6 rounded-full" data-alt="headshot of a male service staff member with a friendly expression" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDt1-frScwqDSkE6BALf3L7csAMW4ca13sGU2DE_8VblqlHALzaNMCfFt9FpwoW2XTbEl82r4kPH1bqW8fnYEVD8dPdxcSK1rp7OK3xrvP0jpMHaTGR5DjWOtiGN_jyxIv_OcJVNTQhSOw_7nMMoJb3TGX6ZVAoGuP46B6BNdWEqRWVnL33VKfthCIYfM7Kw5iDvU3b_M2PNi95bmCYPKn4UrbT71GUwKRk73ABPGvEe_nnoOmk0qCUJ7QhLvgmYobUeLfcfzEr3Q" style="">
+<span class="hover:underline underline-offset-4 decoration-primary/30" style="">Marcus Chen</span>
+</div>
+</td>
+<td class="px-6 py-6 text-on-surface-variant max-w-xs truncate" style="">Flooding reported in bathroom area...</td>
+<td class="px-4 py-6 text-center" style="">
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors" style="">
+<span class="material-symbols-outlined text-on-surface-variant" style="">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 2: Room Makeup -->
+<tr class="group hover:bg-surface-container-low transition-all cursor-pointer border-b border-outline-variant/15">
+<td class="px-6 py-6 font-medium" style="">Oct 24, 10:30 AM</td>
+<td class="px-6 py-6 font-bold text-slate-900" style="">215</td>
+<td class="px-6 py-6" style="">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-6 bg-secondary rounded-full"></div>
+<span class="font-semibold text-secondary" style="">Room Makeup</span>
+</div>
+</td>
+<td class="px-6 py-6" style="">
+<div class="inline-flex items-center px-3 py-1 bg-secondary-container/30 text-on-surface rounded-full text-xs font-bold border border-secondary/5" style="">
+                                    Pending
+                                </div>
+</td>
+<td class="px-6 py-6" style="">
+<div class="flex items-center gap-2">
+<img alt="Assignee" class="w-6 h-6 rounded-full" data-alt="headshot of a female housekeeping staff member smiling professionally" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOuI-9bzP-fAm0PgTlhNxysYkKx_X7iekC0k_Y18K3T4DnFd_K8JBmNtLRLX56ZrKhjEDGIRu86dOJmGwwLqAMERNnSzMADUgHLb2LEZe83SMLO6fHN0WeqCPP9UL24RQxCcSdm54ZYDWxM1MWFx8JOsxLdEsF8Bt6LilEmGqkiCTZylJhMNTSBqqgbr2AibMuYYBTiWN3kNnkAy5mlriogn-asBHfZA217RA65kYbXEGku2fMfxV5T3ebPReSBPW1BaUT0EM_jg" style="">
+<span class="" style="">Elena Soprano</span>
+</div>
+</td>
+<td class="px-6 py-6 text-on-surface-variant max-w-xs truncate" style="">Guest requested extra towels and decaf pods.</td>
+<td class="px-4 py-6 text-center" style="">
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors" style="">
+<span class="material-symbols-outlined text-on-surface-variant" style="">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 3: Cleaning -->
+<tr class="group hover:bg-surface-container-low transition-all cursor-pointer border-b border-outline-variant/15">
+<td class="px-6 py-6 font-medium" style="">Oct 24, 11:00 AM</td>
+<td class="px-6 py-6 font-bold text-slate-900" style="">Suite 11</td>
+<td class="px-6 py-6" style="">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-6 bg-primary-dim rounded-full"></div>
+<span class="font-semibold text-primary-dim" style="">Cleaning</span>
+</div>
+</td>
+<td class="px-6 py-6" style="">
+<div class="inline-flex items-center px-3 py-1 bg-primary-container/40 text-on-surface rounded-full text-xs font-bold border border-primary/5" style="">
+                                    In Progress
+                                </div>
+</td>
+<td class="px-6 py-6" style="">
+<div class="flex items-center gap-2">
+<img alt="Assignee" class="w-6 h-6 rounded-full" data-alt="portrait of a middle-aged male technician with a focused and professional look" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1dR1YhgwImoE1txJGhp9Lzj-7syXlwh0-POvWoCiIPukonfRFN3GFRpuoeG_HNDGRzzyd31lHtRUEqn3Vste97vnqa9dvO_q1AiojwjwxDuGKZZx2WNvxMMjVOTcFW649pVFlQXApOWIn7VB0c6bsmBCi58pO5vkvei6nndwlffL5SbPCtf8EWFhu4j47lquM3F4VJCYd6k2wyuujPvnu74pUZsicbWcD5Q7VOO-uSTZR3aB5BkFTq-EKcfKoBh93goGlivsa4g" style="">
+<span class="" style="">James Kim</span>
+</div>
+</td>
+<td class="px-6 py-6 text-on-surface-variant max-w-xs truncate" style="">Check-out deep clean scheduled.</td>
+<td class="px-4 py-6 text-center" style="">
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors" style="">
+<span class="material-symbols-outlined text-on-surface-variant" style="">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 4: Room Makeup -->
+<tr class="group hover:bg-surface-container-low transition-all cursor-pointer border-b border-outline-variant/15">
+<td class="px-6 py-6 font-medium" style="">Oct 24, 11:45 AM</td>
+<td class="px-6 py-6 font-bold text-slate-900" style="">308</td>
+<td class="px-6 py-6" style="">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-6 bg-secondary rounded-full"></div>
+<span class="font-semibold text-secondary" style="">Room Makeup</span>
+</div>
+</td>
+<td class="px-6 py-6" style="">
+<div class="inline-flex items-center px-3 py-1 bg-surface-container-high text-on-surface rounded-full text-xs font-bold border border-outline-variant/10" style="">
+                                    Assigned
+                                </div>
+</td>
+<td class="px-6 py-6" style="">
+<div class="flex items-center gap-2">
+<img alt="Assignee" class="w-6 h-6 rounded-full" data-alt="headshot of a young professional woman in service uniform" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcQOzaO7Ym-O11kEKN14pRyT0943FmzJZq8cZRpwvkpoPAgbrlRwYlsi6S2zBZkFmpQwimPZ3jetcCnIt3n_UO_wZ7Q6KkCT6HE1AyPNkEKiFCbqrLrwhLbPJFu9o_dAGYTR71npJrtX-Y8sNXQrJRFCoyAZOxmlo5h3JiddmN_520TIj43xjYEK2ZT4WiCmBF6phrOT7za_Peqisw5F_62V84f_ZggGqBl31jUr0i6yZwNhF0_8oMLEa_BqTYJRg7qM9d_bT53A" style="">
+<span class="" style="">Sasha Grey</span>
+</div>
+</td>
+<td class="px-6 py-6 text-on-surface-variant max-w-xs truncate" style="">Standard turnover, next guest check-in 3PM.</td>
+<td class="px-4 py-6 text-center" style="">
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors" style="">
+<span class="material-symbols-outlined text-on-surface-variant" style="">more_horiz</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="flex justify-between items-center px-6 py-8">
+<p class="text-xs font-medium text-on-surface-variant" style="">Showing 1-4 of 48 tasks across 12 floors</p>
+<div class="flex gap-2">
+<button class="px-4 py-2 bg-surface-container-high rounded-lg text-xs font-bold disabled:opacity-50" style="">Previous</button>
+<button class="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold" style="">Next</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- NavigationDrawer (Right Contextual) -->
+<!-- FAB for Task Entry (Contextual) -->
+</body></html>

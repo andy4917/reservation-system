@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;family=Pretendard:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline-variant": "#a2b4c1",
+                        "on-error": "#fff7f6",
+                        "surface-bright": "#f5faff",
+                        "on-tertiary-fixed-variant": "#636769",
+                        "background": "#f5faff",
+                        "surface-container-high": "#dbeaf5",
+                        "secondary-dim": "#475464",
+                        "on-primary-container": "#485264",
+                        "surface-container": "#e4eff8",
+                        "primary": "#555f71",
+                        "tertiary-fixed-dim": "#e3e6e8",
+                        "secondary-fixed-dim": "#c8d6e9",
+                        "on-secondary-fixed-variant": "#4f5d6d",
+                        "primary-dim": "#495365",
+                        "on-tertiary-fixed": "#464a4c",
+                        "on-error-container": "#752121",
+                        "on-surface": "#23353f",
+                        "tertiary-container": "#f1f4f6",
+                        "on-primary-fixed-variant": "#525c6e",
+                        "secondary": "#536070",
+                        "on-secondary-container": "#455363",
+                        "error": "#9f403d",
+                        "surface-variant": "#d3e5f2",
+                        "tertiary-dim": "#505456",
+                        "tertiary": "#5c6062",
+                        "surface-container-low": "#ecf5fc",
+                        "error-dim": "#4e0309",
+                        "surface-container-highest": "#d3e5f2",
+                        "tertiary-fixed": "#f1f4f6",
+                        "surface": "#f5faff",
+                        "on-surface-variant": "#50616c",
+                        "on-secondary": "#f7f9ff",
+                        "on-primary": "#f6f7ff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-dim": "#c7ddec",
+                        "inverse-surface": "#090f12",
+                        "outline": "#6b7d89",
+                        "on-background": "#23353f",
+                        "inverse-on-surface": "#989ea2",
+                        "secondary-container": "#d6e4f7",
+                        "on-tertiary-container": "#585c5e",
+                        "surface-tint": "#555f71",
+                        "on-secondary-fixed": "#33414f",
+                        "on-primary-fixed": "#364051",
+                        "error-container": "#fe8983",
+                        "primary-fixed": "#d9e3f9"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Pretendard"],
+                        "label": ["Pretendard"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Pretendard', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .tonal-layering { transition: background 0.3s ease; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d3e5f2; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen">
+<!-- SideNavBar (Shared Component) -->
+<aside class="fixed left-0 top-0 h-screen w-[280px] z-40 bg-slate-100 dark:bg-slate-950 flex flex-col py-8 px-6 space-y-2 font-['Manrope'] font-medium text-sm">
+<div class="mb-10 px-2">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined" data-icon="corporate_fare">corporate_fare</span>
+</div>
+<div>
+<h1 class="text-xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tighter">UH Task Manager</h1>
+<p class="text-[10px] uppercase tracking-widest text-slate-500">Enterprise PMS</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/30 dark:hover:bg-slate-900/30 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="airport_shuttle">airport_shuttle</span>
+<span>Airport Van</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-900 dark:text-white font-bold border-r-4 border-slate-700 dark:border-slate-300 bg-slate-200/50 dark:bg-slate-900/50 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span>Expense Management</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/30 dark:hover:bg-slate-900/30 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span>Product Management</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/30 dark:hover:bg-slate-900/30 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span>Work Schedule</span>
+</a>
+</nav>
+<div class="pt-6 mt-6 border-t border-slate-200/50 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:text-slate-700 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:text-slate-700 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="contact_support">contact_support</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar (Shared Component) -->
+<header class="fixed top-0 right-0 z-30 w-[calc(100%-280px)] ml-auto bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl h-16 px-8 flex items-center justify-between font-['Pretendard'] tracking-tight">
+<div class="flex items-center gap-4 bg-surface-container-highest/50 px-4 py-2 rounded-full w-96">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="search">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm w-full placeholder:text-on-surface-variant/60" placeholder="Search tasks, guests or rooms..." type="text"/>
+</div>
+<div class="flex items-center gap-6">
+<button class="relative p-2 rounded-full hover:bg-slate-200/50 transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-2 rounded-full hover:bg-slate-200/50 transition-colors">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<div class="flex items-center gap-3 pl-4 border-l border-slate-200">
+<div class="text-right">
+<p class="text-xs font-bold text-slate-800">Admin Manager</p>
+<p class="text-[10px] text-slate-500">Night Shift</p>
+</div>
+<img alt="User profile" class="w-8 h-8 rounded-full object-cover shadow-sm" data-alt="professional headshot of a smiling young male office manager in a crisp white shirt with soft studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOmf93r1Enn9ZzSb9NIqj3ODbshFRcRVPdeHGbrKscvmbE1_KtI-GQbDF3lcnPS9HH7kttt9SYXTP3aEH8CMeZ08xfBbfH7Wn3KDKfRRQTPqycj9IL0TFTtCnQFXmp01LaYmPKnz-DtTbIHf2SZdXSNr9DySBn4rFK5HSzWu-eHaneM2-5Rrbkc1poK9R5oygeFx-_ymKQMW9lg6IPz6bUxpbxYRo-qP0BfyRYkHPnyFWymkqo60EkrjzsjmddYNJKAtDGeEaUXQ"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-[280px] pt-24 px-12 pb-12 min-h-screen">
+<div class="max-w-6xl mx-auto">
+<!-- Header Section -->
+<div class="flex items-end justify-between mb-10">
+<div>
+<span class="text-primary font-bold tracking-widest text-[10px] uppercase block mb-2">PMS Integration</span>
+<h2 class="font-headline text-4xl font-extrabold text-on-surface tracking-tight">Daily Outlay <span class="text-outline-variant font-light">&amp;</span> Expense</h2>
+</div>
+<div class="flex gap-2">
+<button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-semibold text-sm hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="filter_list">filter_list</span>
+                        Filter
+                    </button>
+<button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm hover:shadow-lg transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+                        Manual Entry
+                    </button>
+</div>
+</div>
+<!-- Bento Layout: Metrics & List -->
+<div class="grid grid-cols-12 gap-8">
+<!-- Quick Stats -->
+<div class="col-span-12 grid grid-cols-4 gap-6 mb-4">
+<div class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/10">
+<p class="text-on-surface-variant text-xs font-medium mb-1">Check-out Today</p>
+<p class="text-3xl font-headline font-bold text-on-surface">12 <span class="text-sm font-normal text-on-surface-variant">Rooms</span></p>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/10">
+<p class="text-on-surface-variant text-xs font-medium mb-1">Pending Charges</p>
+<p class="text-3xl font-headline font-bold text-on-surface">3 <span class="text-sm font-normal text-on-surface-variant">Alerts</span></p>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/10">
+<p class="text-on-surface-variant text-xs font-medium mb-1">Damage Reports</p>
+<p class="text-3xl font-headline font-bold text-error">0 <span class="text-sm font-normal text-on-surface-variant">New</span></p>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/10">
+<p class="text-on-surface-variant text-xs font-medium mb-1">Daily Revenue</p>
+<p class="text-3xl font-headline font-bold text-on-surface">₩452k</p>
+</div>
+</div>
+<!-- Main Worklist -->
+<div class="col-span-12 bg-surface-container-lowest rounded-[2rem] shadow-sm overflow-hidden">
+<div class="px-8 py-6 border-b border-surface-container flex items-center justify-between">
+<h3 class="font-headline font-bold text-xl text-on-surface">Check-out Pending Guest List (작업 대상 리스트)</h3>
+<span class="px-3 py-1 bg-surface-container text-on-surface-variant text-[10px] font-bold rounded-full uppercase tracking-tighter">Live Updates</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full border-collapse">
+<thead>
+<tr class="text-left bg-surface-container-low/30">
+<th class="px-8 py-5 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">객실 (Room)</th>
+<th class="px-8 py-5 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">투숙객 (Guest)</th>
+<th class="px-8 py-5 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">체크인 (Check-in)</th>
+<th class="px-8 py-5 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">체크아웃예정 (Expected)</th>
+<th class="px-8 py-5 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container-low">
+<!-- Row 1: Selected State Simulation -->
+<tr class="group hover:bg-primary-container/20 bg-primary-container/30 cursor-pointer transition-colors tonal-layering">
+<td class="px-8 py-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-2xl bg-white shadow-sm flex items-center justify-center font-bold text-primary">301</div>
+</div>
+</td>
+<td class="px-8 py-6">
+<div class="flex flex-col">
+<span class="font-bold text-on-surface">Yuki Tanaka</span>
+<span class="text-xs text-on-surface-variant">Standard Twin</span>
+</div>
+</td>
+<td class="px-8 py-6 font-medium text-on-surface-variant">10 / 24</td>
+<td class="px-8 py-6 font-bold text-primary italic">10 / 26</td>
+<td class="px-8 py-6 text-right">
+<span class="inline-flex items-center px-3 py-1 rounded-full bg-primary-container text-on-primary-container text-[11px] font-bold">
+                                            ACTIVE EDITOR
+                                        </span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="group hover:bg-surface-container-low cursor-pointer transition-colors">
+<td class="px-8 py-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-2xl bg-surface-container flex items-center justify-center font-bold text-on-surface-variant group-hover:bg-white">302</div>
+</div>
+</td>
+<td class="px-8 py-6">
+<div class="flex flex-col">
+<span class="font-bold text-on-surface">David Chen</span>
+<span class="text-xs text-on-surface-variant">Deluxe King</span>
+</div>
+</td>
+<td class="px-8 py-6 font-medium text-on-surface-variant">10 / 24</td>
+<td class="px-8 py-6 font-medium text-on-surface-variant">10 / 27</td>
+<td class="px-8 py-6 text-right">
+<span class="material-symbols-outlined text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity" data-icon="chevron_right">chevron_right</span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="group hover:bg-surface-container-low cursor-pointer transition-colors">
+<td class="px-8 py-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-2xl bg-surface-container flex items-center justify-center font-bold text-on-surface-variant group-hover:bg-white">405</div>
+</div>
+</td>
+<td class="px-8 py-6">
+<div class="flex flex-col">
+<span class="font-bold text-on-surface">Sarah Miller</span>
+<span class="text-xs text-on-surface-variant">Premium Suite</span>
+</div>
+</td>
+<td class="px-8 py-6 font-medium text-on-surface-variant">10 / 23</td>
+<td class="px-8 py-6 font-medium text-on-surface-variant">10 / 25</td>
+<td class="px-8 py-6 text-right">
+<span class="material-symbols-outlined text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity" data-icon="chevron_right">chevron_right</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- NavigationDrawer (Contextual Editor) -->
+<aside class="fixed right-0 top-0 h-screen w-[420px] z-50 bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl flex flex-col translate-x-0 transition-transform duration-300 ease-out shadow-[-20px_0_60px_rgba(0,0,0,0.06)] border-l border-white/20">
+<!-- Header -->
+<div class="px-8 py-10">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h3 class="font-headline font-extrabold text-2xl text-on-surface tracking-tight">Contextual Editor</h3>
+<p class="text-sm text-on-surface-variant mt-1">Edit task details for <span class="font-bold text-primary">Room 301</span></p>
+</div>
+<button class="p-2 rounded-full hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</div>
+<!-- Task Type Tabs -->
+<div class="flex bg-surface-container-low p-1.5 rounded-2xl mb-10">
+<button class="flex-1 py-2.5 text-[13px] font-bold rounded-xl bg-white shadow-sm text-primary transition-all">서비스 비용</button>
+<button class="flex-1 py-2.5 text-[13px] font-bold rounded-xl text-on-surface-variant hover:text-on-surface transition-all">드오디네 상품</button>
+<button class="flex-1 py-2.5 text-[13px] font-bold rounded-xl text-on-surface-variant hover:text-on-surface transition-all">물품 파손</button>
+</div>
+<!-- Editor Form -->
+<div class="space-y-8">
+<!-- Read-only Context -->
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest pl-1">객실번호</label>
+<input class="w-full bg-surface-container-highest/40 border-none rounded-xl text-sm font-bold text-on-surface px-4 py-3 cursor-not-allowed" disabled="" type="text" value="301"/>
+</div>
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest pl-1">투숙객이름</label>
+<input class="w-full bg-surface-container-highest/40 border-none rounded-xl text-sm font-bold text-on-surface px-4 py-3 cursor-not-allowed" disabled="" type="text" value="Yuki Tanaka"/>
+</div>
+</div>
+<!-- Inputs -->
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest pl-1">날짜 (Date)</label>
+<div class="relative">
+<input class="w-full bg-surface-container-highest border-none focus:bg-white focus:ring-0 focus:shadow-md rounded-xl text-sm font-medium text-on-surface px-4 py-3 transition-all" type="date" value="2023-10-24"/>
+</div>
+</div>
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest pl-1">내용 (Details)</label>
+<textarea class="w-full bg-surface-container-highest border-none focus:bg-white focus:ring-0 focus:shadow-md rounded-xl text-sm font-medium text-on-surface px-4 py-3 transition-all resize-none" placeholder="Enter service description..." rows="3">Extra linen service and mini-bar restock</textarea>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest pl-1">수량 (Qty)</label>
+<input class="w-full bg-surface-container-highest border-none focus:bg-white focus:ring-0 focus:shadow-md rounded-xl text-sm font-medium text-on-surface px-4 py-3 transition-all text-center" type="number" value="1"/>
+</div>
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest pl-1">금액 (Amount)</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-on-surface-variant">₩</span>
+<input class="w-full bg-surface-container-highest border-none focus:bg-white focus:ring-0 focus:shadow-md rounded-xl text-sm font-bold text-on-surface pl-8 py-3 transition-all text-right" type="text" value="15,000"/>
+</div>
+</div>
+</div>
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest pl-1">판매자 (Seller)</label>
+<select class="w-full bg-surface-container-highest border-none focus:bg-white focus:ring-0 focus:shadow-md rounded-xl text-sm font-medium text-on-surface px-4 py-3 transition-all appearance-none">
+<option>Admin Manager (Self)</option>
+<option>Front Desk Team</option>
+<option>Housekeeping Team</option>
+</select>
+</div>
+</div>
+</div>
+<!-- Sticky Footer Actions -->
+<div class="mt-auto p-8 bg-surface-container-low/50 backdrop-blur-md grid grid-cols-3 gap-3">
+<button class="py-4 rounded-2xl bg-surface-container-highest text-on-surface font-bold text-xs uppercase tracking-widest hover:bg-white hover:shadow-sm transition-all flex flex-col items-center gap-1">
+<span class="material-symbols-outlined text-lg" data-icon="content_copy">content_copy</span>
+                복사
+            </button>
+<button class="py-4 rounded-2xl bg-surface-container-highest text-on-surface font-bold text-xs uppercase tracking-widest hover:bg-white hover:shadow-sm transition-all flex flex-col items-center gap-1">
+<span class="material-symbols-outlined text-lg" data-icon="history_edu">history_edu</span>
+                기록
+            </button>
+<button class="py-4 rounded-2xl bg-primary text-white font-bold text-xs uppercase tracking-widest hover:shadow-xl transition-all flex flex-col items-center gap-1 shadow-md">
+<span class="material-symbols-outlined text-lg" data-icon="check_circle">check_circle</span>
+                완료
+            </button>
+</div>
+</aside>
+<!-- FAB for quick entry (Contextual Suppression Logic applied - hide when editor is open in real app, showing here for completeness) -->
+<button class="fixed bottom-10 right-[440px] w-14 h-14 bg-secondary text-on-secondary rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40">
+<span class="material-symbols-outlined" data-icon="edit_note">edit_note</span>
+</button>
+</body></html>

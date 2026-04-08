@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline": "#6b7d89",
+                        "on-tertiary": "#f6f9fb",
+                        "primary": "#555f71",
+                        "surface-tint": "#555f71",
+                        "on-primary-fixed-variant": "#525c6e",
+                        "on-error": "#fff7f6",
+                        "error-dim": "#4e0309",
+                        "tertiary-fixed-dim": "#e3e6e8",
+                        "tertiary-fixed": "#f1f4f6",
+                        "on-primary-container": "#485264",
+                        "inverse-on-surface": "#989ea2",
+                        "surface-dim": "#c7ddec",
+                        "on-primary-fixed": "#364051",
+                        "surface-bright": "#f5faff",
+                        "on-primary": "#f6f7ff",
+                        "tertiary-container": "#f1f4f6",
+                        "on-surface-variant": "#50616c",
+                        "surface-container-high": "#dbeaf5",
+                        "inverse-primary": "#dee8ff",
+                        "on-background": "#23353f",
+                        "on-error-container": "#752121",
+                        "secondary-fixed": "#d6e4f7",
+                        "surface-container-low": "#ecf5fc",
+                        "on-secondary-fixed": "#33414f",
+                        "surface-container-highest": "#d3e5f2",
+                        "on-secondary": "#f7f9ff",
+                        "on-surface": "#23353f",
+                        "surface": "#f5faff",
+                        "secondary-container": "#d6e4f7",
+                        "secondary-fixed-dim": "#c8d6e9",
+                        "background": "#f5faff",
+                        "on-tertiary-container": "#585c5e",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-surface": "#090f12",
+                        "on-tertiary-fixed-variant": "#636769",
+                        "on-secondary-container": "#455363",
+                        "primary-container": "#d9e3f9",
+                        "surface-container": "#e4eff8",
+                        "surface-variant": "#d3e5f2",
+                        "error-container": "#fe8983",
+                        "primary-fixed-dim": "#cbd5eb",
+                        "on-tertiary-fixed": "#464a4c",
+                        "secondary-dim": "#475464",
+                        "primary-fixed": "#d9e3f9",
+                        "outline-variant": "#a2b4c1",
+                        "on-secondary-fixed-variant": "#4f5d6d",
+                        "tertiary": "#5c6062",
+                        "secondary": "#536070",
+                        "error": "#9f403d",
+                        "primary-dim": "#495365",
+                        "tertiary-dim": "#505456"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Plus Jakarta Sans"],
+                        "label": ["Plus Jakarta Sans"]
+                    }
+                },
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .status-pastel-coral { background-color: rgba(159, 64, 61, 0.15); }
+        .status-pastel-mint { background-color: rgba(85, 121, 100, 0.15); }
+        .status-pastel-lavender { background-color: rgba(92, 96, 98, 0.15); }
+        .status-pastel-yellow { background-color: rgba(255, 193, 7, 0.15); }
+    </style>
+</head>
+<body class="bg-background text-on-background">
+<!-- Fixed Left Sidebar (SideNavBar) -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-slate-100 dark:bg-slate-900 flex flex-col py-6 px-4 z-50">
+<div class="mb-10 px-4">
+<h1 class="text-xl font-bold text-slate-700 dark:text-slate-200 font-headline">UH Task Manager</h1>
+<p class="text-[0.6875rem] tracking-wider text-slate-500 font-label">Enterprise Editorial</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl group active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+<span class="font-medium">Branch Management</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-medium">Task Scheduling</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="extension">extension</span>
+<span class="font-medium">Integrations</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="font-medium">System Status</span>
+</a>
+</nav>
+<div class="mt-auto space-y-1">
+<button class="w-full mb-6 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+<span>New Task</span>
+</button>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-900 dark:text-white font-semibold border-r-2 border-slate-600 bg-slate-200/50 dark:bg-slate-800/50 rounded-l-xl" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-medium">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+<span class="font-medium">Help</span>
+</a>
+</div>
+</aside>
+<!-- Top Header (TopNavBar) -->
+<header class="fixed top-0 right-0 left-64 h-16 z-40 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl flex justify-between items-center px-8 w-full">
+<div class="flex items-center gap-8">
+<h2 class="text-slate-700 dark:text-slate-200 font-headline text-2xl font-bold">Settings</h2>
+<nav class="flex gap-6">
+<a class="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition-all font-medium" href="#">Profile</a>
+<a class="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition-all font-medium" href="#">Security</a>
+<a class="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition-all font-medium" href="#">API</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-slate-500 hover:bg-surface-container rounded-full transition-all">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-slate-500 hover:bg-surface-container rounded-full transition-all">
+<span class="material-symbols-outlined" data-icon="apps">apps</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden ml-2">
+<img class="h-full w-full object-cover" data-alt="close up professional portrait of a tech administrator in a minimalist office setting with soft natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAg920FqSbEFpMstSwn5bEQJqLsmdiogc8QtuoxeSF3JTVApmiTzSpdx27BimQALdO9gmY1shISsPmHqlQZBK8nkfeoy09QKSqc5kD2l6rGUAIdSU9xT-B89RVcoQxp_NSuCBLsqKA7V2o_3LCNRqgLB7AgTi3KJ32ON6HrWbZQPB6nAlB1lx2ibCZyQe2RT6aYpNDb8JpP_CxsrV1Z8yWnp2Y1a8ak78KG4IS68jSUqUfl60VIZ1aM53px3LX726ei1NsY0b8E_w"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-16 min-h-screen">
+<div class="max-w-6xl mx-auto p-12 space-y-12">
+<!-- Hero Introduction -->
+<section class="space-y-4">
+<h3 class="text-5xl font-extrabold font-headline text-on-background tracking-tight">Configuration Workspace</h3>
+<p class="text-on-surface-variant max-w-2xl leading-relaxed">Customize your editorial workflow and synchronize your task management ecosystem with enterprise-grade precision.</p>
+</section>
+<!-- Section 1: Selection & Period -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-8 bg-surface-container-low p-8 rounded-[2rem]">
+<div class="space-y-2">
+<label class="text-[0.6875rem] font-bold text-on-surface-variant uppercase tracking-widest font-label px-2">지점 선택</label>
+<div class="relative group">
+<select class="w-full h-14 bg-surface-container-lowest border-none rounded-xl px-4 appearance-none text-on-surface font-medium focus:ring-0 focus:shadow-md transition-all cursor-pointer">
+<option>Seoul Central HQ</option>
+<option>Busan Operations</option>
+<option>Jeju Retreat Branch</option>
+</select>
+<span class="material-symbols-outlined absolute right-4 top-4 text-on-surface-variant pointer-events-none" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-[0.6875rem] font-bold text-on-surface-variant uppercase tracking-widest font-label px-2">조회 기간</label>
+<div class="relative group">
+<input class="w-full h-14 bg-surface-container-lowest border-none rounded-xl px-4 text-on-surface font-medium focus:ring-0 focus:shadow-md transition-all cursor-pointer" type="text" value="2023-10-01 ~ 2023-10-31"/>
+<span class="material-symbols-outlined absolute right-4 top-4 text-on-surface-variant pointer-events-none" data-icon="calendar_month">calendar_month</span>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-[0.6875rem] font-bold text-on-surface-variant uppercase tracking-widest font-label px-2">작업 선택</label>
+<div class="relative group">
+<select class="w-full h-14 bg-surface-container-lowest border-none rounded-xl px-4 appearance-none text-on-surface font-medium focus:ring-0 focus:shadow-md transition-all cursor-pointer">
+<option>Inventory Audit</option>
+<option>Revenue Reporting</option>
+<option>Team Scheduling</option>
+</select>
+<span class="material-symbols-outlined absolute right-4 top-4 text-on-surface-variant pointer-events-none" data-icon="task">task</span>
+</div>
+</div>
+</section>
+<!-- Section 2: Action Items (Bento Grid Style) -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="bg-white p-8 rounded-[2rem] space-y-6 hover:bg-surface-container-high transition-colors group cursor-pointer">
+<div class="flex justify-between items-start">
+<div class="p-3 bg-secondary-container rounded-xl text-primary">
+<span class="material-symbols-outlined" data-icon="fact_check">fact_check</span>
+</div>
+<input checked="" class="w-12 h-6 bg-surface-container-highest rounded-full appearance-none checked:bg-primary relative transition-all cursor-pointer before:content-[''] before:absolute before:w-4 before:h-4 before:bg-white before:rounded-full before:top-1 before:left-1 checked:before:left-7 before:transition-all" type="checkbox"/>
+</div>
+<div>
+<h4 class="text-xl font-bold font-headline">예약 검토</h4>
+<p class="text-sm text-on-surface-variant mt-2">Reservation Review: Auto-validate incoming bookings against stock availability.</p>
+</div>
+</div>
+<div class="bg-white p-8 rounded-[2rem] space-y-6 hover:bg-surface-container-high transition-colors group cursor-pointer">
+<div class="flex justify-between items-start">
+<div class="p-3 bg-secondary-container rounded-xl text-primary">
+<span class="material-symbols-outlined" data-icon="print">print</span>
+</div>
+<input class="w-12 h-6 bg-surface-container-highest rounded-full appearance-none checked:bg-primary relative transition-all cursor-pointer before:content-[''] before:absolute before:w-4 before:h-4 before:bg-white before:rounded-full before:top-1 before:left-1 checked:before:left-7 before:transition-all" type="checkbox"/>
+</div>
+<div>
+<h4 class="text-xl font-bold font-headline">운영 출력</h4>
+<p class="text-sm text-on-surface-variant mt-2">Operations Output: Generate physical run-sheets for on-site staff.</p>
+</div>
+</div>
+<div class="bg-white p-8 rounded-[2rem] space-y-6 hover:bg-surface-container-high transition-colors group cursor-pointer">
+<div class="flex justify-between items-start">
+<div class="p-3 bg-primary-container rounded-xl text-primary">
+<span class="material-symbols-outlined" data-icon="sync">sync</span>
+</div>
+<input checked="" class="w-12 h-6 bg-surface-container-highest rounded-full appearance-none checked:bg-primary relative transition-all cursor-pointer before:content-[''] before:absolute before:w-4 before:h-4 before:bg-white before:rounded-full before:top-1 before:left-1 checked:before:left-7 before:transition-all" type="checkbox"/>
+</div>
+<div>
+<h4 class="text-xl font-bold font-headline">구글 시트 연결</h4>
+<p class="text-sm text-on-surface-variant mt-2">Google Sheets Integration: Bi-directional sync with cloud spreadsheets.</p>
+</div>
+</div>
+</section>
+<!-- Section 3 & 4: External Connectivity & System Status -->
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+<!-- Connectivity Fields -->
+<section class="lg:col-span-3 bg-white p-10 rounded-[2rem] space-y-8">
+<div class="flex items-center gap-4 mb-4">
+<span class="material-symbols-outlined text-primary scale-125" data-icon="link">link</span>
+<h3 class="text-2xl font-bold font-headline">External Connectivity</h3>
+</div>
+<div class="space-y-6">
+<div class="space-y-2">
+<label class="text-[0.6875rem] font-bold text-on-surface-variant px-2 uppercase tracking-widest font-label">Spreadsheet URL/ID</label>
+<input class="w-full h-14 bg-surface-container-highest border-none rounded-xl px-6 text-on-surface placeholder:text-outline-variant focus:bg-white focus:shadow-lg transition-all" placeholder="https://docs.google.com/spreadsheets/d/..." type="text"/>
+</div>
+<div class="grid grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="text-[0.6875rem] font-bold text-on-surface-variant px-2 uppercase tracking-widest font-label">Sheet Name</label>
+<input class="w-full h-14 bg-surface-container-highest border-none rounded-xl px-6 text-on-surface focus:bg-white focus:shadow-lg transition-all" type="text" value="Master_Inventory_2023"/>
+</div>
+<div class="space-y-2">
+<label class="text-[0.6875rem] font-bold text-on-surface-variant px-2 uppercase tracking-widest font-label">Inventory Search Basis</label>
+<div class="flex bg-surface-container-highest p-1 rounded-xl h-14">
+<button class="flex-1 rounded-lg bg-white shadow-sm text-on-surface font-semibold text-sm">가용 기준</button>
+<button class="flex-1 rounded-lg text-on-surface-variant font-medium text-sm hover:text-on-surface transition-colors">현재값 기준</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- System Connection Status -->
+<section class="lg:col-span-2 bg-surface-container-low p-10 rounded-[2rem] flex flex-col">
+<div class="flex items-center gap-4 mb-8">
+<span class="material-symbols-outlined text-primary scale-125" data-icon="sensors">sensors</span>
+<h3 class="text-2xl font-bold font-headline">System Monitor</h3>
+</div>
+<div class="space-y-6 flex-1">
+<div class="flex items-center justify-between p-4 bg-white/50 rounded-2xl">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary" data-icon="cloud_done">cloud_done</span>
+<span class="font-semibold text-sm">Google Sheets Connection</span>
+</div>
+<span class="px-3 py-1 rounded-full text-[0.6875rem] font-bold status-pastel-mint text-on-surface uppercase tracking-tighter">Active</span>
+</div>
+<div class="flex items-center justify-between p-4 bg-white/50 rounded-2xl">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary" data-icon="login">login</span>
+<span class="font-semibold text-sm">Wings Login Status</span>
+</div>
+<span class="px-3 py-1 rounded-full text-[0.6875rem] font-bold status-pastel-yellow text-on-surface uppercase tracking-tighter">Authenticating</span>
+</div>
+<div class="flex items-center justify-between p-4 bg-white/50 rounded-2xl">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary" data-icon="account_circle">account_circle</span>
+<span class="font-semibold text-sm">Naver/Station Session</span>
+</div>
+<span class="px-3 py-1 rounded-full text-[0.6875rem] font-bold status-pastel-lavender text-on-surface uppercase tracking-tighter">Standby</span>
+</div>
+</div>
+<button class="mt-8 py-3 w-full bg-surface-container-high rounded-xl text-on-surface font-bold text-sm flex items-center justify-center gap-2 hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="refresh">refresh</span>
+                        Re-validate All Sessions
+                    </button>
+</section>
+</div>
+<!-- Section 5: Output Configuration -->
+<section class="bg-white p-12 rounded-[2rem]">
+<div class="flex items-end justify-between mb-10 border-b-ghost border-outline-variant/15 border-b pb-8">
+<div class="space-y-2">
+<h3 class="text-3xl font-bold font-headline tracking-tight">Output Configuration</h3>
+<p class="text-on-surface-variant">Define how your finalized data is packaged and delivered.</p>
+</div>
+<div class="flex gap-4">
+<button class="px-8 py-4 bg-surface-container-high rounded-xl font-bold text-on-surface active:scale-95 transition-all">Discard Changes</button>
+<button class="px-8 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-xl font-bold shadow-lg active:scale-95 transition-all">Save Profile</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+<div class="space-y-6">
+<div class="space-y-3">
+<label class="text-[0.6875rem] font-extrabold text-on-surface-variant px-1 uppercase tracking-widest font-label">Save Location</label>
+<div class="flex items-center gap-4 p-5 bg-surface-container-low rounded-2xl group hover:bg-surface-container transition-all cursor-pointer">
+<span class="material-symbols-outlined text-primary" data-icon="folder_open">folder_open</span>
+<span class="flex-1 text-sm font-medium">/Users/admin/Work/UH_TaskManager/Exports/2023_Q4</span>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors" data-icon="edit">edit</span>
+</div>
+</div>
+</div>
+<div class="space-y-6">
+<div class="space-y-3">
+<label class="text-[0.6875rem] font-extrabold text-on-surface-variant px-1 uppercase tracking-widest font-label">Output Format</label>
+<div class="flex gap-3">
+<button class="flex-1 py-4 px-6 rounded-2xl bg-primary text-on-primary font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-base" data-icon="description">description</span>
+                                    PDF Editorial
+                                </button>
+<button class="flex-1 py-4 px-6 rounded-2xl bg-surface-container-low text-on-surface font-bold text-sm transition-all hover:bg-surface-container flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-base" data-icon="table_rows">table_rows</span>
+                                    CSV Raw
+                                </button>
+<button class="flex-1 py-4 px-6 rounded-2xl bg-surface-container-low text-on-surface font-bold text-sm transition-all hover:bg-surface-container flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-base" data-icon="code">code</span>
+                                    JSON
+                                </button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Footer Decorative -->
+<footer class="py-12 flex justify-between items-center text-on-surface-variant/40">
+<p class="text-sm font-medium">UH Task Manager © 2023 Enterprise Editorial License</p>
+<div class="flex gap-6">
+<span class="material-symbols-outlined" data-icon="security">security</span>
+<span class="material-symbols-outlined" data-icon="verified_user">verified_user</span>
+</div>
+</footer>
+</div>
+</main>
+</body></html>

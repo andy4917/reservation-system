@@ -18,6 +18,8 @@
     "read-live": "node scripts/app_v2_read_live.mjs",
     "app:hygiene:check": "python3 tests/regression_cpp_core_required_py.py && python3 scripts/check_contract_hygiene.py --cwd . && node tests/regression_app_v2_operational_hardcoding_guard.mjs",
     "app:check": "tsc -p tsconfig.json --noEmit && npm run app:hygiene:check",
+    "ui:workbench:storybook": "npm --prefix ui-workbench install && npm --prefix ui-workbench run storybook",
+    "ui:workbench:build": "npm --prefix ui-workbench install && npm --prefix ui-workbench run build-storybook",
     "extension:contracts:check": "tsc -p tsconfig.extension-contracts.json --noEmit",
     "extension:package": "./tasks/build_extension_unpacked.sh"
   },

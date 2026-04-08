@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>UH Task Manager - Reservation &amp; Inventory</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Pretendard:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-tint": "#555f71",
+                        "on-error": "#fff7f6",
+                        "tertiary-fixed-dim": "#e3e6e8",
+                        "inverse-surface": "#090f12",
+                        "surface": "#f5faff",
+                        "on-tertiary-fixed": "#464a4c",
+                        "on-primary-fixed-variant": "#525c6e",
+                        "on-secondary-fixed": "#33414f",
+                        "inverse-on-surface": "#989ea2",
+                        "tertiary": "#5c6062",
+                        "secondary-container": "#d6e4f7",
+                        "outline-variant": "#a2b4c1",
+                        "background": "#f5faff",
+                        "secondary-fixed": "#d6e4f7",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#9f403d",
+                        "on-primary": "#f6f7ff",
+                        "surface-container-low": "#ecf5fc",
+                        "surface-container": "#e4eff8",
+                        "on-secondary": "#f7f9ff",
+                        "secondary-fixed-dim": "#c8d6e9",
+                        "on-primary-fixed": "#364051",
+                        "surface-bright": "#f5faff",
+                        "on-surface": "#23353f",
+                        "tertiary-container": "#f1f4f6",
+                        "surface-dim": "#c7ddec",
+                        "primary": "#555f71",
+                        "secondary": "#536070",
+                        "on-background": "#23353f",
+                        "inverse-primary": "#dee8ff",
+                        "on-secondary-fixed-variant": "#4f5d6d",
+                        "error-dim": "#4e0309",
+                        "on-surface-variant": "#50616c",
+                        "on-tertiary-container": "#585c5e",
+                        "primary-container": "#d9e3f9",
+                        "error-container": "#fe8983",
+                        "tertiary-fixed": "#f1f4f6",
+                        "on-tertiary": "#f6f9fb",
+                        "secondary-dim": "#475464",
+                        "on-secondary-container": "#455363",
+                        "surface-container-high": "#dbeaf5",
+                        "outline": "#6b7d89",
+                        "tertiary-dim": "#505456",
+                        "on-tertiary-fixed-variant": "#636769",
+                        "primary-fixed": "#d9e3f9",
+                        "on-primary-container": "#485264",
+                        "surface-variant": "#d3e5f2",
+                        "primary-dim": "#495365",
+                        "primary-fixed-dim": "#cbd5eb",
+                        "on-error-container": "#752121",
+                        "surface-container-highest": "#d3e5f2"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope", "sans-serif"],
+                        "body": ["Pretendard", "sans-serif"],
+                        "label": ["Pretendard", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Pretendard', sans-serif; }
+        .font-manrope { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #555f71 0%, #d9e3f9 100%);
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-background text-on-surface">
+<!-- SideNavBar -->
+<aside class="bg-slate-100 dark:bg-slate-900 font-manrope antialiased tracking-tight h-screen w-64 fixed left-0 top-0 flex flex-col h-full p-4 z-50">
+<div class="flex items-center gap-3 px-2 mb-8">
+<div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined">account_tree</span>
+</div>
+<div>
+<h1 class="text-lg font-bold text-slate-800 dark:text-slate-100 leading-none">UH Task Manager</h1>
+<p class="text-[10px] uppercase tracking-widest text-on-surface-variant/70 mt-1">Enterprise Edition</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<div class="text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-medium">Dashboard</span>
+</div>
+<div class="bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl shadow-sm flex items-center gap-3 px-4 py-3 cursor-pointer">
+<span class="material-symbols-outlined">account_tree</span>
+<span class="font-bold">Projects</span>
+</div>
+<div class="text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer">
+<span class="material-symbols-outlined">group</span>
+<span class="font-medium">Team</span>
+</div>
+<div class="text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-medium">Schedule</span>
+</div>
+<div class="text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="font-medium">Archives</span>
+</div>
+</nav>
+<div class="mt-auto pt-6 space-y-1">
+<button class="w-full btn-gradient text-white py-3 rounded-xl font-bold mb-6 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 scale-95 active:scale-100 duration-200">
+<span class="material-symbols-outlined text-sm">add</span>
+                New Task
+            </button>
+<div class="text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-medium">Settings</span>
+</div>
+<div class="text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-medium">Support</span>
+</div>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 left-64 h-16 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md flex justify-between items-center px-8 w-full z-40">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-96">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full bg-surface-container-highest border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-0 focus:bg-white transition-all placeholder:text-on-surface-variant/50" placeholder="Search reservations, rooms, or guests..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 text-slate-500">
+<span class="material-symbols-outlined cursor-pointer hover:text-slate-900 transition-all">notifications</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-slate-900 transition-all">history</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-slate-900 transition-all">chat_bubble</span>
+</div>
+<div class="h-8 w-[1px] bg-outline-variant/30"></div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<p class="text-xs font-bold text-on-surface leading-none">Alex Rivera</p>
+<p class="text-[10px] text-on-surface-variant">Front Desk Manager</p>
+</div>
+<img class="w-9 h-9 rounded-full object-cover ring-2 ring-surface-container shadow-sm" data-alt="close-up portrait of a professional man" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAso7NNnjzgqrXeqZl0Icfu7dzXv3fMYRMrKMqnirmbx8PgrxOReRHF5j95KrWCslSxGxTn6aWzNAXidDTMXqEHT6uhSe3f8jm6ehQznSg1Z8RWLvw2hnLA40H9Td7rFt5JGuHF9YRG2u36IPF5jEZp5mnrbixWPovZiFSun7ZoZGqowWQ_P6mrOzbNY8iLl59oXajKrVYiUY6l01cBVSAVYQ5Uopso5vfVIcJe7ntgrITGSJGmeFIOZbu99P3Ti2Fk8CgVVpjiFQ"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-16 min-h-screen">
+<div class="p-8 max-w-[1600px] mx-auto">
+<!-- Page Header -->
+<div class="mb-8 flex items-end justify-between">
+<div>
+<h2 class="text-4xl font-extrabold font-manrope tracking-tight text-on-surface">Weekly Occupancy</h2>
+<p class="text-on-surface-variant mt-1">Oct 23, 2023 - Oct 29, 2023 • 142 Total Reservations</p>
+</div>
+<div class="flex gap-2 p-1 bg-surface-container rounded-xl">
+<button class="px-4 py-2 bg-surface-container-lowest shadow-sm rounded-lg text-sm font-bold text-primary">Grid View</button>
+<button class="px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface">List View</button>
+<button class="px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface">Analytics</button>
+</div>
+</div>
+<!-- Detailed Occupancy Grid -->
+<section class="bg-surface-container-low rounded-3xl overflow-hidden mb-8 shadow-sm">
+<div class="overflow-x-auto no-scrollbar">
+<div class="min-w-[1200px]">
+<!-- Grid Header (Days) -->
+<div class="flex border-b border-outline-variant/10">
+<div class="w-48 p-6 font-bold text-xs uppercase tracking-widest text-on-surface-variant bg-surface-container">Room Type</div>
+<div class="flex-1 grid grid-cols-7">
+<div class="p-4 text-center border-l border-outline-variant/10 bg-surface-container/50">
+<p class="text-xs text-on-surface-variant">MON</p>
+<p class="text-xl font-bold">23</p>
+</div>
+<div class="p-4 text-center border-l border-outline-variant/10 bg-surface-container/50">
+<p class="text-xs text-on-surface-variant">TUE</p>
+<p class="text-xl font-bold">24</p>
+</div>
+<div class="p-4 text-center border-l border-outline-variant/10 bg-surface-container/50">
+<p class="text-xs text-on-surface-variant">WED</p>
+<p class="text-xl font-bold text-primary">25</p>
+</div>
+<div class="p-4 text-center border-l border-outline-variant/10 bg-surface-container/50">
+<p class="text-xs text-on-surface-variant">THU</p>
+<p class="text-xl font-bold">26</p>
+</div>
+<div class="p-4 text-center border-l border-outline-variant/10 bg-surface-container/50">
+<p class="text-xs text-on-surface-variant">FRI</p>
+<p class="text-xl font-bold">27</p>
+</div>
+<div class="p-4 text-center border-l border-outline-variant/10 bg-surface-container/50">
+<p class="text-xs text-on-surface-variant">SAT</p>
+<p class="text-xl font-bold text-error">28</p>
+</div>
+<div class="p-4 text-center border-l border-outline-variant/10 bg-surface-container/50">
+<p class="text-xs text-on-surface-variant">SUN</p>
+<p class="text-xl font-bold text-error">29</p>
+</div>
+</div>
+</div>
+<!-- Room Rows -->
+<div class="divide-y divide-outline-variant/10">
+<!-- Room 101 -->
+<div class="flex group">
+<div class="w-48 p-6 flex flex-col justify-center bg-surface-container/20 group-hover:bg-surface-container/40 transition-colors">
+<span class="text-lg font-bold">101</span>
+<span class="text-[10px] text-on-surface-variant font-medium">DELUXE KING</span>
+</div>
+<div class="flex-1 grid grid-cols-7 relative h-24">
+<div class="absolute inset-y-2 left-[14.28%] w-[42.84%] bg-[#ffcfc9]/60 hover:bg-[#ffcfc9]/80 rounded-xl p-3 cursor-pointer transition-all border border-white/40 shadow-sm z-10" onclick="document.getElementById('modal').style.display='flex'">
+<p class="text-xs font-bold text-on-surface truncate">JUNG, JI-HOON</p>
+<p class="text-[10px] text-on-surface-variant flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-[10px]" style="font-variation-settings: 'FILL' 1;">star</span>
+                                            VIP MEMBER
+                                        </p>
+</div>
+<div class="absolute inset-y-2 left-[71.42%] w-[28.56%] bg-[#d1fadf]/60 hover:bg-[#d1fadf]/80 rounded-xl p-3 cursor-pointer transition-all border border-white/40 shadow-sm z-10">
+<p class="text-xs font-bold text-on-surface truncate">LEE, MIN-HO</p>
+<p class="text-[10px] text-on-surface-variant mt-1">Confirmed</p>
+</div>
+<div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div>
+</div>
+</div>
+<!-- Room 102 -->
+<div class="flex group">
+<div class="w-48 p-6 flex flex-col justify-center bg-surface-container/20 group-hover:bg-surface-container/40 transition-colors">
+<span class="text-lg font-bold">102</span>
+<span class="text-[10px] text-on-surface-variant font-medium">SUPERIOR TWIN</span>
+</div>
+<div class="flex-1 grid grid-cols-7 relative h-24">
+<div class="absolute inset-y-2 left-0 w-[57.12%] bg-[#e0e7ff]/60 hover:bg-[#e0e7ff]/80 rounded-xl p-3 cursor-pointer transition-all border border-white/40 shadow-sm z-10">
+<p class="text-xs font-bold text-on-surface truncate">ESTHER CHOI</p>
+<p class="text-[10px] text-on-surface-variant mt-1">Group Booking</p>
+</div>
+<div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div>
+</div>
+</div>
+<!-- Room 103 -->
+<div class="flex group">
+<div class="w-48 p-6 flex flex-col justify-center bg-surface-container/20 group-hover:bg-surface-container/40 transition-colors">
+<span class="text-lg font-bold">103</span>
+<span class="text-[10px] text-on-surface-variant font-medium">OCEAN SUITE</span>
+</div>
+<div class="flex-1 grid grid-cols-7 relative h-24">
+<div class="absolute inset-y-2 left-[28.56%] w-[14.28%] bg-[#fef9c3]/60 hover:bg-[#fef9c3]/80 rounded-xl p-3 cursor-pointer transition-all border border-white/40 shadow-sm z-10">
+<p class="text-xs font-bold text-on-surface truncate">PARK, SH</p>
+<p class="text-[10px] text-on-surface-variant mt-1">Walk-in</p>
+</div>
+<div class="absolute inset-y-2 left-[57.12%] w-[42.84%] bg-[#d1fadf]/60 hover:bg-[#d1fadf]/80 rounded-xl p-3 cursor-pointer transition-all border border-white/40 shadow-sm z-10">
+<p class="text-xs font-bold text-on-surface truncate">NAVER DIRECT</p>
+<p class="text-[10px] text-on-surface-variant mt-1">Pending Payment</p>
+</div>
+<div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div><div class="border-l border-outline-variant/10"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Live Inventory Status Redesigned -->
+<section>
+<div class="flex justify-between items-center mb-6">
+<div>
+<h3 class="text-2xl font-extrabold font-manrope tracking-tight">Live Inventory Status</h3>
+<p class="text-on-surface-variant text-sm mt-1">Channel sync across Naver &amp; Station platforms</p>
+</div>
+<div class="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+</span>
+<span class="text-[10px] font-bold uppercase tracking-wider">System Sync: Active</span>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-3xl overflow-hidden shadow-sm border border-outline-variant/5">
+<div class="overflow-x-auto no-scrollbar">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container/50">
+<th class="p-6 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-64">Sales Channel</th>
+<th class="p-6 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-center">Urban Spa Suite</th>
+<th class="p-6 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-center">Double Twin Spa</th>
+<th class="p-6 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-center">Grand Spa (8P)</th>
+<th class="p-6 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-center">Suite (6P)</th>
+<th class="p-6 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-center">Suite (4P)</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<!-- STATION Row -->
+<tr class="bg-slate-900 group">
+<td class="p-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white">
+<span class="material-symbols-outlined">hub</span>
+</div>
+<div>
+<p class="text-sm font-bold text-white">STATION</p>
+<p class="text-[10px] text-white/50">DIRECT GLOBAL API</p>
+</div>
+</div>
+</td>
+<td class="p-4 text-center">
+<div class="inline-flex items-center justify-center bg-white/5 text-white/80 px-4 py-2 rounded-xl text-sm font-semibold min-w-[80px]">1 / 2</div>
+</td>
+<td class="p-4 text-center">
+<div class="inline-flex items-center justify-center bg-error-container/20 text-error-container px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider min-w-[80px]">Closed</div>
+</td>
+<td class="p-4 text-center">
+<div class="inline-flex items-center justify-center bg-error-container/20 text-error-container px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider min-w-[80px]">Closed</div>
+</td>
+<td class="p-4 text-center">
+<div class="inline-flex items-center justify-center bg-white/5 text-white/80 px-4 py-2 rounded-xl text-sm font-semibold min-w-[80px]">0 / 2</div>
+</td>
+<td class="p-4 text-center">
+<div class="inline-flex items-center justify-center bg-error-container/20 text-error-container px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider min-w-[80px]">Closed</div>
+</td>
+</tr>
+<!-- NAVER Row -->
+<tr class="bg-emerald-600/90 group">
+<td class="p-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white">
+<span class="material-symbols-outlined">chat</span>
+</div>
+<div>
+<p class="text-sm font-bold text-white">NAVER</p>
+<p class="text-[10px] text-white/70">REGIONAL PARTNER</p>
+</div>
+</div>
+</td>
+<td class="p-4 text-center">
+<div class="inline-flex items-center justify-center bg-white/20 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider min-w-[80px]">Closed</div>
+</td>
+<td class="p-4 text-center">
+<div class="inline-flex items-center justify-center bg-emerald-400/30 text-white px-4 py-2 rounded-xl text-sm font-semibold min-w-[80px]">1 / 1</div>
+</td>
+<td class="p-4 text-center">
+<div class="inline-flex items-center justify-center bg-emerald-400/30 text-white px-4 py-2 rounded-xl text-sm font-semibold min-w-[80px]">0 / 2</div>
+</td>
+<td class="p-4 text-center">
+<div class="inline-flex items-center justify-center bg-emerald-400/30 text-white px-4 py-2 rounded-xl text-sm font-semibold min-w-[80px]">0 / 4</div>
+</td>
+<td class="p-4 text-center">
+<div class="inline-flex items-center justify-center bg-emerald-400/30 text-white px-4 py-2 rounded-xl text-sm font-semibold min-w-[80px]">0 / 4</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Reservation Details Modal -->
+<div class="fixed inset-0 z-[100] flex items-center justify-center p-6 hidden" id="modal">
+<div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="this.parentElement.style.display='none'"></div>
+<div class="relative w-full max-w-lg bg-white/80 backdrop-blur-xl rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] overflow-hidden border border-white/50 animate-in fade-in zoom-in duration-300">
+<div class="h-40 relative">
+<img class="w-full h-full object-cover" data-alt="interior of a luxury hotel suite" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnvUh0jMrgZqYlHbm-296d1-5kE8ofSw_rTg4vH2O-HL9yf2OdBBx9vSJDK6tOdteQ5hWt1SFq2V_I5JhXxLz0ort0mbh33dyBaN9HtMVx-RzWZn2gb7M62c0ZYEMRDe1dFIctszDlNAQ3fpf8AZcE5KNPLp7iqbEZuBrzzFKhem4-JH_BqYkPR27lN0ymjidMSRzkW4bZErnbl5O2PvcFsSHTAgNclHQsaNVPjj4lFUc2WB8ZPhVCoKiYyeR5ejIqprcCihyfGQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+<div class="absolute bottom-6 left-8">
+<span class="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-[10px] font-bold text-white uppercase tracking-widest border border-white/30">Deluxe King • Room 101</span>
+<h4 class="text-2xl font-extrabold text-white font-manrope mt-2">Jung, Ji-hoon</h4>
+</div>
+<button class="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/40 transition-colors" onclick="document.getElementById('modal').style.display='none'">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-8">
+<div class="grid grid-cols-2 gap-8 mb-8">
+<div>
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Check-In</p>
+<p class="text-lg font-bold">Oct 24, 2023</p>
+<p class="text-xs text-on-surface-variant">From 15:00 PM</p>
+</div>
+<div>
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Check-Out</p>
+<p class="text-lg font-bold">Oct 27, 2023</p>
+<p class="text-xs text-on-surface-variant">Before 11:00 AM</p>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-2xl p-6 mb-8">
+<div class="flex justify-between items-center mb-4">
+<span class="text-sm font-medium text-on-surface-variant">Nightly Rate</span>
+<span class="text-lg font-bold">₩342,000</span>
+</div>
+<div class="flex justify-between items-center mb-4">
+<span class="text-sm font-medium text-on-surface-variant">Stay Duration</span>
+<span class="text-sm font-semibold">3 Nights</span>
+</div>
+<div class="h-[1px] bg-outline-variant/20 my-4"></div>
+<div class="flex justify-between items-center">
+<span class="text-sm font-bold">Total Payable</span>
+<span class="text-2xl font-extrabold text-primary font-manrope">₩1,026,000</span>
+</div>
+</div>
+<div class="flex gap-4">
+<button class="flex-1 py-4 px-6 rounded-2xl font-bold bg-surface-container-high text-on-surface hover:bg-surface-container-highest transition-colors active:scale-95 duration-200">
+                        Edit Booking
+                    </button>
+<button class="flex-[1.5] py-4 px-6 rounded-2xl font-bold text-white btn-gradient shadow-lg shadow-primary/20 active:scale-95 duration-200">
+                        Process Check-In
+                    </button>
+</div>
+</div>
+</div>
+</div>
+</body></html>

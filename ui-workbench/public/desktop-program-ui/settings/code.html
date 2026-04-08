@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Settings - Clean Enterprise PMS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed-variant": "#525c6e",
+                        "surface-tint": "#555f71",
+                        "error-container": "#fe8983",
+                        "secondary-container": "#ffdad6",
+                        "primary-dim": "#495365",
+                        "inverse-primary": "#dee8ff",
+                        "secondary-fixed": "#ffdad6",
+                        "surface-dim": "#cfdce3",
+                        "secondary-fixed-dim": "#ffc7c1",
+                        "on-surface-variant": "#566166",
+                        "on-secondary": "#fff7f6",
+                        "on-error": "#fff7f6",
+                        "inverse-surface": "#0b0f10",
+                        "on-secondary-container": "#942d28",
+                        "tertiary": "#006b61",
+                        "on-secondary-fixed": "#7b1a18",
+                        "secondary-dim": "#962e29",
+                        "on-surface": "#2a3439",
+                        "primary-fixed-dim": "#cbd5eb",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-high": "#e1e9ee",
+                        "on-primary-container": "#485264",
+                        "tertiary-fixed-dim": "#71eedc",
+                        "tertiary-fixed": "#80fdea",
+                        "surface-container": "#e8eff3",
+                        "background": "#f7f9fb",
+                        "on-tertiary": "#e2fff8",
+                        "on-tertiary-fixed-variant": "#006b61",
+                        "outline-variant": "#a9b4b9",
+                        "primary": "#555f71",
+                        "on-background": "#2a3439",
+                        "secondary": "#a63a34",
+                        "on-secondary-fixed-variant": "#a13731",
+                        "inverse-on-surface": "#9a9d9f",
+                        "surface-bright": "#f7f9fb",
+                        "on-tertiary-container": "#006056",
+                        "primary-container": "#d9e3f9",
+                        "on-tertiary-fixed": "#004c44",
+                        "error": "#9f403d",
+                        "tertiary-dim": "#005e54",
+                        "surface-container-low": "#f0f4f7",
+                        "surface-container-highest": "#d9e4ea",
+                        "outline": "#717c82",
+                        "surface": "#f7f9fb",
+                        "on-error-container": "#752121",
+                        "tertiary-container": "#80fdea",
+                        "surface-variant": "#d9e4ea",
+                        "on-primary-fixed": "#364051",
+                        "primary-fixed": "#d9e3f9",
+                        "error-dim": "#4e0309",
+                        "on-primary": "#f6f7ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Plus Jakarta Sans"],
+                        "body": ["Plus Jakarta Sans"],
+                        "label": ["Plus Jakarta Sans"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .no-line-rule { border: none !important; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #555f71;
+            background-color: #ffffff !important;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen">
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-[#f0f4f7] dark:bg-slate-800/50 flex flex-col p-4 space-y-2 font-['Plus_Jakarta_Sans'] text-sm font-semibold text-[#555f71]">
+<div class="mb-8 px-3 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined" data-icon="domain">domain</span>
+</div>
+<div>
+<h1 class="text-xl font-bold text-[#2a3439] dark:text-white leading-tight">Settings</h1>
+<p class="text-[10px] font-bold text-[#555f71]/60 uppercase tracking-wider">Global Configuration</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 text-[#555f71]/60 dark:text-slate-400 p-3 hover:bg-[#e8eff3] dark:hover:bg-slate-700 transition-all rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="edit_note">edit_note</span>
+                Manual Inputs
+            </a>
+<a class="flex items-center gap-3 text-[#555f71]/60 dark:text-slate-400 p-3 hover:bg-[#e8eff3] dark:hover:bg-slate-700 transition-all rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="room_preferences">room_preferences</span>
+                Operational Selections
+            </a>
+<a class="flex items-center gap-3 bg-[#e8eff3] dark:bg-[#555f71]/20 text-[#555f71] dark:text-white rounded-xl p-3" href="#">
+<span class="material-symbols-outlined" data-icon="settings_applications">settings_applications</span>
+                System Configuration
+            </a>
+</nav>
+<div class="pt-4 border-t border-[#555f71]/10 space-y-1">
+<a class="flex items-center gap-3 text-[#555f71]/60 dark:text-slate-400 p-3 hover:bg-[#e8eff3] transition-all rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="contact_support">contact_support</span>
+                Support
+            </a>
+<a class="flex items-center gap-3 text-[#555f71]/60 dark:text-slate-400 p-3 hover:bg-[#e8eff3] transition-all rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+                Logout
+            </a>
+</div>
+</aside>
+<div class="ml-64 min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="flex justify-between items-center w-full px-8 py-3 bg-[#f7f9fb] dark:bg-slate-900 sticky top-0 z-30 font-['Plus_Jakarta_Sans'] text-sm font-normal">
+<div class="flex items-center gap-8">
+<span class="text-lg font-bold text-[#2a3439] dark:text-white">Enterprise PMS</span>
+<nav class="hidden md:flex gap-6">
+<a class="text-[#555f71]/70 dark:text-slate-400 hover:text-[#2a3439] transition-colors" href="#">Dashboard</a>
+<a class="text-[#555f71]/70 dark:text-slate-400 hover:text-[#2a3439] transition-colors" href="#">Reservations</a>
+<a class="text-[#555f71]/70 dark:text-slate-400 hover:text-[#2a3439] transition-colors" href="#">Guests</a>
+<a class="text-[#555f71]/70 dark:text-slate-400 hover:text-[#2a3439] transition-colors" href="#">Reports</a>
+<a class="text-[#555f71] dark:text-white font-bold border-b-2 border-[#555f71] pb-1" href="#">Settings</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline text-lg" data-icon="search">search</span>
+<input class="bg-surface-container-highest border-none rounded-full py-1.5 pl-10 pr-4 text-xs w-64 focus:ring-1 focus:ring-primary" placeholder="Search parameters..." type="text"/>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-[#555f71]" data-icon="notifications">notifications</span>
+</button>
+<img alt="User profile avatar" class="w-8 h-8 rounded-full object-cover ring-2 ring-surface-container" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNgYUMgXEdZ-klnnYObVN8AOtpq3S5mI7pOOZupoTBoiDYBn0j8B_8wW2Kxcip1tQfn6Stjguw2EaF6cAeH3FwQDgiomuufibza3THnm9B_cN0_1oJG_KOURZPl7dZdU0OyB45hPuovHneMEqwo7Wia3nwRD5uF9LAtWapfRemJJJx4Jjf7gReiobho2IvvxaaBFIcW_sCcBmCMEEcDRpqroDOdZin2RxjKGg8Z0KlFTGcpGGwUCp4rXboZDbJv_CK_Wa61zZLiXtJ"/>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 p-8 max-w-6xl mx-auto w-full space-y-10">
+<div>
+<h2 class="text-[1.75rem] font-semibold text-on-surface mb-2">Global Configuration</h2>
+<p class="text-on-surface-variant text-sm max-w-2xl">Manage your property's operational parameters, WINGS integration, and advanced BGE-M3 model settings from a centralized dashboard.</p>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+<!-- Section 1: Manual Inputs -->
+<section class="lg:col-span-12 xl:col-span-5 space-y-6">
+<div class="bg-surface-container-lowest rounded-2xl p-8 shadow-[0px_32px_64px_-12px_rgba(42,52,57,0.04)] h-full">
+<div class="flex items-center gap-3 mb-8">
+<div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="input">input</span>
+</div>
+<h3 class="text-base font-semibold">Manual Inputs <span class="text-[10px] font-bold text-on-surface-variant/60 uppercase ml-2 tracking-widest">(직접 입력 필요)</span></h3>
+</div>
+<div class="space-y-6">
+<div>
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2 block">Reservation Sheet Address</label>
+<input class="w-full bg-surface-container-low border border-surface-container-highest/50 rounded-xl px-4 py-3 text-sm focus:bg-white transition-all" placeholder="https://docs.google.com/spreadsheets/..." type="url"/>
+</div>
+<div>
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2 block">Reservation Sheet Tab Name</label>
+<input class="w-full bg-surface-container-low border border-surface-container-highest/50 rounded-xl px-4 py-3 text-sm focus:bg-white transition-all" placeholder="e.g. Master_2024" type="text"/>
+</div>
+<div class="grid grid-cols-2 gap-6">
+<div>
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2 block">WINGS Login ID</label>
+<input class="w-full bg-surface-container-low border border-surface-container-highest/50 rounded-xl px-4 py-3 text-sm focus:bg-white transition-all" type="text"/>
+</div>
+<div>
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2 block">WINGS Password</label>
+<input class="w-full bg-surface-container-low border border-surface-container-highest/50 rounded-xl px-4 py-3 text-sm focus:bg-white transition-all" type="password" value="********"/>
+</div>
+</div>
+<div>
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2 block">BGE-M3 Local Model Path</label>
+<div class="relative group">
+<input class="w-full bg-surface-container-low border border-surface-container-highest/50 rounded-xl px-4 py-3 text-sm pr-12 focus:bg-white transition-all" placeholder="/usr/local/models/bge-m3" type="text"/>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline text-lg cursor-pointer hover:text-primary transition-colors" data-icon="folder_open">folder_open</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: Operational Selections -->
+<section class="lg:col-span-12 xl:col-span-7 space-y-6">
+<div class="bg-surface-container-lowest rounded-2xl p-8 shadow-[0px_32px_64px_-12px_rgba(42,52,57,0.04)] h-full">
+<div class="flex items-center gap-3 mb-8">
+<div class="w-10 h-10 rounded-xl bg-tertiary/10 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="settings_input_component">settings_input_component</span>
+</div>
+<h3 class="text-base font-semibold">Operational Selections <span class="text-[10px] font-bold text-on-surface-variant/60 uppercase ml-2 tracking-widest">(운영 선택값)</span></h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
+<!-- Column 1 -->
+<div class="space-y-8">
+<div>
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 block">BGE-M3 Execution Mode</label>
+<div class="relative">
+<select class="w-full bg-surface-container-low border border-surface-container-highest/50 rounded-xl px-4 py-3 text-sm appearance-none cursor-pointer focus:bg-white transition-all">
+<option>High Performance (Local GPU)</option>
+<option>Cloud Optimized</option>
+<option>Battery Saver (CPU Only)</option>
+</select>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline pointer-events-none" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<div class="space-y-4">
+<div class="flex items-center justify-between p-4 rounded-xl bg-surface-container-low/50 border border-transparent hover:border-surface-container-highest transition-all">
+<div class="flex flex-col">
+<span class="text-sm font-semibold">Exclude Room Makeup</span>
+<span class="text-[9px] text-on-surface-variant uppercase font-bold tracking-tight">Maintenance Flow</span>
+</div>
+<button class="w-11 h-6 rounded-full bg-primary relative transition-colors shadow-sm">
+<div class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+</button>
+</div>
+<div class="flex items-center justify-between p-4 rounded-xl bg-surface-container-low/50 border border-transparent hover:border-surface-container-highest transition-all">
+<div class="flex flex-col">
+<span class="text-sm font-semibold">Show Consecutive Stay</span>
+<span class="text-[9px] text-on-surface-variant uppercase font-bold tracking-tight">Optimization</span>
+</div>
+<button class="w-11 h-6 rounded-full bg-outline-variant/30 relative transition-colors">
+<div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+</button>
+</div>
+<div class="flex items-center justify-between p-4 rounded-xl bg-surface-container-low/50 border border-transparent hover:border-surface-container-highest transition-all">
+<div class="flex flex-col">
+<span class="text-sm font-semibold">Use BGE-M3</span>
+<span class="text-[9px] text-on-surface-variant uppercase font-bold tracking-tight">AI Processing</span>
+</div>
+<button class="w-11 h-6 rounded-full bg-primary relative transition-colors shadow-sm">
+<div class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+</button>
+</div>
+</div>
+</div>
+<!-- Column 2 -->
+<div class="space-y-10">
+<div>
+<div class="flex justify-between items-center mb-4">
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">Default Lookup Period</label>
+<span class="text-sm font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">30 Days</span>
+</div>
+<input class="w-full h-1.5 bg-surface-container-highest rounded-full appearance-none accent-primary cursor-pointer" max="90" min="1" type="range" value="30"/>
+</div>
+<div class="grid grid-cols-2 gap-6">
+<div>
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2 block">Top K Results</label>
+<input class="w-full bg-surface-container-low border border-surface-container-highest/50 rounded-xl px-4 py-3 text-sm font-semibold focus:bg-white" type="number" value="10"/>
+</div>
+<div>
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2 block">Score Threshold</label>
+<input class="w-full bg-surface-container-low border border-surface-container-highest/50 rounded-xl px-4 py-3 text-sm font-semibold focus:bg-white" type="text" value="0.85"/>
+</div>
+</div>
+<div class="p-5 rounded-2xl bg-primary-container/20 border border-primary/5">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary text-xl shrink-0" data-icon="info">info</span>
+<p class="text-xs text-on-primary-container leading-relaxed font-medium">Adjusting the Score Threshold affects matching precision. Higher values ensure stricter accuracy but may return fewer matches.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 3: System Configuration (Restructured to Row-based) -->
+<section class="lg:col-span-12">
+<div class="bg-surface-container-lowest rounded-2xl p-8 shadow-[0px_32px_64px_-12px_rgba(42,52,57,0.04)]">
+<div class="flex items-center justify-between mb-10">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="schema">schema</span>
+</div>
+<h3 class="text-base font-semibold">System Configuration <span class="text-[10px] font-bold text-on-surface-variant/60 uppercase ml-2 tracking-widest">(운영 구조값)</span></h3>
+</div>
+<button class="px-5 py-2.5 bg-primary text-white text-xs font-bold rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:translate-y-[-1px] active:translate-y-[1px] transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="refresh">refresh</span>
+                                Update Schema
+                            </button>
+</div>
+<div class="space-y-4">
+<!-- Parameter Row: Branch Mapping -->
+<div class="grid grid-cols-1 md:grid-cols-12 items-center gap-6 p-5 rounded-2xl bg-surface-container-low/40 border border-surface-container-highest/30">
+<div class="md:col-span-3">
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block">Branch Tab Mapping</label>
+<p class="text-[10px] text-on-surface-variant/60 mt-1">Configured regional endpoints</p>
+</div>
+<div class="md:col-span-9 flex flex-wrap gap-3 items-center">
+<span class="px-3 py-1.5 bg-surface-container-highest/80 rounded-lg text-[11px] font-bold text-on-surface border border-outline-variant/10">SEOUL_HQ</span>
+<span class="px-3 py-1.5 bg-surface-container-highest/80 rounded-lg text-[11px] font-bold text-on-surface border border-outline-variant/10">JEJU_RESORT</span>
+<button class="px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="add">add</span> Add Region
+                                    </button>
+</div>
+</div>
+<!-- Multi-Parameter Grid Row -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="p-5 rounded-2xl bg-surface-container-low/40 border border-surface-container-highest/30 flex items-center justify-between">
+<div>
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block mb-1">Operator Name</label>
+<p class="text-sm font-bold text-on-surface">Admin_Systems_Central</p>
+</div>
+<span class="material-symbols-outlined text-outline-variant text-lg" data-icon="verified_user">verified_user</span>
+</div>
+<div class="p-5 rounded-2xl bg-surface-container-low/40 border border-surface-container-highest/30 flex items-center justify-between">
+<div>
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block mb-1">BGE-M3 Model ID</label>
+<p class="text-sm font-mono font-bold text-primary">bge-m3-v1.5-distilled</p>
+</div>
+<span class="material-symbols-outlined text-outline-variant text-lg" data-icon="hub">hub</span>
+</div>
+<div class="p-5 rounded-2xl bg-surface-container-low/40 border border-surface-container-highest/30 flex items-center justify-between">
+<div>
+<label class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block mb-1">Partition Key</label>
+<p class="text-sm font-bold text-on-surface">ORG_7749_GLOBAL</p>
+</div>
+<span class="material-symbols-outlined text-outline-variant text-lg" data-icon="key">key</span>
+</div>
+</div>
+<!-- Network Row -->
+<div class="grid grid-cols-1 md:grid-cols-12 items-center gap-6 p-6 rounded-2xl bg-[#555f71]/5 border border-[#555f71]/10">
+<div class="md:col-span-3">
+<h4 class="text-[11px] font-extrabold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></div>
+                                        Network Origin
+                                    </h4>
+</div>
+<div class="md:col-span-9 grid grid-cols-1 sm:grid-cols-2 gap-8">
+<div class="flex items-center gap-4">
+<div class="p-2 rounded-lg bg-white shadow-sm border border-surface-container-highest">
+<span class="material-symbols-outlined text-primary text-xl" data-icon="lan">lan</span>
+</div>
+<div class="min-w-0">
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-tight">Provider URL</p>
+<p class="text-xs truncate font-semibold text-on-surface">https://api.internal-pms.io</p>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="p-2 rounded-lg bg-white shadow-sm border border-surface-container-highest">
+<span class="material-symbols-outlined text-primary text-xl" data-icon="fingerprint">fingerprint</span>
+</div>
+<div class="min-w-0">
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-tight">Origin Hash</p>
+<p class="text-xs truncate font-mono font-semibold text-on-surface">8f2a632...491ce</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Spacer for bottom bar -->
+<div class="h-12"></div>
+<!-- Floating Action Bar (Contextual) -->
+<div class="fixed bottom-8 right-8 flex gap-4 z-40">
+<button class="bg-surface-container-lowest text-on-surface-variant px-7 py-3.5 rounded-2xl font-bold text-sm shadow-xl shadow-black/5 hover:bg-surface-container-low hover:text-on-surface transition-all flex items-center gap-2 border border-outline-variant/20 backdrop-blur-md">
+<span class="material-symbols-outlined text-lg" data-icon="history">history</span>
+                    Discard Changes
+                </button>
+<button class="bg-primary text-white px-9 py-3.5 rounded-2xl font-bold text-sm shadow-2xl shadow-primary/30 hover:shadow-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-3">
+<span class="material-symbols-outlined text-lg" data-icon="save">save</span>
+                    Apply Configurations
+                </button>
+</div>
+</main>
+</div>
+</body></html>
