@@ -1,7 +1,23 @@
-profile = "full-trusted"
-approval_policy = "never"
-sandbox_mode = "danger-full-access"
+file_opener = "vscode"
 
-[profiles.full-trusted]
-approval_policy = "never"
-sandbox_mode = "danger-full-access"
+[project]
+display_name = "reservation-system"
+github_repo = "andy4917/reservation-system"
+
+[mcp_servers.context7]
+url = "https://mcp.context7.com/mcp"
+enabled = true
+required = false
+tool_timeout_sec = 30
+
+[mcp_servers.context7.env_http_headers]
+CONTEXT7_API_KEY = "CONTEXT7_API_KEY"
+
+[mcp_servers.serena]
+enabled = true
+required = false
+startup_timeout_sec = 15
+tool_timeout_sec = 120
+command = "serena"
+args = ["start-mcp-server", "--project-from-cwd", "--context=codex"]
+disabled_tools = ["execute_shell_command", "remove_project"]
